@@ -341,8 +341,8 @@ const ProductLoader = (function () {
     };
 
     try {
-      if (typeof window.Cart !== "undefined" && window.Cart && typeof window.Cart.getCount === "function") {
-        setBadge(window.Cart.getCount());
+      if (typeof window.Cart !== "undefined" && window.Cart && typeof window.Cart.getItemCount === "function") {
+        setBadge(window.Cart.getItemCount());
       } else {
         setBadge(0);
       }

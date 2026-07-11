@@ -19,7 +19,7 @@
  */
 
 const SITE_CONFIG = Object.freeze({
-  siteName: "AzubaTrends",
+  siteName: "Angan",
   tagline: "Everyday goods for the home, delivered around the courtyard.",
   currencySymbol: "\u20B9", // ₹
   // Intentionally blank — a Google Drive-hosted logo URL gets added later.
@@ -35,9 +35,9 @@ const SITE_CONFIG = Object.freeze({
   // --- EmailJS (order notification email) ---
   // TODO: replace with real values from your EmailJS dashboard.
   emailjs: Object.freeze({
-    publicKey: "HfbnYA4QBzySCk_3u",
-    serviceId: "service_udqkh9u",
-    templateId: "template_bhpt2zb"
+    publicKey: "YOUR_EMAILJS_PUBLIC_KEY",
+    serviceId: "YOUR_EMAILJS_SERVICE_ID",
+    templateId: "YOUR_EMAILJS_TEMPLATE_ID"
   }),
 
   // --- Payments ---
