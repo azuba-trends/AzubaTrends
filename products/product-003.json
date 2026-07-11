@@ -1,0 +1,15 @@
+{
+  "id": "prod-003",
+  "title": "Brass Table Lamp with Fabric Shade",
+  "slug": "brass-table-lamp",
+  "category": "Lighting",
+  "tags": ["brass", "lamp", "lighting", "living room"],
+  "shortDescription": "Solid brass base with a hand-stitched linen shade.",
+  "description": "A weighty, solid-brass lamp base paired with a hand-stitched linen shade. Ships with a 1.5m fabric-braided cord and a standard E27 fitting; bulb not included. Polish occasionally with a dry cloth to keep the shine.",
+  "mrp": 1899,
+  "sellingPrice": 1499,
+  "stock": 17,
+  "sku": "AGN-LAMP-BR01",
+  "images": ["images/products/prod-003.svg"],
+  "createdDate": "2026-06-01"
+}

@@ -1,0 +1,34 @@
+{
+  "_comment_howToEdit": "Admin: to allow/block a location, edit the arrays below and commit/push this file. No code change needed. Site will pick up new rules on next page load after deployment.",
+
+  "allowedState": "West Bengal",
+
+  "stateAliases": [
+    "west bengal", "wb", "westbengal", "w.b.", "w. bengal"
+  ],
+
+  "allowedCities": [
+    "Kolkata", "Howrah", "Durgapur", "Asansol", "Siliguri",
+    "Bardhaman", "Malda", "Kharagpur", "Haldia", "Krishnanagar",
+    "Baharampur", "Habra", "Kalyani", "Basirhat", "Chandannagar",
+    "Darjeeling", "Jalpaiguri", "Cooch Behar", "Bankura", "Purulia",
+    "Midnapore", "Raiganj", "Alipurduar", "Balurghat", "Suri",
+    "Jangipur", "Tamluk", "Contai", "Diamond Harbour", "Barrackpore",
+    "Bidhannagar (Salt Lake)", "Rajarhat New Town", "Serampore",
+    "Naihati", "Bhatpara", "Kanchrapara", "Panihati", "Uluberia"
+  ],
+
+  "_comment_pincodeLogic": "Primary check is numeric range. India Post confirms West Bengal PIN codes start with digits 70-74 (range 700000-749999). NOTE: PIN codes 744xxx belong to Andaman & Nicobar Islands, NOT West Bengal, even though they start with '74'. That specific sub-range is excluded below. Admin should verify edge-case pincodes against https://www.indiapost.gov.in and add overrides as needed.",
+
+  "pincodeRanges": [
+    { "min": 700000, "max": 743999 }
+  ],
+
+  "explicitAllowedPincodes": [],
+  "explicitBlockedPincodes": [],
+
+  "restrictionMessage": "Sorry! We currently deliver only within West Bengal, India. We're working on expanding soon.",
+
+  "lastUpdatedBy": "admin",
+  "lastUpdatedDate": "2026-07-10"
+}

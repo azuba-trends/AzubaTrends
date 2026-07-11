@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Checkout</title>
+<meta name="robots" content="noindex">
+
+<!-- If Claude 2 has a shared site stylesheet, it loads first so the
+     variables below (--color-primary etc.) can be overridden site-wide.
+     This file works standalone if it isn't present. -->
+<link rel="stylesheet" href="css/style.css">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+
+<style>
+  .checkout-page {
+    --color-bg: #F5F7F4;
+    --color-surface: #FFFFFF;
+    --color-ink: #16211F;
+    --color-ink-muted: #5B6B68;
+    --color-primary: #0F6B5C;
+    --color-primary-hover: #0C5548;
+    --color-accent: #C98A2C;
+    --color-error: #B3261E;
+    --color-error-bg: #FBEAE9;
+    --color-success: #1E8E5A;
+    --color-success-bg: #E9F5EE;
+    --color-border: #E1E5E1;
+    --font-display: 'Fraunces', Georgia, serif;
+    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+    --radius: 12px;
+
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  .checkout-page * { box-sizing: border-box; }
+
+  .checkout-main {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+  }
+
+  .checkout-page h1 {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    font-weight: 600;
+    margin: 0 0 24px;
+  }
+
+  .checkout-page h2 {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 12px;
+  }
+
+  .checkout-grid {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 24px;
+    align-items: start;
+  }
+
+  .checkout-flow { display: flex; flex-direction: column; gap: 20px; }
+
+  .checkout-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 24px;
+  }
+
+  .section-note { color: var(--color-ink-muted); font-size: 0.9rem; margin: 0 0 16px; }
+
+  /* --- Cart rows --- */
+  .cart-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .cart-row:last-child { border-bottom: none; }
+  .cart-row__info { display: flex; flex-direction: column; }
+  .cart-row__title { font-weight: 500; }
+  .cart-row__qty { color: var(--color-ink-muted); font-size: 0.85rem; }
+  .cart-row__price { font-family: var(--font-mono); font-weight: 500; white-space: nowrap; }
+
+  /* --- Coupon --- */
+  .coupon-box { margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--color-border); }
+  .coupon-box label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 6px; }
+  .coupon-row { display: flex; gap: 8px; }
+  .coupon-row input {
+    flex: 1;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+  }
+  .coupon-message { min-height: 1.2em; font-size: 0.85rem; margin: 8px 0 0; }
+  .coupon-message--success { color: var(--color-success); }
+  .coupon-message--error { color: var(--color-error); }
+
+  /* --- Forms --- */
+  .form-field { margin-bottom: 16px; }
+  .form-field label { display: block; font-weight: 500; font-size: 0.9rem; margin-bottom: 6px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+  input[type="text"], input[type="tel"], textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    font-family: var(--font-body);
+    font-size: 1rem;
+    color: var(--color-ink);
+    background: var(--color-surface);
+  }
+  #field-pincode, #field-phone { font-family: var(--font-mono); }
+  textarea { resize: vertical; }
+
+  input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  .field-error {
+    display: block;
+    color: var(--color-error);
+    font-size: 0.8rem;
+    min-height: 1.1em;
+    margin-top: 4px;
+  }
+
+  .honeypot-field {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
+
+  .banner {
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    margin: 12px 0;
+  }
+  .banner--error { background: var(--color-error-bg); color: var(--color-error); }
+
+  .form-message { min-height: 1.2em; font-size: 0.85rem; color: var(--color-error); }
+
+  /* --- Buttons --- */
+  .btn {
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 12px 20px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+  }
+  .btn--primary { background: var(--color-primary); color: #fff; }
+  .btn--primary:hover { background: var(--color-primary-hover); }
+  .btn--primary:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn--secondary { background: transparent; color: var(--color-primary); border: 1px solid var(--color-border); }
+
+  /* --- Payment options --- */
+  .payment-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+  .payment-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 14px;
+    cursor: pointer;
+  }
+  .payment-option small { color: var(--color-ink-muted); }
+  .payment-option:has(input:checked) { border-color: var(--color-accent); background: #FBF4E8; }
+
+  /* --- UPI / receipt-style card: this checkout deals in real UPI receipts,
+     so the payment + confirmation moments borrow that ticket-stub texture
+     rather than looking like a generic modal. --- */
+  #upi-section, #confirmation-section {
+    position: relative;
+    text-align: center;
+    padding-top: 28px;
+  }
+  #upi-section::before, #confirmation-section::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 6px;
+    background-image: repeating-linear-gradient(
+      90deg, var(--color-border) 0 8px, transparent 8px 16px
+    );
+  }
+  #upi-qr-canvas { margin: 8px auto 16px; display: block; }
+  #upi-amount-text { font-family: var(--font-mono); font-size: 1.1rem; font-weight: 500; margin: 4px 0; }
+  #upi-countdown { color: var(--color-ink-muted); font-size: 0.85rem; margin-bottom: 16px; }
+  .upi-disclaimer { color: var(--color-ink-muted); font-size: 0.8rem; max-width: 420px; margin: 16px auto 0; }
+  #upi-pay-link { display: inline-block; margin-bottom: 12px; color: var(--color-primary); font-weight: 500; }
+
+  #confirmation-order-id {
+    font-family: var(--font-mono);
+    background: var(--color-success-bg);
+    color: var(--color-success);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  /* --- Summary sidebar --- */
+  .checkout-summary { position: sticky; top: 20px; }
+  .summary-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 0.95rem; }
+  .summary-row--total {
+    border-top: 1px solid var(--color-border);
+    margin-top: 8px;
+    padding-top: 12px;
+    font-weight: 600;
+    font-size: 1.1rem;
+    font-family: var(--font-mono);
+  }
+  #edit-details-btn { width: 100%; margin-top: 16px; }
+
+  @media (max-width: 760px) {
+    .checkout-grid { grid-template-columns: 1fr; }
+    .form-row { grid-template-columns: 1fr; }
+    .checkout-summary { position: static; }
+  }
+</style>
+</head>
+<body class="checkout-page">
+
+<!-- Claude 2's shared header renders here (nav, logo, cart badge target). -->
+<div id="header-placeholder"></div>
+
+<main class="checkout-main">
+  <h1>Checkout</h1>
+
+  <div id="empty-cart-message" hidden>
+    <p>Your cart is empty. <a href="index.html">Continue shopping</a> to add something first.</p>
+  </div>
+
+  <div id="checkout-content" hidden>
+    <div class="checkout-grid">
+
+      <div class="checkout-flow">
+
+        <section id="cart-review-section" class="checkout-card">
+          <h2>Your order</h2>
+          <div id="cart-items-list"></div>
+
+          <div class="coupon-box">
+            <label for="coupon-code-input">Have a coupon?</label>
+            <div class="coupon-row">
+              <input type="text" id="coupon-code-input" placeholder="Enter code" autocomplete="off">
+              <button type="button" id="coupon-apply-btn" class="btn btn--secondary">Apply</button>
+              <button type="button" id="coupon-remove-btn" class="btn btn--secondary" hidden>Remove</button>
+            </div>
+            <p id="coupon-message" class="coupon-message" role="status"></p>
+          </div>
+        </section>
+
+        <section id="delivery-section" class="checkout-card">
+          <h2>Delivery details</h2>
+          <p class="section-note">We currently deliver only within West Bengal.</p>
+
+          <form id="delivery-form" novalidate>
+            <!-- Honeypot: real visitors never see or fill this in. -->
+            <div class="honeypot-field" aria-hidden="true">
+              <label for="field-website">Leave this field blank</label>
+              <input type="text" id="field-website" name="website" tabindex="-1" autocomplete="off">
+            </div>
+
+            <div class="form-field">
+              <label for="field-name">Full name</label>
+              <input type="text" id="field-name" name="name" autocomplete="name" required>
+              <span class="field-error" id="error-name"></span>
+            </div>
+
+            <div class="form-field">
+              <label for="field-phone">Phone number</label>
+              <input type="tel" id="field-phone" name="phone" autocomplete="tel" placeholder="10-digit mobile number" required>
+              <span class="field-error" id="error-phone"></span>
+            </div>
+
+            <div class="form-field">
+              <label for="field-address">Address</label>
+              <textarea id="field-address" name="address" rows="3" autocomplete="street-address" required></textarea>
+              <span class="field-error" id="error-address"></span>
+            </div>
+
+            <div class="form-row">
+              <div class="form-field">
+                <label for="field-city">City</label>
+                <input type="text" id="field-city" name="city" autocomplete="address-level2" required>
+                <span class="field-error" id="error-city"></span>
+              </div>
+              <div class="form-field">
+                <label for="field-state">State</label>
+                <input type="text" id="field-state" name="state" autocomplete="address-level1" value="West Bengal" required>
+                <span class="field-error" id="error-state"></span>
+              </div>
+              <div class="form-field">
+                <label for="field-pincode">Pincode</label>
+                <input type="text" id="field-pincode" name="pincode" inputmode="numeric" autocomplete="postal-code" required>
+                <span class="field-error" id="error-pincode"></span>
+              </div>
+            </div>
+
+            <p id="geo-error-message" class="banner banner--error" hidden></p>
+            <p id="delivery-form-message" class="form-message" role="status"></p>
+
+            <button type="submit" id="continue-to-payment-btn" class="btn btn--primary">Continue to payment</button>
+          </form>
+        </section>
+
+        <section id="payment-section" class="checkout-card" hidden>
+          <h2>Payment</h2>
+          <p id="payment-order-id-note" class="section-note"></p>
+
+          <div class="payment-options">
+            <label class="payment-option">
+              <input type="radio" name="paymentMethod" value="COD" id="payment-cod">
+              <span>Cash on Delivery <small>(COD charge applies)</small></span>
+            </label>
+            <label class="payment-option">
+              <input type="radio" name="paymentMethod" value="UPI" id="payment-upi">
+              <span>Pay via UPI</span>
+            </label>
+          </div>
+
+          <div id="cod-section" hidden>
+            <button type="button" id="place-order-cod-btn" class="btn btn--primary">Place order (Cash on Delivery)</button>
+          </div>
+
+          <div id="upi-section" hidden>
+            <canvas id="upi-qr-canvas" width="240" height="240"></canvas>
+            <p id="upi-qr-fallback-message" hidden>Couldn't generate a QR code — use the link below to pay instead.</p>
+            <a id="upi-pay-link" href="#" hidden>Open in your UPI app</a>
+            <p id="upi-amount-text"></p>
+            <p id="upi-countdown"></p>
+            <button type="button" id="upi-done-btn" class="btn btn--primary">Done, I've Paid</button>
+            <p class="upi-disclaimer">Clicking this confirms your order, not your payment — we don't have a way to verify UPI transfers automatically. Our team checks each payment manually against the order ID before dispatch.</p>
+          </div>
+        </section>
+
+        <section id="confirmation-section" class="checkout-card" hidden>
+          <h2>Order placed</h2>
+          <p>Your order ID is <span id="confirmation-order-id"></span> — save it for reference.</p>
+          <p id="confirmation-payment-note" class="section-note"></p>
+        </section>
+
+      </div>
+
+      <aside class="checkout-summary checkout-card">
+        <h2>Summary</h2>
+        <div class="summary-row"><span>Subtotal</span><span id="summary-subtotal">₹0</span></div>
+        <div class="summary-row" id="summary-discount-row" hidden><span>Discount</span><span id="summary-discount-amount">−₹0</span></div>
+        <div class="summary-row" id="summary-cod-row" hidden><span>COD charge</span><span id="summary-cod-amount">+₹0</span></div>
+        <div class="summary-row summary-row--total"><span>Total</span><span id="summary-total">₹0</span></div>
+        <button type="button" id="edit-details-btn" class="btn btn--secondary" hidden>Edit delivery details</button>
+      </aside>
+
+    </div>
+  </div>
+</main>
+
+<!-- Claude 2's shared footer renders here. -->
+<div id="footer-placeholder"></div>
+
+<!-- Claude 1's existing modules — already built, loaded here so this page can use them. -->
+<script src="js/site-config.js"></script>
+<script src="js/security.js"></script>
+<script src="js/geo-restriction.js"></script>
+<script src="js/emailjs-integration.js"></script>
+
+<!-- QR code rendering library (client-side only, no backend involved). -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1/build/qrcode.min.js"></script>
+
+<!-- This checkout workstream. checkout.js loads last, after cart.js/coupon.js. -->
+<script src="js/cart.js"></script>
+<script src="js/coupon.js"></script>
+<script src="js/qr-generator.js"></script>
+<script src="js/checkout.js"></script>
+</body>
+</html>

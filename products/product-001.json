@@ -1,0 +1,15 @@
+{
+  "id": "prod-001",
+  "title": "Terracotta Diya Set (Pack of 12)",
+  "slug": "terracotta-diya-set",
+  "category": "Home Decor",
+  "tags": ["terracotta", "diya", "festive", "lighting", "handmade"],
+  "shortDescription": "Hand-shaped clay diyas, kiln-fired for an even glow.",
+  "description": "A set of 12 hand-shaped terracotta diyas, fired in small-batch kilns by potters in rural West Bengal. Each piece is slightly different, which is the point. Use them for Diwali, Kali Puja, or everyday tabletop light. Unglazed clay finish; wipe clean, do not soak.",
+  "mrp": 499,
+  "sellingPrice": 349,
+  "stock": 42,
+  "sku": "AGN-DIYA-012",
+  "images": ["images/products/prod-001.svg"],
+  "createdDate": "2026-05-12"
+}

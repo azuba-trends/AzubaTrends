@@ -1,0 +1,23 @@
+{
+  "_comment": "Admin: add/edit/deactivate coupons here. type is 'percentage' or 'flat'. Set active:false to disable a coupon without deleting it.",
+  "coupons": [
+    {
+      "code": "WELCOME10",
+      "type": "percentage",
+      "value": 10,
+      "minOrderValue": 500,
+      "maxDiscount": 200,
+      "expiryDate": "2026-12-31",
+      "active": true
+    },
+    {
+      "code": "FLAT50",
+      "type": "flat",
+      "value": 50,
+      "minOrderValue": 300,
+      "maxDiscount": null,
+      "expiryDate": "2026-12-31",
+      "active": true
+    }
+  ]
+}
