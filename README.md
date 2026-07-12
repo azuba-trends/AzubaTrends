@@ -8,7 +8,7 @@ Plain HTML, CSS, and vanilla JavaScript. No frameworks, no build step, no server
 ## Full Directory Structure
 
 ```
-ecommerce-site/
+AzubaTrends/
 ├── index.html                 [Claude 2] Home page
 ├── product.html                [Claude 2] Product detail page (reads ?id= from URL)
 ├── category.html                [Claude 2] Category listing page
@@ -21,6 +21,10 @@ ecommerce-site/
 │   └── images/
 │       ├── logo-placeholder.png [blank — Google Drive link added later via SITE_CONFIG.logoUrl]
 │       └── products/            [product images referenced by products/*.json]
+│
+├── images
+│   └── products/                [product images referenced by products/*.json]
+│
 │
 ├── css/
 │   ├── main.css                [Claude 2] Global styles, layout, responsive rules
@@ -36,9 +40,17 @@ ecommerce-site/
 │   ├── cart.js                 [Claude 3] Cart state (add/remove/update qty), localStorage persistence
 │   ├── coupon.js               [Claude 3] Validates & applies coupons/config/coupons.json
 │   ├── checkout.js             [Claude 3] Guest checkout form, order assembly, geo + payment flow
-│   └── qr-generator.js         [Claude 3] Generates UPI QR code client-side
+│   ├── qr-generator.js         [Claude 3] Generates UPI QR code client-side
+│   ├── reviews.js
+│   └── layout.js
+│
+│
+├── partials/
+│   ├── header.html
+│   └── footer.html
 │
 ├── products/
+│   ├── index.json
 │   ├── product-001.json        [sample — Claude 1 provided schema]
 │   └── product-002.json        [sample, includes stock:0 for testing out-of-stock ranking]
 │

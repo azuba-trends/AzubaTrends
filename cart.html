@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your Cart - AzubaTrends</title>
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/components.css">
+<style>
+  .cart-page-grid { display: grid; grid-template-columns: 1fr 350px; gap: 30px; margin-top: 20px; align-items: start; }
+  .cart-item { display: flex; gap: 20px; padding: 20px; background: white; border: 1px solid var(--color-border); border-radius: 8px; margin-bottom: 15px; }
+  .cart-item img { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; }
+  .cart-item-details { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+  .qty-controls { display: flex; align-items: center; gap: 15px; margin-top: 10px; }
+  .qty-btn { background: #eee; border: none; padding: 5px 12px; font-size: 1.2rem; cursor: pointer; border-radius: 4px; }
+  .remove-btn { color: red; background: none; border: none; cursor: pointer; font-size: 0.9rem; text-decoration: underline; margin-top: 10px; }
+  .summary-card { background: white; padding: 25px; border: 1px solid var(--color-border); border-radius: 8px; position: sticky; top: 90px; }
+  .summary-row { display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 1.1rem; }
+  .coupon-section { display: flex; gap: 10px; margin: 20px 0; border-top: 1px dashed #ccc; border-bottom: 1px dashed #ccc; padding: 20px 0; }
+  @media (max-width: 768px) { .cart-page-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div id="header-mount"></div>
+
+<main class="container" style="padding: 40px 20px; min-height: 60vh;">
+  <h1>Your Shopping Cart</h1>
+  
+  <div id="empty-cart-msg" style="display: none; text-align: center; margin-top: 50px;">
+    <h2>Your cart is empty!</h2>
+    <p>Looks like you haven't added anything yet.</p>
+    <a href="index.html" class="btn btn-primary" style="margin-top: 20px;">Continue Shopping</a>
+  </div>
+
+  <div class="cart-page-grid" id="cart-content" style="display: none;">
+    <!-- Left Side: Items -->
+    <div id="cart-items-container"></div>
+
+    <!-- Right Side: Summary & Coupon -->
+    <div class="summary-card">
+      <h3>Order Summary</h3>
+      <div class="summary-row" style="margin-top: 20px;">
+        <span>Subtotal</span>
+        <span id="cart-subtotal">₹0</span>
+      </div>
+      
+      <div class="coupon-section">
+        <input type="text" id="coupon-input" placeholder="Enter Coupon Code" style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+        <button class="btn btn-outline" id="apply-coupon-btn">Apply</button>
+      </div>
+      <p id="coupon-msg" style="font-size: 0.85rem; margin-top: -10px; margin-bottom: 15px;"></p>
+
+      <div class="summary-row" id="discount-row" style="display: none; color: green;">
+        <span>Discount</span>
+        <span id="cart-discount">-₹0</span>
+      </div>
+
+      <div class="summary-row" style="font-weight: bold; font-size: 1.3rem; border-top: 2px solid #eee; padding-top: 15px;">
+        <span>Total</span>
+        <span id="cart-final-total">₹0</span>
+      </div>
+
+      <button id="checkout-btn" class="btn btn-primary btn-block" style="margin-top: 20px; font-size: 1.1rem; padding: 15px;">Proceed to Checkout</button>
+    </div>
+  </div>
+</main>
+
+<div id="footer-mount"></div>
+
+<script src="js/site-config.js"></script>
+<script src="js/security.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/cart.js"></script>
+<script src="js/coupon.js"></script>
+<script src="js/product-loader.js"></script>
+<script>
+  window.addEventListener("layout:ready", () => ProductLoader.initHeader());
+
+  document.addEventListener("DOMContentLoaded", () => {
+    let appliedDiscount = 0;
+    
+    function renderCartPage() {
+      const items = window.Cart.getItems();
+      const container = document.getElementById("cart-items-container");
+      const emptyMsg = document.getElementById("empty-cart-msg");
+      const cartContent = document.getElementById("cart-content");
+
+      if (items.length === 0) {
+        emptyMsg.style.display = "block";
+        cartContent.style.display = "none";
+        sessionStorage.removeItem("applied_coupon");
+        return;
+      }
+
+      emptyMsg.style.display = "none";
+      cartContent.style.display = "grid";
+      container.innerHTML = "";
+
+      items.forEach(item => {
+        container.innerHTML += `
+          <div class="cart-item">
+            <img src="${item.image || 'images/logo-placeholder.png'}" alt="Product">
+            <div class="cart-item-details">
+              <div>
+                <h3 style="margin: 0; font-size: 1.2rem;">${item.title}</h3>
+                <p style="margin: 5px 0; font-weight: bold; color: var(--color-primary);">₹${item.price}</p>
+              </div>
+              <div class="qty-controls">
+                <button class="qty-btn" onclick="updateQty('${item.productId}', -1)">-</button>
+                <span style="font-weight: bold; font-size: 1.1rem; width: 20px; text-align: center;">${item.quantity}</span>
+                <button class="qty-btn" onclick="updateQty('${item.productId}', 1)">+</button>
+                <button class="remove-btn" onclick="removeItem('${item.productId}')">Remove</button>
+              </div>
+            </div>
+            <div style="font-weight: bold; font-size: 1.2rem;">₹${item.price * item.quantity}</div>
+          </div>
+        `;
+      });
+
+      calculateTotals();
+    }
+
+    window.updateQty = (id, change) => {
+      const items = window.Cart.getItems();
+      const item = items.find(i => i.productId === id);
+      if(item) {
+        const newQty = item.quantity + change;
+        window.Cart.updateQuantity(id, newQty);
+        renderCartPage();
+      }
+    };
+
+    window.removeItem = (id) => {
+      window.Cart.removeItem(id);
+      renderCartPage();
+    };
+
+    function calculateTotals() {
+      const subtotal = window.Cart.getTotal();
+      document.getElementById("cart-subtotal").textContent = "₹" + subtotal;
+      
+      const finalTotal = subtotal - appliedDiscount;
+      document.getElementById("cart-final-total").textContent = "₹" + (finalTotal > 0 ? finalTotal : 0);
+    }
+
+    // Coupon Logic
+    document.getElementById("apply-coupon-btn").addEventListener("click", async () => {
+      const code = document.getElementById("coupon-input").value;
+      const subtotal = window.Cart.getTotal();
+      const msg = document.getElementById("coupon-msg");
+
+      if(!code) return;
+      const result = await window.Coupon.validate(code, subtotal);
+      
+      if(result.valid) {
+        appliedDiscount = result.discount;
+        msg.textContent = result.message;
+        msg.style.color = "green";
+        document.getElementById("discount-row").style.display = "flex";
+        document.getElementById("cart-discount").textContent = "-₹" + appliedDiscount;
+        // Save coupon for checkout page
+        sessionStorage.setItem("applied_coupon", JSON.stringify({ code: result.coupon.code, discount: appliedDiscount }));
+      } else {
+        appliedDiscount = 0;
+        msg.textContent = result.message;
+        msg.style.color = "red";
+        document.getElementById("discount-row").style.display = "none";
+        sessionStorage.removeItem("applied_coupon");
+      }
+      calculateTotals();
+    });
+
+    // Checkout Button
+    document.getElementById("checkout-btn").addEventListener("click", () => {
+      window.location.href = "checkout.html";
+    });
+
+    renderCartPage();
+  });
+</script>
+</body>
+</html>

@@ -1,6 +1,12 @@
 {
   "cleanUrls": true,
   "trailingSlash": false,
+  "rewrites": [
+    {
+      "source": "/share",
+      "destination": "/api/product"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

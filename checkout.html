@@ -271,57 +271,54 @@
           <p class="section-note">We currently deliver only within West Bengal.</p>
 
           <form id="delivery-form" novalidate>
-            <!-- Honeypot: real visitors never see or fill this in. -->
-            <div class="honeypot-field" aria-hidden="true">
-              <label for="field-website">Leave this field blank</label>
-              <input type="text" id="field-website" name="website" tabindex="-1" autocomplete="off">
-            </div>
-
+            <!-- Form fields -->
             <div class="form-field">
-              <label for="field-name">Full name</label>
-              <input type="text" id="field-name" name="name" autocomplete="name" required>
+              <label>Full name</label>
+              <input type="text" id="field-name" required>
               <span class="field-error" id="error-name"></span>
             </div>
 
             <div class="form-field">
-              <label for="field-phone">Phone number</label>
-              <input type="tel" id="field-phone" name="phone" autocomplete="tel" placeholder="10-digit mobile number" required>
+              <label>Phone number</label>
+              <input type="tel" id="field-phone" placeholder="10-digit mobile number" required>
               <span class="field-error" id="error-phone"></span>
             </div>
 
             <div class="form-field">
-              <label for="field-email">Email (optional)</label>
-              <input type="email" id="field-email" name="email" autocomplete="email" placeholder="you@example.com">
-              <span class="field-error" id="error-email"></span>
+              <label>Email (optional)</label>
+              <input type="email" id="field-email" placeholder="you@example.com">
             </div>
 
             <div class="form-field">
-              <label for="field-address">Address</label>
-              <textarea id="field-address" name="address" rows="3" autocomplete="street-address" required></textarea>
+              <label>Address (House, Street, Area)</label>
+              <textarea id="field-address" rows="3" required></textarea>
               <span class="field-error" id="error-address"></span>
             </div>
 
             <div class="form-row">
               <div class="form-field">
-                <label for="field-city">City</label>
-                <input type="text" id="field-city" name="city" autocomplete="address-level2" required>
+                <label>State</label>
+                <!-- FIXED STATE DROPDOWN -->
+                <select id="field-state" style="width:100%; padding:10px; border-radius:8px; background:#eee;" disabled>
+                  <option value="West Bengal">West Bengal</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label>City / District</label>
+                <!-- CITY DROPDOWN (Will be populated by JS) -->
+                <select id="field-city" style="width:100%; padding:10px; border-radius:8px;" required>
+                  <option value="">Select City</option>
+                </select>
                 <span class="field-error" id="error-city"></span>
               </div>
               <div class="form-field">
-                <label for="field-state">State</label>
-                <input type="text" id="field-state" name="state" autocomplete="address-level1" value="West Bengal" required>
-                <span class="field-error" id="error-state"></span>
-              </div>
-              <div class="form-field">
-                <label for="field-pincode">Pincode</label>
-                <input type="text" id="field-pincode" name="pincode" inputmode="numeric" autocomplete="postal-code" required>
+                <label>Pincode</label>
+                <input type="text" id="field-pincode" placeholder="e.g. 700001" required>
                 <span class="field-error" id="error-pincode"></span>
               </div>
             </div>
 
             <p id="geo-error-message" class="banner banner--error" hidden></p>
-            <p id="delivery-form-message" class="form-message" role="status"></p>
-
             <button type="submit" id="continue-to-payment-btn" class="btn btn--primary">Continue to payment</button>
           </form>
         </section>

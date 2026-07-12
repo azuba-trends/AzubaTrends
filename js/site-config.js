@@ -1,56 +1,47 @@
-/**
- * site-config.js
- * ------------------------------------------------------------------
- * Shared constants read by every other module (product-loader.js,
- * checkout.js, emailjs-integration.js, qr-generator.js, etc). Nothing
- * outside this file should need to change if you edit values here.
- *
- * ACTION NEEDED BEFORE GOING LIVE — fill these in (see README "Setup
- * Instructions"):
- *   1. emailjs.publicKey / serviceId / templateId — from your EmailJS
- *      dashboard, after creating a service + template there.
- *   2. upiId — your real UPI ID (e.g. "yourname@bank"), used to build
- *      the QR code at checkout.
- *   3. logoUrl — a hosted image URL once you have a logo; leave blank
- *      to keep showing the site name as text.
- * Until these are filled in, order emails and the UPI QR code will
- * not work — everything else on the site functions normally.
- * ------------------------------------------------------------------
- */
-
-const SITE_CONFIG = Object.freeze({
+// js/site-config.js
+window.SITE_CONFIG = {
   siteName: "AzubaTrends",
-  tagline: "Everyday goods for the home, delivered around the courtyard.",
-  currencySymbol: "\u20B9", // ₹
-  // Intentionally blank — a Google Drive-hosted logo URL gets added later.
-  // Every consumer of this value must fall back gracefully (see header
-  // markup in each page, which shows the site name as text when this
-  // is empty).
-  logoUrl: "",
-  adminEmail: "azubatrends@gmail.com",
-  supportPhone: "+91-62895-30407",
+  currencySymbol: "₹",
   deliveryRegion: "West Bengal, India",
-  copyrightYear: new Date().getFullYear(),
-
-  // --- EmailJS (order notification email) ---
-  // TODO: replace with real values from your EmailJS dashboard.
-  emailjs: Object.freeze({
-    publicKey: "HfbnYA4QBzySCk_3u",
-    serviceId: "service_udqkh9u",
-    templateId: "template_bhpt2zb"
-  }),
-
-  // --- Payments ---
-  upiId: "azubatrends@naviaxis",
-  // Extra charge added for Cash on Delivery orders (in ₹). Set to 0 to disable.
+  logoUrl: "", 
   codExtraCharge: 30,
-  // How long the UPI QR/countdown stays up before auto-marking the
-  // order "pending verification" if the customer doesn't click Done.
   upiAutoConfirmSeconds: 60
-});
+};
 
-// Expose for non-module <script> usage across pages (checkout.js calls
-// window.SITE_CONFIG.* explicitly).
-if (typeof window !== "undefined") {
-  window.SITE_CONFIG = SITE_CONFIG;
-}
+// Initialize Firebase for the Frontend
+(async function() {
+  const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js");
+  const { getFirestore, doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js");
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBimjySQnhOfYCnQV0Drdx3wRb0x173bbs", // <-- APNI FIREBASE API KEY YAHAN DALEIN
+    authDomain: "azubatrends-32349.firebaseapp.com",
+    projectId: "azubatrends-32349",
+    storageBucket: "azubatrends-32349.firebasestorage.app",
+    messagingSenderId: "767815210504",
+    appId: "1:767815210504:web:39a81e27237fc66e29a3bd"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  window.FirebaseApp = { app, db };
+
+  // Fetch Settings from Firebase
+  try {
+    const docSnap = await getDoc(doc(db, "settings", "store_config"));
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      window.SITE_CONFIG.siteName = data.storeName || window.SITE_CONFIG.siteName;
+      window.SITE_CONFIG.upiId = data.upiId || "";
+      window.SITE_CONFIG.adminEmail = data.supportEmail || "azubatrends@gmail.com";
+      window.SITE_CONFIG.supportPhone = data.supportPhone || "";
+      window.SITE_CONFIG.emailjs = {
+        publicKey: data.emailjs_publicKey || "",
+        serviceId: data.emailjs_serviceId || "",
+        templateId: data.emailjs_templateId || ""
+      };
+    }
+  } catch(e) {
+    console.error("Could not load settings from DB", e);
+  }
+})();

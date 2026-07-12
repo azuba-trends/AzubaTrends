@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Panel - AzubaTrends</title>
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/components.css">
+<style>
+  body { background: #f4f6f8; margin: 0; font-family: var(--font-body); }
+  /* Login Screen */
+  .login-container { max-width: 400px; margin: 100px auto; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+  .error-msg { color: red; font-size: 0.85rem; display: none; margin-top: 10px; }
+  
+  /* Admin Layout */
+  #admin-layout { display: none; height: 100vh; display: flex; }
+  .sidebar { width: 250px; background: var(--color-primary-dark); color: white; display: flex; flex-direction: column; }
+  .sidebar-header { padding: 20px; font-size: 1.2rem; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.1); }
+  .sidebar-nav { flex: 1; padding: 10px 0; }
+  .sidebar-nav button { width: 100%; text-align: left; padding: 15px 20px; color: #cbd5e1; background: none; border: none; font-size: 1rem; cursor: pointer; transition: 0.2s; }
+  .sidebar-nav button:hover, .sidebar-nav button.active { background: var(--color-primary); color: white; }
+  .sidebar-footer { padding: 20px; border-top: 1px solid rgba(255,255,255,0.1); }
+  
+  .main-content { flex: 1; overflow-y: auto; padding: 30px; background: #f8fafc; }
+  .section { display: none; }
+  .section.active { display: block; }
+  
+  /* Tables & Forms */
+  .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.9rem; }
+  th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--color-border); }
+  th { background: var(--color-surface-sunken); font-weight: 600; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+  .full-width { grid-column: span 2; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen" class="login-container">
+  <h2 style="text-align: center; margin-bottom: 20px;">Azuba Admin Login</h2>
+  <form id="admin-login-form">
+    <div class="form-field">
+      <label>Email ID</label>
+      <input type="email" id="admin-email" required>
+    </div>
+    <div class="form-field" style="margin-top: 15px;">
+      <label>Password</label>
+      <input type="password" id="admin-password" required>
+    </div>
+    <p id="login-error" class="error-msg">Invalid Credentials</p>
+    <button type="submit" class="btn btn-primary btn-block" style="margin-top: 20px;">Login</button>
+  </form>
+</div>
+
+<!-- ADMIN LAYOUT -->
+<div id="admin-layout">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">AzubaTrends Admin</div>
+    <div class="sidebar-nav">
+      <button class="nav-btn active" data-target="dashboard">Dashboard</button>
+      <button class="nav-btn" data-target="categories">Categories</button>
+      <button class="nav-btn" data-target="products">Products</button>
+      <button class="nav-btn" data-target="orders">Orders</button>
+      <button class="nav-btn" data-target="settings">Settings</button>
+    </div>
+    <div class="sidebar-footer">
+      <button id="logout-btn" class="btn btn-outline" style="color: white; border-color: white; width: 100%;">Logout</button>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    
+    <!-- DASHBOARD SECTION -->
+    <div id="dashboard" class="section active">
+      <h2>Dashboard</h2>
+      <div class="card">
+        <p>Welcome to your control panel! Select an option from the sidebar to manage your store.</p>
+      </div>
+    </div>
+
+    <!-- CATEGORIES SECTION -->
+    <div id="categories" class="section">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>Categories</h2>
+        <button id="show-add-cat-btn" class="btn btn-primary">+ Add Category</button>
+      </div>
+
+      <!-- Add Category Form -->
+      <div id="add-cat-form-container" class="card" style="display: none;">
+        <h3>Add New Category</h3>
+        <form id="add-category-form" class="form-grid" style="margin-top: 15px;">
+          <div class="form-field">
+            <label>Category Name</label>
+            <input type="text" id="cat-name" required>
+          </div>
+          <div class="form-field">
+            <label>Slug (Auto-generated)</label>
+            <input type="text" id="cat-slug" readonly style="background: #eee;">
+          </div>
+          <div class="form-field">
+            <label>Category Type</label>
+            <select id="cat-type" required>
+              <option value="parent">Parent Category (Main)</option>
+              <option value="child">Child Category (Sub-category)</option>
+            </select>
+          </div>
+          <div class="form-field" id="parent-cat-dropdown-container" style="display: none;">
+            <label>Select Parent Category</label>
+            <select id="parent-cat-select"></select>
+          </div>
+          <div class="form-field full-width">
+            <label>Description</label>
+            <textarea id="cat-desc" rows="2"></textarea>
+          </div>
+          <div class="form-field">
+            <label>Meta Title (SEO)</label>
+            <input type="text" id="cat-meta-title">
+          </div>
+          <div class="form-field">
+            <label>Meta Description (SEO)</label>
+            <input type="text" id="cat-meta-desc">
+          </div>
+          <div class="form-field full-width" style="display: flex; gap: 10px;">
+            <button type="submit" class="btn btn-primary" id="save-cat-btn">Save Category</button>
+            <button type="button" class="btn btn-outline" id="cancel-cat-btn">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- All Categories Table -->
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Slug</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="categories-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- PRODUCTS SECTION -->
+    <div id="products" class="section">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>Products</h2>
+        <button id="show-add-prod-btn" class="btn btn-primary">+ Add Product</button>
+      </div>
+
+      <!-- Add/Edit Product Form -->
+      <div id="add-prod-form-container" class="card" style="display: none;">
+        <h3 id="product-form-title">Add New Product</h3>
+        <form id="product-form" class="form-grid" style="margin-top: 15px;">
+          <input type="hidden" id="prod-id">
+          
+          <div class="form-field">
+            <label>Product Name</label>
+            <input type="text" id="prod-name" required>
+          </div>
+          <div class="form-field">
+            <label>Slug (Auto-generated)</label>
+            <input type="text" id="prod-slug" required>
+          </div>
+          <div class="form-field">
+            <label>Category</label>
+            <select id="prod-category" required></select>
+          </div>
+          <div class="form-field">
+            <label>Brand Name</label>
+            <input type="text" id="prod-brand">
+          </div>
+          <div class="form-field">
+            <label>Regular Price (MRP) ₹</label>
+            <input type="number" id="prod-mrp" required>
+          </div>
+          <div class="form-field">
+            <label>Sale Price ₹</label>
+            <input type="number" id="prod-price" required>
+          </div>
+          <div class="form-field">
+            <label>Stock Quantity</label>
+            <input type="number" id="prod-stock" required>
+          </div>
+          <div class="form-field">
+            <label>SKU</label>
+            <input type="text" id="prod-sku">
+          </div>
+          <div class="form-field full-width">
+            <label>Tags (Comma separated, e.g., cotton, summer, red)</label>
+            <input type="text" id="prod-tags">
+          </div>
+          <div class="form-field full-width">
+            <label>Short Description</label>
+            <textarea id="prod-short-desc" rows="2" required></textarea>
+          </div>
+          <div class="form-field full-width">
+            <label>Long Description</label>
+            <textarea id="prod-long-desc" rows="4"></textarea>
+          </div>
+
+          <!-- Image Upload (ImgBB) -->
+          <div class="form-field full-width" style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px dashed #cbd5e1;">
+            <label style="font-weight: bold; color: var(--color-primary);">Upload Images (Max 2MB each)</label>
+            <div style="margin-top: 10px;">
+              <label>Feature Image (Main)</label><br>
+              <input type="file" id="prod-feature-img" accept="image/*">
+            </div>
+            <div style="margin-top: 10px;">
+              <label>Gallery (Select up to 4 more)</label><br>
+              <input type="file" id="prod-gallery-imgs" accept="image/*" multiple>
+            </div>
+            <p style="font-size: 0.8rem; color: #64748b;">*Uploading new images replaces the old ones when editing.</p>
+          </div>
+
+          <div class="form-field full-width" style="display: flex; gap: 10px; margin-top: 10px;">
+            <button type="button" class="btn btn-primary" id="publish-prod-btn">Publish Product</button>
+            <button type="button" class="btn btn-accent" id="draft-prod-btn">Save as Draft</button>
+            <button type="button" class="btn btn-outline" id="cancel-prod-btn">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- All Products Table -->
+      <div class="card">
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Image</th>
+                <th>Name</th>
+                <th>Category</th>
+                <th>Price</th>
+                <th>Stock</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="products-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ORDERS SECTION -->
+    <div id="orders" class="section">
+      <h2>Manage Orders</h2>
+      <div class="card">
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Date</th>
+                <th>Customer</th>
+                <th>Amount</th>
+                <th>Method</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="orders-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Order Details Modal -->
+      <div id="order-details-modal" class="card" style="display: none; border: 2px solid var(--color-primary); margin-top: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 15px;">
+          <h3 style="margin: 0;" id="modal-order-id">Order Details</h3>
+          <button class="btn btn-outline" id="close-order-modal">Close [X]</button>
+        </div>
+        <div class="form-grid">
+          <div>
+            <strong>Customer Details:</strong>
+            <p id="modal-cust-details" style="margin-top: 5px; font-size: 0.9rem; line-height: 1.5;"></p>
+          </div>
+          <div>
+            <strong>Update Status:</strong>
+            <div style="display: flex; gap: 10px; margin-top: 5px;">
+              <select id="modal-order-status" style="padding: 8px;">
+                <option value="Pending">Pending</option>
+                <option value="Processing">Processing</option>
+                <option value="Shipped">Shipped</option>
+                <option value="Delivered">Delivered</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+              <button class="btn btn-primary" id="update-status-btn">Update</button>
+            </div>
+            <p style="margin-top: 15px;"><strong>Total Amount:</strong> <span id="modal-order-total" style="color: green; font-weight: bold; font-size: 1.2rem;"></span></p>
+          </div>
+        </div>
+        <h4 style="margin-top: 20px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Items Ordered</h4>
+        <ul id="modal-order-items" style="list-style: none; padding: 0; font-size: 0.9rem;"></ul>
+      </div>
+    </div>
+
+    <!-- SETTINGS SECTION -->
+    <div id="settings" class="section">
+      <h2>Store Settings</h2>
+      <div class="card">
+        <form id="settings-form" class="form-grid">
+          <div class="form-field full-width">
+            <h3 style="border-bottom: 1px solid #eee; padding-bottom: 5px;">General Info</h3>
+          </div>
+          <div class="form-field">
+            <label>Store Name</label>
+            <input type="text" id="set-store-name" required>
+          </div>
+          <div class="form-field">
+            <label>UPI ID (For Payments)</label>
+            <input type="text" id="set-upi-id" required>
+          </div>
+          <div class="form-field">
+            <label>Support Email</label>
+            <input type="email" id="set-support-email" required>
+          </div>
+          <div class="form-field">
+            <label>Support Phone</label>
+            <input type="text" id="set-support-phone" required>
+          </div>
+
+          <div class="form-field full-width">
+            <h3 style="border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 15px;">EmailJS Config (Optional)</h3>
+          </div>
+          <div class="form-field">
+            <label>Public Key</label>
+            <input type="text" id="set-email-pub">
+          </div>
+          <div class="form-field">
+            <label>Service ID</label>
+            <input type="text" id="set-email-srv">
+          </div>
+          <div class="form-field">
+            <label>Template ID</label>
+            <input type="text" id="set-email-tpl">
+          </div>
+          <div class="form-field" style="display: flex; align-items: flex-end;">
+            <button type="submit" class="btn btn-primary" id="save-settings-btn" style="width: 100%;">Save All Settings</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script type="module" src="js/firebase-config.js"></script>
+<script type="module" src="js/admin.js"></script>
+</body>
+</html>
