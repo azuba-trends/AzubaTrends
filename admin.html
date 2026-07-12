@@ -8,272 +8,218 @@
 <link rel="stylesheet" href="css/components.css">
 <style>
   body { background: #f4f6f8; margin: 0; font-family: var(--font-body); }
-  /* Login Screen */
   .login-container { max-width: 400px; margin: 100px auto; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
   .error-msg { color: red; font-size: 0.85rem; display: none; margin-top: 10px; }
   
-  /* Admin Layout */
   #admin-layout { display: none; height: 100vh; display: flex; }
   .sidebar { width: 250px; background: var(--color-primary-dark); color: white; display: flex; flex-direction: column; }
   .sidebar-header { padding: 20px; font-size: 1.2rem; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.1); }
-  .sidebar-nav { flex: 1; padding: 10px 0; }
+  .sidebar-nav { flex: 1; padding: 10px 0; overflow-y: auto; }
   .sidebar-nav button { width: 100%; text-align: left; padding: 15px 20px; color: #cbd5e1; background: none; border: none; font-size: 1rem; cursor: pointer; transition: 0.2s; }
   .sidebar-nav button:hover, .sidebar-nav button.active { background: var(--color-primary); color: white; }
-  .sidebar-footer { padding: 20px; border-top: 1px solid rgba(255,255,255,0.1); }
   
   .main-content { flex: 1; overflow-y: auto; padding: 30px; background: #f8fafc; }
   .section { display: none; }
   .section.active { display: block; }
   
-  /* Tables & Forms */
   .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
   table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.9rem; }
   th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--color-border); }
   th { background: var(--color-surface-sunken); font-weight: 600; }
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
   .full-width { grid-column: span 2; }
+  
+  /* Dashboard Stat Cards */
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  .stat-card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); text-align: center; }
+  .stat-card h3 { font-size: 1rem; color: #64748b; margin-bottom: 10px; }
+  .stat-card h1 { font-size: 2.5rem; margin: 0; }
+  
+  /* Order Tabs */
+  .tabs { display: flex; gap: 10px; border-bottom: 2px solid #eee; margin-bottom: 20px; }
+  .tab-btn { background: none; border: none; padding: 10px 20px; font-size: 1rem; cursor: pointer; font-weight: bold; color: #64748b; }
+  .tab-btn.active { color: var(--color-primary); border-bottom: 3px solid var(--color-primary); margin-bottom: -2px; }
 </style>
 </head>
 <body>
 
-<!-- LOGIN SCREEN -->
+<!-- LOGIN -->
 <div id="login-screen" class="login-container">
   <h2 style="text-align: center; margin-bottom: 20px;">Azuba Admin Login</h2>
   <form id="admin-login-form">
-    <div class="form-field">
-      <label>Email ID</label>
-      <input type="email" id="admin-email" required>
-    </div>
-    <div class="form-field" style="margin-top: 15px;">
-      <label>Password</label>
-      <input type="password" id="admin-password" required>
-    </div>
+    <div class="form-field"><label>Email</label><input type="email" id="admin-email" required></div>
+    <div class="form-field" style="margin-top: 15px;"><label>Password</label><input type="password" id="admin-password" required></div>
     <p id="login-error" class="error-msg">Invalid Credentials</p>
     <button type="submit" class="btn btn-primary btn-block" style="margin-top: 20px;">Login</button>
   </form>
 </div>
 
-<!-- ADMIN LAYOUT -->
+<!-- ADMIN -->
 <div id="admin-layout">
-  <!-- Sidebar -->
   <div class="sidebar">
     <div class="sidebar-header">AzubaTrends Admin</div>
     <div class="sidebar-nav">
       <button class="nav-btn active" data-target="dashboard">Dashboard</button>
-      <button class="nav-btn" data-target="categories">Categories</button>
-      <button class="nav-btn" data-target="products">Products</button>
-      <button class="nav-btn" data-target="orders">Orders</button>
+      <button class="nav-btn" data-target="products">Store > Products</button>
+      <button class="nav-btn" data-target="categories">Store > Categories</button>
+      <button class="nav-btn" data-target="brands">Store > Brands</button>
+      <button class="nav-btn" data-target="orders">All Orders</button>
       <button class="nav-btn" data-target="settings">Settings</button>
     </div>
-    <div class="sidebar-footer">
-      <button id="logout-btn" class="btn btn-outline" style="color: white; border-color: white; width: 100%;">Logout</button>
-    </div>
+    <div style="padding: 20px;"><button id="logout-btn" class="btn btn-outline" style="color: white; border-color: white; width: 100%;">Logout</button></div>
   </div>
 
-  <!-- Main Content -->
   <div class="main-content">
     
-    <!-- DASHBOARD SECTION -->
+    <!-- DASHBOARD -->
     <div id="dashboard" class="section active">
-      <h2>Dashboard</h2>
-      <div class="card">
-        <p>Welcome to your control panel! Select an option from the sidebar to manage your store.</p>
+      <h2>Dashboard Overview</h2>
+      <div class="stat-grid">
+        <div class="stat-card"><h3>Total Products</h3><h1 id="stat-tot-prod">0</h1></div>
+        <div class="stat-card"><h3>Active / Live</h3><h1 id="stat-act-prod" style="color: green;">0</h1></div>
+        <div class="stat-card"><h3>Out of Stock</h3><h1 id="stat-oos-prod" style="color: red;">0</h1></div>
+        <div class="stat-card"><h3>Total Sales</h3><h1 id="stat-tot-sales" style="color: var(--color-primary);">₹0</h1></div>
       </div>
     </div>
 
-    <!-- CATEGORIES SECTION -->
-    <div id="categories" class="section">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h2>Categories</h2>
-        <button id="show-add-cat-btn" class="btn btn-primary">+ Add Category</button>
-      </div>
-
-      <!-- Add Category Form -->
-      <div id="add-cat-form-container" class="card" style="display: none;">
-        <h3>Add New Category</h3>
-        <form id="add-category-form" class="form-grid" style="margin-top: 15px;">
-          <div class="form-field">
-            <label>Category Name</label>
-            <input type="text" id="cat-name" required>
-          </div>
-          <div class="form-field">
-            <label>Slug (Auto-generated)</label>
-            <input type="text" id="cat-slug" readonly style="background: #eee;">
-          </div>
-          <div class="form-field">
-            <label>Category Type</label>
-            <select id="cat-type" required>
-              <option value="parent">Parent Category (Main)</option>
-              <option value="child">Child Category (Sub-category)</option>
-            </select>
-          </div>
-          <div class="form-field" id="parent-cat-dropdown-container" style="display: none;">
-            <label>Select Parent Category</label>
-            <select id="parent-cat-select"></select>
-          </div>
-          <div class="form-field full-width">
-            <label>Description</label>
-            <textarea id="cat-desc" rows="2"></textarea>
-          </div>
-          <div class="form-field">
-            <label>Meta Title (SEO)</label>
-            <input type="text" id="cat-meta-title">
-          </div>
-          <div class="form-field">
-            <label>Meta Description (SEO)</label>
-            <input type="text" id="cat-meta-desc">
-          </div>
-          <div class="form-field full-width" style="display: flex; gap: 10px;">
-            <button type="submit" class="btn btn-primary" id="save-cat-btn">Save Category</button>
-            <button type="button" class="btn btn-outline" id="cancel-cat-btn">Cancel</button>
-          </div>
-        </form>
-      </div>
-
-      <!-- All Categories Table -->
-      <div class="card">
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Type</th>
-              <th>Slug</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="categories-table-body"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- PRODUCTS SECTION -->
+    <!-- PRODUCTS -->
     <div id="products" class="section">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h2>Products</h2>
+        <h2>All Products</h2>
         <button id="show-add-prod-btn" class="btn btn-primary">+ Add Product</button>
       </div>
 
-      <!-- Add/Edit Product Form -->
+      <!-- Add/Edit Product -->
       <div id="add-prod-form-container" class="card" style="display: none;">
         <h3 id="product-form-title">Add New Product</h3>
         <form id="product-form" class="form-grid" style="margin-top: 15px;">
           <input type="hidden" id="prod-id">
-          
-          <div class="form-field">
-            <label>Product Name</label>
-            <input type="text" id="prod-name" required>
-          </div>
-          <div class="form-field">
-            <label>Slug (Auto-generated)</label>
-            <input type="text" id="prod-slug" required>
-          </div>
-          <div class="form-field">
-            <label>Category</label>
-            <select id="prod-category" required></select>
-          </div>
-          <div class="form-field">
-            <label>Brand Name</label>
-            <input type="text" id="prod-brand">
-          </div>
-          <div class="form-field">
-            <label>Regular Price (MRP) ₹</label>
-            <input type="number" id="prod-mrp" required>
-          </div>
-          <div class="form-field">
-            <label>Sale Price ₹</label>
-            <input type="number" id="prod-price" required>
-          </div>
-          <div class="form-field">
-            <label>Stock Quantity</label>
-            <input type="number" id="prod-stock" required>
-          </div>
-          <div class="form-field">
-            <label>SKU</label>
-            <input type="text" id="prod-sku">
-          </div>
-          <div class="form-field full-width">
-            <label>Tags (Comma separated, e.g., cotton, summer, red)</label>
-            <input type="text" id="prod-tags">
-          </div>
-          <div class="form-field full-width">
-            <label>Short Description</label>
-            <textarea id="prod-short-desc" rows="2" required></textarea>
-          </div>
-          <div class="form-field full-width">
-            <label>Long Description</label>
-            <textarea id="prod-long-desc" rows="4"></textarea>
-          </div>
+          <div class="form-field"><label>Name</label><input type="text" id="prod-name" required></div>
+          <div class="form-field"><label>Slug (Auto/Edit)</label><input type="text" id="prod-slug" required></div>
+          <div class="form-field"><label>Category</label><select id="prod-category" required></select></div>
+          <div class="form-field"><label>Brand</label><select id="prod-brand"><option value="">Select Brand</option></select></div>
+          <div class="form-field"><label>Regular Price (MRP) ₹</label><input type="number" id="prod-mrp" required></div>
+          <div class="form-field"><label>Sale Price ₹</label><input type="number" id="prod-price" required></div>
+          <div class="form-field"><label>Stock</label><input type="number" id="prod-stock" required></div>
+          <div class="form-field"><label>SKU</label><input type="text" id="prod-sku"></div>
+          <div class="form-field full-width"><label>Tags (Comma separated)</label><input type="text" id="prod-tags"></div>
+          <div class="form-field"><label>Delivery Partner Name</label><input type="text" id="prod-delivery-partner"></div>
+          <div class="form-field"><label>Delivery Fee ₹</label><input type="number" id="prod-delivery-fee" value="0"></div>
+          <div class="form-field full-width"><label>Short Description</label><textarea id="prod-short-desc" rows="2" required></textarea></div>
+          <div class="form-field full-width"><label>Long Description</label><textarea id="prod-long-desc" rows="4"></textarea></div>
 
-          <!-- Image Upload (ImgBB) -->
+          <!-- Images -->
           <div class="form-field full-width" style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px dashed #cbd5e1;">
-            <label style="font-weight: bold; color: var(--color-primary);">Upload Images (Max 2MB each)</label>
-            <div style="margin-top: 10px;">
-              <label>Feature Image (Main)</label><br>
-              <input type="file" id="prod-feature-img" accept="image/*">
-            </div>
-            <div style="margin-top: 10px;">
-              <label>Gallery (Select up to 4 more)</label><br>
-              <input type="file" id="prod-gallery-imgs" accept="image/*" multiple>
-            </div>
-            <p style="font-size: 0.8rem; color: #64748b;">*Uploading new images replaces the old ones when editing.</p>
+            <label style="font-weight: bold; color: var(--color-primary);">Upload Images</label>
+            <div style="margin-top: 10px;"><label>Feature Image</label><br><input type="file" id="prod-feature-img" accept="image/*"></div>
+            <div style="margin-top: 10px;"><label>Gallery (Up to 4)</label><br><input type="file" id="prod-gallery-imgs" accept="image/*" multiple></div>
+            <div style="margin-top: 10px;"><label>Delivery Partner Image (Optional)</label><br><input type="file" id="prod-delivery-img" accept="image/*"></div>
           </div>
 
           <div class="form-field full-width" style="display: flex; gap: 10px; margin-top: 10px;">
-            <button type="button" class="btn btn-primary" id="publish-prod-btn">Publish Product</button>
-            <button type="button" class="btn btn-accent" id="draft-prod-btn">Save as Draft</button>
+            <button type="button" class="btn btn-primary" id="publish-prod-btn">Publish</button>
+            <button type="button" class="btn btn-accent" id="draft-prod-btn">Save Draft (Pause)</button>
             <button type="button" class="btn btn-outline" id="cancel-prod-btn">Cancel</button>
           </div>
         </form>
       </div>
 
-      <!-- All Products Table -->
-      <div class="card">
-        <div style="overflow-x: auto;">
-          <table>
-            <thead>
-              <tr>
-                <th>Image</th>
-                <th>Name</th>
-                <th>Category</th>
-                <th>Price</th>
-                <th>Stock</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="products-table-body"></tbody>
-          </table>
-        </div>
+      <!-- Table -->
+      <div class="card" style="overflow-x: auto;">
+        <table>
+          <thead><tr><th>Select</th><th>Name</th><th>Brand</th><th>Category</th><th>Tags</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="products-table-body"></tbody>
+        </table>
       </div>
     </div>
 
-    <!-- ORDERS SECTION -->
+    <!-- CATEGORIES -->
+    <div id="categories" class="section">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>All Categories</h2>
+        <button id="show-add-cat-btn" class="btn btn-primary">+ Add Category</button>
+      </div>
+      <div id="add-cat-form-container" class="card" style="display: none;">
+        <h3>Add/Edit Category</h3>
+        <form id="add-category-form" class="form-grid">
+          <input type="hidden" id="cat-id">
+          <div class="form-field"><label>Name</label><input type="text" id="cat-name" required></div>
+          <div class="form-field"><label>Slug</label><input type="text" id="cat-slug" required></div>
+          <div class="form-field">
+            <label>Type</label>
+            <select id="cat-type"><option value="parent">Parent</option><option value="child">Child</option></select>
+          </div>
+          <div class="form-field" id="parent-cat-dropdown-container" style="display: none;">
+            <label>Parent Category</label><select id="parent-cat-select"></select>
+          </div>
+          <div class="form-field"><label>Meta Title</label><input type="text" id="cat-meta-title"></div>
+          <div class="form-field"><label>Meta Description</label><input type="text" id="cat-meta-desc"></div>
+          <div class="form-field full-width"><label>Description</label><textarea id="cat-desc" rows="2"></textarea></div>
+          <div class="form-field full-width"><label>Image</label><input type="file" id="cat-image" accept="image/*"></div>
+          <div class="form-field full-width" style="display: flex; gap: 10px;">
+            <button type="submit" class="btn btn-primary">Save Category</button>
+            <button type="button" class="btn btn-outline" id="cancel-cat-btn">Cancel</button>
+          </div>
+        </form>
+      </div>
+      <div class="card" style="overflow-x: auto;">
+        <table>
+          <thead><tr><th>Select</th><th>Name</th><th>Type</th><th>Actions</th></tr></thead>
+          <tbody id="categories-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- BRANDS -->
+    <div id="brands" class="section">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>All Brands</h2>
+        <button id="show-add-brand-btn" class="btn btn-primary">+ Add Brand</button>
+      </div>
+      <div id="add-brand-form-container" class="card" style="display: none;">
+        <h3>Add/Edit Brand</h3>
+        <form id="add-brand-form" class="form-grid">
+          <input type="hidden" id="brand-id">
+          <div class="form-field"><label>Name</label><input type="text" id="brand-name" required></div>
+          <div class="form-field"><label>Slug</label><input type="text" id="brand-slug" required></div>
+          <div class="form-field"><label>Meta Title</label><input type="text" id="brand-meta-title"></div>
+          <div class="form-field"><label>Meta Description</label><input type="text" id="brand-meta-desc"></div>
+          <div class="form-field full-width"><label>Description</label><textarea id="brand-desc" rows="2"></textarea></div>
+          <div class="form-field full-width"><label>Image</label><input type="file" id="brand-image" accept="image/*"></div>
+          <div class="form-field full-width" style="display: flex; gap: 10px;">
+            <button type="submit" class="btn btn-primary">Save Brand</button>
+            <button type="button" class="btn btn-outline" id="cancel-brand-btn">Cancel</button>
+          </div>
+        </form>
+      </div>
+      <div class="card" style="overflow-x: auto;">
+        <table>
+          <thead><tr><th>Select</th><th>Name</th><th>Slug</th><th>Actions</th></tr></thead>
+          <tbody id="brands-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ORDERS -->
     <div id="orders" class="section">
-      <h2>Manage Orders</h2>
-      <div class="card">
-        <div style="overflow-x: auto;">
-          <table>
-            <thead>
-              <tr>
-                <th>Order ID</th>
-                <th>Date</th>
-                <th>Customer</th>
-                <th>Amount</th>
-                <th>Method</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody id="orders-table-body"></tbody>
-          </table>
-        </div>
+      <h2>All Orders</h2>
+      <div class="tabs">
+        <button class="tab-btn active" data-filter="Active">Active Orders</button>
+        <button class="tab-btn" data-filter="Finished">Finished Orders</button>
+        <button class="tab-btn" data-filter="Cancelled">Cancelled</button>
+      </div>
+      <div class="card" style="overflow-x: auto;">
+        <table>
+          <thead><tr><th>Order ID</th><th>Date</th><th>Customer</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="orders-table-body"></tbody>
+        </table>
       </div>
 
       <!-- Order Details Modal -->
       <div id="order-details-modal" class="card" style="display: none; border: 2px solid var(--color-primary); margin-top: 20px;">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 15px;">
           <h3 style="margin: 0;" id="modal-order-id">Order Details</h3>
-          <button class="btn btn-outline" id="close-order-modal">Close [X]</button>
+          <button class="btn btn-outline" id="close-order-modal">Close</button>
         </div>
         <div class="form-grid">
           <div>
@@ -300,49 +246,23 @@
       </div>
     </div>
 
-    <!-- SETTINGS SECTION -->
+    <!-- SETTINGS -->
     <div id="settings" class="section">
-      <h2>Store Settings</h2>
+      <h2>Account & Settings</h2>
       <div class="card">
         <form id="settings-form" class="form-grid">
-          <div class="form-field full-width">
-            <h3 style="border-bottom: 1px solid #eee; padding-bottom: 5px;">General Info</h3>
-          </div>
-          <div class="form-field">
-            <label>Store Name</label>
-            <input type="text" id="set-store-name" required>
-          </div>
-          <div class="form-field">
-            <label>UPI ID (For Payments)</label>
-            <input type="text" id="set-upi-id" required>
-          </div>
-          <div class="form-field">
-            <label>Support Email</label>
-            <input type="email" id="set-support-email" required>
-          </div>
-          <div class="form-field">
-            <label>Support Phone</label>
-            <input type="text" id="set-support-phone" required>
-          </div>
-
-          <div class="form-field full-width">
-            <h3 style="border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 15px;">EmailJS Config (Optional)</h3>
-          </div>
-          <div class="form-field">
-            <label>Public Key</label>
-            <input type="text" id="set-email-pub">
-          </div>
-          <div class="form-field">
-            <label>Service ID</label>
-            <input type="text" id="set-email-srv">
-          </div>
-          <div class="form-field">
-            <label>Template ID</label>
-            <input type="text" id="set-email-tpl">
-          </div>
-          <div class="form-field" style="display: flex; align-items: flex-end;">
-            <button type="submit" class="btn btn-primary" id="save-settings-btn" style="width: 100%;">Save All Settings</button>
-          </div>
+          <div class="form-field full-width"><h3 style="border-bottom: 1px solid #eee; padding-bottom: 5px;">General</h3></div>
+          <div class="form-field"><label>Store Name</label><input type="text" id="set-store-name" required></div>
+          <div class="form-field"><label>Admin Username / Name</label><input type="text" id="set-admin-name"></div>
+          <div class="form-field full-width"><h3 style="border-bottom: 1px solid #eee; padding-bottom: 5px;">Payment & Support</h3></div>
+          <div class="form-field"><label>UPI ID (For Online Payments)</label><input type="text" id="set-upi-id" required></div>
+          <div class="form-field"><label>Support Email</label><input type="email" id="set-support-email" required></div>
+          <div class="form-field"><label>Support Phone</label><input type="text" id="set-support-phone" required></div>
+          <div class="form-field full-width"><h3 style="border-bottom: 1px solid #eee; padding-bottom: 5px;">EmailJS Config</h3></div>
+          <div class="form-field"><label>Public Key</label><input type="text" id="set-email-pub"></div>
+          <div class="form-field"><label>Service ID</label><input type="text" id="set-email-srv"></div>
+          <div class="form-field"><label>Template ID</label><input type="text" id="set-email-tpl"></div>
+          <div class="form-field full-width"><button type="submit" class="btn btn-primary" id="save-settings-btn">Save All Settings</button></div>
         </form>
       </div>
     </div>

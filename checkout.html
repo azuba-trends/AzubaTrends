@@ -28,41 +28,37 @@
 <main class="checkout-main">
   <h1>Checkout</h1>
 
-  <div id="empty-cart-message" style="display: none; text-align:center; margin-top:50px;">
+  <!-- Empty Cart Message -->
+  <div id="empty-cart-message" hidden style="text-align:center; margin-top:50px;">
     <h2>Your cart is empty.</h2>
     <p><a href="index.html" class="btn btn-primary" style="margin-top:20px;">Continue shopping</a></p>
   </div>
 
-  <div id="checkout-content" style="display: none;">
+  <!-- Main Checkout Content -->
+  <div id="checkout-content" hidden>
     <div class="checkout-grid">
 
       <!-- Left Column -->
       <div>
-        <!-- Address Section -->
         <section id="delivery-section" class="checkout-card">
           <h2>Delivery Details</h2>
           <form id="delivery-form" novalidate>
-            
             <div class="form-field">
               <label>Full name</label>
               <input type="text" id="field-name" required>
             </div>
-            
             <div class="form-field">
               <label>Phone number</label>
               <input type="tel" id="field-phone" placeholder="10-digit mobile number" required>
             </div>
-
             <div class="form-field">
               <label>Email (optional)</label>
               <input type="email" id="field-email" placeholder="you@example.com">
             </div>
-
             <div class="form-field">
-              <label>Full Address</label>
+              <label>Full Address (House, Street, Area)</label>
               <textarea id="field-address" rows="3" required></textarea>
             </div>
-
             <div class="form-row">
               <div class="form-field">
                 <label>State</label>
@@ -82,13 +78,12 @@
                 <span class="field-error" id="error-pincode"></span>
               </div>
             </div>
-
             <button type="submit" class="btn btn-primary" style="margin-top: 15px;">Continue to Payment</button>
           </form>
         </section>
 
         <!-- Payment Section -->
-        <section id="payment-section" class="checkout-card" style="display: none;">
+        <section id="payment-section" class="checkout-card" hidden>
           <h2>Payment Method</h2>
           <p id="payment-order-id-note" style="color: #666; font-size: 0.9rem; margin-bottom: 15px;"></p>
 
@@ -101,26 +96,25 @@
             <span>Pay via UPI (Online)</span>
           </label>
 
-          <div id="cod-section" style="display: none; margin-top: 20px;">
+          <div id="cod-section" hidden style="margin-top: 20px;">
             <button type="button" id="place-order-cod-btn" class="btn btn-primary">Place Order (COD)</button>
           </div>
 
-          <div id="upi-section" style="display: none; margin-top: 20px; text-align: center;">
+          <div id="upi-section" hidden style="margin-top: 20px; text-align: center;">
             <canvas id="upi-qr-canvas" style="margin: 0 auto; display: block;"></canvas>
-            <a id="upi-pay-link" href="#" style="display: none; color: var(--color-primary); font-weight: bold; margin-top: 10px;">Click here to Pay via UPI App</a>
+            <a id="upi-pay-link" href="#" hidden style="color: var(--color-primary); font-weight: bold; margin-top: 10px;">Click here to Pay via UPI App</a>
             <p id="upi-amount-text" style="font-weight: bold; font-size: 1.1rem; margin-top: 15px;"></p>
             <button type="button" id="upi-done-btn" class="btn btn-primary" style="margin-top: 15px;">I have paid, Place Order</button>
           </div>
         </section>
 
         <!-- Success Section -->
-        <section id="confirmation-section" class="checkout-card" style="display: none; text-align: center; padding: 40px 20px;">
+        <section id="confirmation-section" class="checkout-card" hidden style="text-align: center; padding: 40px 20px;">
           <h2 style="color: green;">Order Placed Successfully! 🎉</h2>
           <p>Your Order ID is <strong id="confirmation-order-id" style="font-size: 1.2rem;"></strong></p>
           <p id="confirmation-payment-note" style="color: #555; margin-top: 10px;"></p>
           <a href="index.html" class="btn btn-primary" style="margin-top: 20px;">Continue Shopping</a>
         </section>
-
       </div>
 
       <!-- Right Column: Summary -->
@@ -128,21 +122,15 @@
         <h3 style="margin-top: 0;">Order Summary</h3>
         <div id="checkout-items-list" style="margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 15px; font-size: 0.9rem;"></div>
         
-        <div class="summary-row">
-          <span>Subtotal</span>
-          <span id="summary-subtotal">₹0</span>
+        <div class="summary-row"><span>Subtotal</span><span id="summary-subtotal">₹0</span></div>
+        <div class="summary-row" id="summary-discount-row" hidden style="color: green;">
+          <span>Discount</span><span id="summary-discount-amount">-₹0</span>
         </div>
-        <div class="summary-row" id="summary-discount-row" style="display: none; color: green;">
-          <span>Discount</span>
-          <span id="summary-discount-amount">-₹0</span>
-        </div>
-        <div class="summary-row" id="summary-cod-row" style="display: none;">
-          <span>COD Charge</span>
-          <span id="summary-cod-amount">+₹0</span>
+        <div class="summary-row" id="summary-cod-row" hidden>
+          <span>COD Charge</span><span id="summary-cod-amount">+₹0</span>
         </div>
         <div class="summary-row summary-row--total">
-          <span>Total to Pay</span>
-          <span id="summary-total" style="color: var(--color-primary);">₹0</span>
+          <span>Total to Pay</span><span id="summary-total" style="color: var(--color-primary);">₹0</span>
         </div>
       </aside>
 
