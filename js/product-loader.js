@@ -1,4 +1,3 @@
-// js/product-loader.js
 const ProductLoader = (function () {
   let cachedProducts = null;
   let inFlightRequest = null;
@@ -10,28 +9,21 @@ const ProductLoader = (function () {
 
     inFlightRequest = (async () => {
       try {
-        // Wait for Firebase to initialize (from site-config.js)
         while(!window.FirebaseApp) { await new Promise(r => setTimeout(r, 100)); }
         
         const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js");
         const db = window.FirebaseApp.db;
         
-        // Fetch only Active products
         const q = query(collection(db, "products"), where("status", "==", "active"));
         const snapshot = await getDocs(q);
         
-        cachedProducts = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        
+        cachedProducts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         return cachedProducts;
       } catch (err) {
         console.error("ProductLoader Error:", err);
         return [];
       }
     })();
-
     return inFlightRequest;
   }
 
@@ -124,9 +116,15 @@ const ProductLoader = (function () {
 
   function initHeader() {
     const siteName = window.SITE_CONFIG.siteName || "AzubaTrends";
+    
+    // Update all places where Site Name should appear
     document.querySelectorAll("[data-site-name]").forEach(el => el.textContent = siteName);
     
-    // Cart Badge
+    // Update Page Title if it contains old name
+    if(document.title.includes("Angan")) {
+      document.title = document.title.replace("Angan", siteName);
+    }
+
     const setBadge = (count) => {
       document.querySelectorAll("[data-cart-count]").forEach(b => b.textContent = count);
     };

@@ -1,4 +1,3 @@
-// js/site-config.js
 window.SITE_CONFIG = {
   siteName: "AzubaTrends",
   currencySymbol: "₹",
@@ -8,13 +7,12 @@ window.SITE_CONFIG = {
   upiAutoConfirmSeconds: 60
 };
 
-// Initialize Firebase for the Frontend
 (async function() {
   const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js");
   const { getFirestore, doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js");
 
   const firebaseConfig = {
-    apiKey: "AIzaSyBimjySQnhOfYCnQV0Drdx3wRb0x173bbs", // <-- APNI FIREBASE API KEY YAHAN DALEIN
+    apiKey: "AIzaSyBimjySQnhOfYCnQV0Drdx3wRb0x173bbs", // ⚠️ YAHAN APNI API KEY DALIYE (Pichle code me jo thi)
     authDomain: "azubatrends-32349.firebaseapp.com",
     projectId: "azubatrends-32349",
     storageBucket: "azubatrends-32349.firebasestorage.app",
@@ -40,6 +38,11 @@ window.SITE_CONFIG = {
         serviceId: data.emailjs_serviceId || "",
         templateId: data.emailjs_templateId || ""
       };
+      
+      // Update UI with new settings dynamically
+      if(window.ProductLoader && window.ProductLoader.initHeader) {
+        window.ProductLoader.initHeader();
+      }
     }
   } catch(e) {
     console.error("Could not load settings from DB", e);
