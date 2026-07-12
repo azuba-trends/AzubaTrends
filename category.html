@@ -13,34 +13,7 @@
 </head>
 <body>
 
-<header class="site-header">
-  <div class="site-header__bar">
-    <a href="index.html" class="site-logo" aria-label="Angan home">
-      <img id="site-logo-img" src="" alt="" style="display:none;">
-      <span id="site-logo-text" class="site-logo__text">Angan</span>
-    </a>
-
-    <div class="search-wrap">
-      <form class="search-form" role="search" autocomplete="off">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" class="search-input" placeholder="Search for diyas, rugs, lamps…" aria-label="Search products" autocomplete="off">
-      </form>
-      <div class="search-suggestions" role="listbox" hidden></div>
-    </div>
-
-    <nav class="site-nav" aria-label="Primary">
-      <a href="index.html" data-page="index.html">Home</a>
-      <a href="category.html" data-page="category.html">Categories</a>
-      <a href="about.html" data-page="about.html">About</a>
-      <a href="terms.html" data-page="terms.html">Terms</a>
-    </nav>
-
-    <a href="checkout.html" class="header-cart" aria-label="View cart">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-      <span class="header-cart__badge" data-cart-count id="cart-count-badge">0</span>
-    </a>
-  </div>
-</header>
+<div id="header-mount"></div>
 
 <main>
   <div class="container">
@@ -56,65 +29,19 @@
   </div>
 </main>
 
-<footer class="site-footer">
-  <div class="site-footer__inner">
-    <div>
-      <h4 data-site-name>Angan</h4>
-      <p style="color:#B9C8D4; font-size:0.88rem; max-width:36ch;">Everyday home goods, delivered across West Bengal.</p>
-    </div>
-    <div>
-      <h4>Company</h4>
-      <ul>
-        <li><a href="about.html">About</a></li>
-        <li><a href="terms.html">Terms &amp; Conditions</a></li>
-      </ul>
-    </div>
-    <div>
-      <h4>Shop</h4>
-      <ul>
-        <li><a href="index.html">All Products</a></li>
-        <li><a href="category.html">Categories</a></li>
-      </ul>
-    </div>
-  </div>
-  <div class="site-footer__bottom">
-    &copy; <span data-copyright-year>2026</span> <span data-site-name>Angan</span>. All rights reserved.
-  </div>
-</footer>
-
-<nav class="bottom-nav" aria-label="Mobile">
-  <a href="index.html" data-page="index.html">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-    Home
-  </a>
-  <a href="category.html" data-page="category.html">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-    Categories
-  </a>
-  <a href="#" id="bottom-nav-search" data-page="search">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    Search
-  </a>
-  <a href="checkout.html" data-page="checkout.html">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-    Cart
-  </a>
-</nav>
+<div id="footer-mount"></div>
 
 <script src="js/site-config.js"></script>
 <script src="js/security.js"></script>
+<script src="js/layout.js"></script>
     <script src="js/cart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
 <script src="js/product-loader.js"></script>
 <script src="js/search.js"></script>
 <script>
-  document.getElementById("bottom-nav-search").addEventListener("click", (e) => {
-    e.preventDefault();
-    document.querySelector(".search-input").focus();
-  });
+  window.addEventListener("layout:ready", () => ProductLoader.initHeader());
 
   document.addEventListener("DOMContentLoaded", async () => {
-    ProductLoader.initHeader();
 
     const products = await ProductLoader.loadAllProducts();
     const grid = document.getElementById("product-grid");

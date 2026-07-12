@@ -209,6 +209,11 @@ main { flex: 1; }
   color: var(--color-primary-dark);
 }
 
+.header-cart svg {
+  width: 22px;
+  height: 22px;
+}
+
 .header-cart__badge {
   position: absolute;
   top: -2px;

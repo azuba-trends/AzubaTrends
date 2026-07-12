@@ -356,7 +356,7 @@ const ProductLoader = (function () {
     });
   }
 
-  return {
+  const ProductLoaderPublicAPI = {
     loadAllProducts,
     getProductById,
     calcDiscount,
@@ -368,4 +368,12 @@ const ProductLoader = (function () {
     renderCategoryChips,
     initHeader
   };
+
+  // Expose for non-module <script> usage across pages (checkout.html calls
+  // window.ProductLoader.initHeader() explicitly).
+  if (typeof window !== "undefined") {
+    window.ProductLoader = ProductLoaderPublicAPI;
+  }
+
+  return ProductLoaderPublicAPI;
 })();

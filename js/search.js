@@ -191,7 +191,11 @@
     });
   }
 
-  document.addEventListener("DOMContentLoaded", () => {
+  // The search bar lives inside the header partial, which is injected
+  // asynchronously by layout.js — wait for that instead of
+  // DOMContentLoaded, or querySelectorAll(".search-wrap") would find
+  // nothing (header wouldn't exist in the DOM yet).
+  window.addEventListener("layout:ready", () => {
     document.querySelectorAll(".search-wrap").forEach(wireSearchBar);
   });
 })();

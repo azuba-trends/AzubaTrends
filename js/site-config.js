@@ -19,7 +19,7 @@
  */
 
 const SITE_CONFIG = Object.freeze({
-  siteName: "AzubaTrends",
+  siteName: "Angan",
   tagline: "Everyday goods for the home, delivered around the courtyard.",
   currencySymbol: "\u20B9", // ₹
   // Intentionally blank — a Google Drive-hosted logo URL gets added later.
@@ -28,16 +28,16 @@ const SITE_CONFIG = Object.freeze({
   // is empty).
   logoUrl: "",
   adminEmail: "azubatrends@gmail.com",
-  supportPhone: "+91-62895-30407",
+  supportPhone: "+91-90000-00000",
   deliveryRegion: "West Bengal, India",
   copyrightYear: new Date().getFullYear(),
 
   // --- EmailJS (order notification email) ---
   // TODO: replace with real values from your EmailJS dashboard.
   emailjs: Object.freeze({
-    publicKey: "HfbnYA4QBzySCk_3u",
-    serviceId: "service_udqkh9u",
-    templateId: "template_bhpt2zb"
+    publicKey: "YOUR_EMAILJS_PUBLIC_KEY",
+    serviceId: "YOUR_EMAILJS_SERVICE_ID",
+    templateId: "YOUR_EMAILJS_TEMPLATE_ID"
   }),
 
   // --- Payments ---
@@ -48,3 +48,9 @@ const SITE_CONFIG = Object.freeze({
   // order "pending verification" if the customer doesn't click Done.
   upiAutoConfirmSeconds: 60
 });
+
+// Expose for non-module <script> usage across pages (checkout.js calls
+// window.SITE_CONFIG.* explicitly).
+if (typeof window !== "undefined") {
+  window.SITE_CONFIG = SITE_CONFIG;
+}

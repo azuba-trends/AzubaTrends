@@ -288,3 +288,9 @@ const Reviews = (function () {
 
   return { init, getAverage, renderStars };
 })();
+
+// Expose for non-module <script> usage across pages, consistent with every
+// other module on the site.
+if (typeof window !== "undefined") {
+  window.Reviews = Reviews;
+}

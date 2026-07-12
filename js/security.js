@@ -89,3 +89,9 @@ const Security = Object.freeze({
   // Internal mutable state for canSubmit. Not part of the public API.
   _submitTimestamps: {}
 });
+
+// Expose for non-module <script> usage across pages (checkout.js calls
+// window.Security.* explicitly).
+if (typeof window !== "undefined") {
+  window.Security = Security;
+}

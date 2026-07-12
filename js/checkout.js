@@ -224,6 +224,7 @@
     const raw = {
       name: $('field-name').value.trim(),
       phone: $('field-phone').value.trim(),
+      email: $('field-email').value.trim(),
       address: $('field-address').value.trim(),
       city: $('field-city').value.trim(),
       state: $('field-state').value.trim(),
@@ -236,6 +237,11 @@
     }
     if (!window.Security.isValidIndianPhone(raw.phone)) {
       setFieldError('phone', 'Enter a valid 10-digit Indian mobile number.');
+      valid = false;
+    }
+    // Email is optional — only validated if the customer chose to fill it in.
+    if (raw.email && !window.Security.isValidEmail(raw.email)) {
+      setFieldError('email', 'Enter a valid email address, or leave this blank.');
       valid = false;
     }
     if (!raw.address) {
@@ -262,6 +268,7 @@
     const sanitized = {
       name: window.Security.escapeHTML(raw.name),
       phone: window.Security.escapeHTML(raw.phone),
+      email: raw.email ? window.Security.escapeHTML(raw.email) : '',
       address: window.Security.escapeHTML(raw.address),
       city: window.Security.escapeHTML(raw.city),
       state: window.Security.escapeHTML(raw.state),
@@ -472,8 +479,10 @@
       orderId: currentOrderId,
       customerName: deliveryDetails.name,
       customerPhone: deliveryDetails.phone,
+      customerEmail: deliveryDetails.email || 'Not provided',
       customerAddress: deliveryDetails.address,
       customerCity: deliveryDetails.city,
+      customerState: deliveryDetails.state,
       customerPincode: deliveryDetails.pincode,
       items,
       subtotal: currentSubtotal(),
