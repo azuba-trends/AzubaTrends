@@ -40,6 +40,7 @@
 
         <!-- Info -->
         <div>
+          <div class="product-info__brand" id="product-brand" hidden></div>
           <div class="product-info__category" id="product-category"></div>
           <h1 class="product-info__title" id="product-title"></h1>
 
@@ -47,6 +48,12 @@
             <span class="price-current" id="product-price-current"></span>
             <span class="price-mrp" id="product-price-mrp" hidden></span>
             <span class="discount-pill" id="product-discount" hidden></span>
+          </div>
+
+          <div class="delivery-partner-note" id="delivery-partner-note" hidden>
+            This product comes from
+            <img id="delivery-partner-logo" alt="" hidden>
+            <strong id="delivery-partner-name"></strong>
           </div>
 
           <p class="product-info__short" id="product-short-desc"></p>
@@ -204,6 +211,14 @@
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeLightbox(); });
 
     // ---- Info ---------------------------------------------
+    const brandEl = document.getElementById("product-brand");
+    if (product.brand) {
+      Security.setTextSafely(brandEl, product.brand);
+      brandEl.hidden = false;
+    } else {
+      brandEl.hidden = true;
+    }
+
     Security.setTextSafely(document.getElementById("product-category"), product.category || "");
     Security.setTextSafely(document.getElementById("product-title"), product.title || "");
     Security.setTextSafely(document.getElementById("product-short-desc"), product.shortDescription || "");
@@ -219,6 +234,25 @@
       const discEl = document.getElementById("product-discount");
       discEl.textContent = `${discount}% off`;
       discEl.hidden = false;
+    }
+
+    // Delivery partner note — only shown when the admin actually set a
+    // name or logo for this product; otherwise the whole row stays hidden
+    // rather than showing an empty/half-filled line.
+    const deliveryNote = document.getElementById("delivery-partner-note");
+    const deliveryLogo = document.getElementById("delivery-partner-logo");
+    const deliveryNameEl = document.getElementById("delivery-partner-name");
+    if (product.deliveryPartnerName || product.deliveryPartnerImage) {
+      Security.setTextSafely(deliveryNameEl, product.deliveryPartnerName || "");
+      if (product.deliveryPartnerImage) {
+        deliveryLogo.src = product.deliveryPartnerImage;
+        deliveryLogo.hidden = false;
+      } else {
+        deliveryLogo.hidden = true;
+      }
+      deliveryNote.hidden = false;
+    } else {
+      deliveryNote.hidden = true;
     }
 
     const qtyInput = document.getElementById("qty-input");

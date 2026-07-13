@@ -8,12 +8,17 @@
 <link rel="stylesheet" href="css/components.css">
 <style>
   .checkout-main { max-width: 1040px; margin: 0 auto; padding: 32px 20px 80px; }
+  .checkout-main > h1 { margin-bottom: var(--space-6); }
   .checkout-grid { display: grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; }
-  .checkout-card { background: white; border: 1px solid var(--color-border); border-radius: 8px; padding: 24px; margin-bottom: 20px; }
-  .form-field { margin-bottom: 16px; }
-  .form-field label { display: block; font-weight: 500; font-size: 0.9rem; margin-bottom: 6px; }
+  .checkout-card { background: white; border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); padding: 24px; margin-bottom: 20px; }
+  .checkout-card h2 { margin-bottom: var(--space-5); }
+  /* components.css already makes .form-field a flex column with a 6px
+     label-to-input gap — we only add the space BETWEEN fields here,
+     rather than re-declaring label/display rules that were stacking on
+     top of the global ones and doubling every gap on this page. */
+  .form-field { margin-bottom: var(--space-4); }
   .form-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-  input[type="text"], input[type="tel"], input[type="email"], textarea, select { width: 100%; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 8px; font-family: inherit; }
+  input[type="text"], input[type="tel"], input[type="email"], textarea, select { width: 100%; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); font-family: inherit; font-size: 0.9rem; }
   .field-error { color: var(--color-danger); font-size: 0.8rem; display: block; margin-top: 4px; min-height: 1em; }
   .summary-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 0.95rem; }
   .summary-row--total { border-top: 1px solid var(--color-border); margin-top: 8px; padding-top: 12px; font-weight: bold; font-size: 1.2rem; }
@@ -127,6 +132,7 @@
             <canvas id="upi-qr-canvas" style="margin: 0 auto; display: block;"></canvas>
             <a id="upi-pay-link" href="#" style="display: none; color: var(--color-primary); font-weight: bold; margin-top: 10px;">Click here to Pay via UPI App</a>
             <p id="upi-amount-text" style="font-weight: bold; font-size: 1.1rem; margin-top: 15px;"></p>
+            <p id="upi-countdown-text" style="color: var(--color-ink-soft); font-size: 0.85rem; margin-top: 6px;"></p>
             <button type="button" id="upi-done-btn" class="btn btn-primary" style="margin-top: 15px;">I have paid, Place Order</button>
           </div>
         </section>

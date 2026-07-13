@@ -469,6 +469,13 @@
 }
 
 /* Product info column */
+.product-info__brand {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-ink-soft);
+  margin-bottom: var(--space-1);
+}
+
 .product-info__category {
   font-size: 0.78rem;
   font-weight: 600;
@@ -500,6 +507,29 @@
   font-size: 0.78rem;
   padding: 3px 10px;
   border-radius: 999px;
+}
+
+.delivery-partner-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.85rem;
+  color: var(--color-ink-soft);
+  margin-bottom: var(--space-4);
+}
+
+.delivery-partner-note strong {
+  color: var(--color-ink);
+}
+
+/* Small and crisp, never stretched — object-fit keeps the partner's logo
+   from looking pixelated or squashed regardless of its original size. */
+#delivery-partner-logo {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: var(--color-surface-sunken);
 }
 
 .product-info__short {
@@ -578,14 +608,21 @@
 }
 
 .form-field textarea,
+.form-field select,
 .form-field input[type="file"],
-.form-field input[type="text"] {
+.form-field input[type="text"],
+.form-field input[type="number"],
+.form-field input[type="email"],
+.form-field input[type="tel"] {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
   background: var(--color-surface);
   font-size: 0.9rem;
+  width: 100%;
 }
+
+.form-field select { cursor: pointer; }
 
 .form-field textarea { min-height: 90px; resize: vertical; }
 

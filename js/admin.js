@@ -43,21 +43,29 @@ setTimeout(() => {
   // it lives in the sidebar or as a "+ Add Product" / "Cancel" button inside
   // a section. data-fresh-form resets that form into "Add new" mode so
   // clicking "+ Add Product" after editing something doesn't leave stale data.
+  // Pure section switch — NO form reset. Used both by real nav clicks and by
+  // editProduct/editCategory/editBrand after they've populated a form (those
+  // must NOT trigger the fresh-form reset, or the data they just filled in
+  // gets wiped immediately — that was the "Edit always opens a blank Add
+  // form" bug).
+  function goToSection(target) {
+    document.querySelectorAll(".sidebar .nav-btn").forEach((b) => b.classList.remove("active"));
+    const sidebarMatch = document.querySelector(`.sidebar .nav-btn[data-target="${target}"]`);
+    if (sidebarMatch) sidebarMatch.classList.add("active");
+    document.querySelectorAll(".section").forEach((s) => s.classList.remove("active"));
+    document.getElementById(target).classList.add("active");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       const target = e.currentTarget.dataset.target;
-      document.querySelectorAll(".sidebar .nav-btn").forEach((b) => b.classList.remove("active"));
-      const sidebarMatch = document.querySelector(`.sidebar .nav-btn[data-target="${target}"]`);
-      if (sidebarMatch) sidebarMatch.classList.add("active");
-      document.querySelectorAll(".section").forEach((s) => s.classList.remove("active"));
-      document.getElementById(target).classList.add("active");
+      goToSection(target);
 
       const fresh = e.currentTarget.dataset.freshForm;
       if (fresh === "product") resetProductForm();
       if (fresh === "category") resetCategoryForm();
       if (fresh === "brand") resetBrandForm();
-
-      window.scrollTo({ top: 0, behavior: "smooth" });
     });
   });
 
@@ -213,7 +221,7 @@ setTimeout(() => {
       setTimeout(() => { document.getElementById("parent-cat-select").value = cat.parentSlug; }, 50);
     }
     document.getElementById("category-form-title").textContent = "Edit Category";
-    document.querySelector('.nav-btn[data-target="store-add-category"]').click();
+    goToSection("store-add-category");
   }
 
   async function deleteCategory(id) {
@@ -255,7 +263,7 @@ setTimeout(() => {
         await addDoc(collection(db, "categories"), data);
       }
       resetCategoryForm();
-      document.querySelector('.nav-btn[data-target="store-categories"]').click();
+      goToSection("store-categories");
       loadCategories();
     } catch (err) {
       alert("Error saving category: " + err.message);
@@ -322,7 +330,7 @@ setTimeout(() => {
     document.getElementById("brand-meta-desc").value = b.metaDesc || "";
     previewExistingImages(document.getElementById("brand-image-preview"), b.image ? [b.image] : []);
     document.getElementById("brand-form-title").textContent = "Edit Brand";
-    document.querySelector('.nav-btn[data-target="store-add-brand"]').click();
+    goToSection("store-add-brand");
   }
 
   async function deleteBrand(id) {
@@ -358,7 +366,7 @@ setTimeout(() => {
         await addDoc(collection(db, "brands"), data);
       }
       resetBrandForm();
-      document.querySelector('.nav-btn[data-target="store-brands"]').click();
+      goToSection("store-brands");
       loadBrands();
     } catch (err) {
       alert("Error saving brand: " + err.message);
@@ -472,7 +480,7 @@ setTimeout(() => {
     }, 100);
 
     document.getElementById("product-form-title").textContent = "Edit Product";
-    document.querySelector('.nav-btn[data-target="store-add-product"]').click();
+    goToSection("store-add-product");
   }
 
   async function toggleProductStatus(id, currentStatus) {
@@ -546,7 +554,7 @@ setTimeout(() => {
         await addDoc(collection(db, "products"), pData);
       }
       resetProductForm();
-      document.querySelector('.nav-btn[data-target="store-products"]').click();
+      goToSection("store-products");
       loadProducts();
     } catch (err) {
       document.getElementById("product-save-status").textContent = "Error: " + err.message;

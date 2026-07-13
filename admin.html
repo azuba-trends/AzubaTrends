@@ -59,10 +59,19 @@
   .tab-panel.active { display: block; }
 
   /* Image upload previews */
-  .img-preview-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-  .img-preview-row img { width: 70px; height: 70px; object-fit: cover; border-radius: 6px; border: 1px solid var(--color-border); }
-  .upload-box { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px dashed #cbd5e1; }
-  .field-hint { font-size: 0.78rem; color: #64748b; margin-top: 4px; }
+  .img-preview-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .img-preview-row:empty { margin-top: 0; }
+  .img-preview-row img { width: 72px; height: 72px; object-fit: cover; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); border: 1px solid var(--color-border); background: white; }
+  .upload-box { background: var(--color-surface-sunken); padding: var(--space-4); border-radius: var(--radius-md); border: 1.5px dashed #cbd5e1; transition: border-color 0.15s ease; }
+  .upload-box:focus-within, .upload-box:hover { border-color: var(--color-primary); }
+  .upload-box__title { font-weight: 700; color: var(--color-primary); display: flex; align-items: center; gap: 8px; margin-bottom: var(--space-3); font-size: 0.95rem; }
+  .upload-box__title .upload-icon { font-size: 1.1rem; }
+  .upload-box input[type="file"] {
+    display: block; width: 100%; padding: 9px 12px; background: white;
+    border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+    font-size: 0.85rem; cursor: pointer;
+  }
+  .field-hint { font-size: 0.78rem; color: #64748b; margin-top: 6px; }
   .required-star { color: var(--color-danger); }
 </style>
 </head>
@@ -245,20 +254,20 @@
           </div>
 
           <div class="form-field full-width upload-box">
-            <label style="font-weight: bold; color: var(--color-primary);">Feature Image (main product photo, max 2MB)</label><br>
+            <div class="upload-box__title"><span class="upload-icon">🖼️</span> Feature Image <span class="field-hint" style="margin:0;">(main product photo, max 2MB)</span></div>
             <input type="file" id="prod-feature-img" accept="image/*">
             <div class="img-preview-row" id="prod-feature-preview"></div>
           </div>
 
           <div class="form-field full-width upload-box">
-            <label style="font-weight: bold; color: var(--color-primary);">Image Gallery (up to 5 images, max 2MB each)</label><br>
+            <div class="upload-box__title"><span class="upload-icon">🖼️</span> Image Gallery <span class="field-hint" style="margin:0;">(up to 5 images, max 2MB each)</span></div>
             <input type="file" id="prod-gallery-imgs" accept="image/*" multiple>
             <div class="img-preview-row" id="prod-gallery-preview"></div>
             <p class="field-hint">Uploading new gallery images replaces the old set when editing.</p>
           </div>
 
           <div class="form-field full-width upload-box">
-            <label style="font-weight: bold; color: var(--color-primary);">Delivery Partner Logo (optional)</label><br>
+            <div class="upload-box__title"><span class="upload-icon">🚚</span> Delivery Partner Logo <span class="field-hint" style="margin:0;">(optional)</span></div>
             <input type="file" id="prod-delivery-img" accept="image/*">
             <div class="img-preview-row" id="prod-delivery-preview"></div>
           </div>
@@ -328,7 +337,7 @@
             <input type="text" id="cat-meta-desc">
           </div>
           <div class="form-field full-width upload-box">
-            <label style="font-weight:bold; color:var(--color-primary);">Category Image (optional)</label><br>
+            <div class="upload-box__title"><span class="upload-icon">🖼️</span> Category Image <span class="field-hint" style="margin:0;">(optional)</span></div>
             <input type="file" id="cat-image" accept="image/*">
             <div class="img-preview-row" id="cat-image-preview"></div>
           </div>
@@ -384,7 +393,7 @@
             <input type="text" id="brand-meta-desc">
           </div>
           <div class="form-field full-width upload-box">
-            <label style="font-weight:bold; color:var(--color-primary);">Brand Logo (optional)</label><br>
+            <div class="upload-box__title"><span class="upload-icon">🖼️</span> Brand Logo <span class="field-hint" style="margin:0;">(optional)</span></div>
             <input type="file" id="brand-image" accept="image/*">
             <div class="img-preview-row" id="brand-image-preview"></div>
           </div>

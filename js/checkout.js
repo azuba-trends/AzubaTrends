@@ -29,6 +29,13 @@
 
   function $(id) { return document.getElementById(id); }
 
+  // .hidden (the IDL property) toggles the `hidden` *attribute*, which loses
+  // to any inline `style="display:none"` already on the element — that
+  // mismatch is exactly why the COD/UPI panels never appeared before.
+  // These two helpers always win by setting style.display directly.
+  function show(id) { const el = $(id); if (el) el.style.display = ''; }
+  function hide(id) { const el = $(id); if (el) el.style.display = 'none'; }
+
   function showFieldError(id, message) {
     const el = $(id);
     if (el) el.textContent = message || '';
@@ -329,16 +336,19 @@
         selectedPaymentMethod = e.target.value;
         renderSummary();
         if (selectedPaymentMethod === 'COD') {
-          $('upi-section').hidden = true;
-          $('cod-section').hidden = false;
+          if (upiCountdownTimer) clearInterval(upiCountdownTimer);
+          hide('upi-section');
+          show('cod-section');
         } else {
-          $('cod-section').hidden = true;
-          $('upi-section').hidden = false;
+          hide('cod-section');
+          show('upi-section');
           startUPIFlow();
         }
       });
     });
   }
+
+  let upiCountdownTimer = null;
 
   function startUPIFlow() {
     const total = renderSummary();
@@ -353,8 +363,26 @@
       });
       window.QRGenerator.renderQR($('upi-qr-canvas'), link, 240);
       $('upi-pay-link').href = link;
-      $('upi-pay-link').hidden = false;
+      show('upi-pay-link');
     }
+
+    // "Timing" countdown — purely a UX nudge (there's still no backend to
+    // auto-verify a UPI payment), reminding the shopper to confirm once
+    // they've actually paid instead of leaving the QR up with no feedback.
+    if (upiCountdownTimer) clearInterval(upiCountdownTimer);
+    let secondsLeft = window.SITE_CONFIG.upiAutoConfirmSeconds || 60;
+    const countdownEl = $('upi-countdown-text');
+    const tick = () => {
+      if (secondsLeft <= 0) {
+        Security.setTextSafely(countdownEl, "Paid? Tap \"I have paid, Place Order\" below to confirm.");
+        clearInterval(upiCountdownTimer);
+        return;
+      }
+      Security.setTextSafely(countdownEl, `Scan & pay within ${secondsLeft}s, then tap "I have paid" below.`);
+      secondsLeft -= 1;
+    };
+    tick();
+    upiCountdownTimer = setInterval(tick, 1000);
   }
 
   async function finalizeOrder(method) {
