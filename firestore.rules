@@ -46,6 +46,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Coupons — the storefront (cart/checkout) must be able to read these
+    // without logging in to validate a code at checkout; only the admin
+    // panel can create/edit/delete them.
+    match /coupons/{couponId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // Store settings (UPI id, support contact, EmailJS/ImgBB keys) — every
     // page needs to READ this without logging in, but only the admin panel
     // may write it.

@@ -1,5 +1,5 @@
 {
-  "_comment": "Admin: add/edit/deactivate coupons here. type is 'percentage' or 'flat'. Set active:false to disable a coupon without deleting it.",
+  "_comment": "DEPRECATED as of the Admin > All Coupons update: this file is no longer read by the site. Coupons now live in Firestore's `coupons` collection and are fully managed from Admin -> Store -> All Coupons / Add Coupon (create, edit, activate/deactivate, delete) — changes go live instantly, no git push needed. This file is kept only as a historical reference of the two coupons that used to ship by default (WELCOME10, FLAT50); recreate them from the admin panel if you still want them.",
   "coupons": [
     {
       "code": "WELCOME10",

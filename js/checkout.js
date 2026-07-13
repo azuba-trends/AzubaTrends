@@ -353,6 +353,7 @@
   function startUPIFlow() {
     const total = renderSummary();
     Security.setTextSafely($('upi-amount-text'), `Pay Exactly ₹${total} via UPI`);
+    Security.setTextSafely($('upi-order-id-note'), `Order ID: ${currentOrderId}`);
 
     if (window.QRGenerator && window.SITE_CONFIG.upiId) {
       const link = window.QRGenerator.buildUPILink({
@@ -436,7 +437,9 @@
       Security.setTextSafely($('confirmation-order-id'), currentOrderId);
       Security.setTextSafely(
         $('confirmation-payment-note'),
-        method === 'COD' ? 'Payment to be collected on delivery.' : 'UPI payment is pending manual verification.'
+        method === 'COD'
+          ? 'Payment to be collected on delivery.'
+          : `UPI payment for Order ${currentOrderId} is pending manual verification. We'll confirm once we receive it.`
       );
 
       if (window.OrderEmail) {

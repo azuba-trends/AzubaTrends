@@ -1,5 +1,5 @@
 import {
-  collection, addDoc, getDocs, doc, deleteDoc, updateDoc, setDoc, getDoc, query, orderBy
+  collection, addDoc, doc, deleteDoc, updateDoc, setDoc, getDoc, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
 const esc = (s) => (window.Security ? window.Security.escapeHTML(s) : String(s ?? ""));
@@ -20,10 +20,11 @@ setTimeout(() => {
       loginScreen.style.display = "none";
       adminLayout.style.display = "flex";
       document.getElementById("account-login-email").textContent = user.email || "—";
-      loadAllData();
+      startRealtimeSync();
     } else {
       loginScreen.style.display = "block";
       adminLayout.style.display = "none";
+      stopRealtimeSync();
     }
   });
 
@@ -48,13 +49,25 @@ setTimeout(() => {
   // must NOT trigger the fresh-form reset, or the data they just filled in
   // gets wiped immediately — that was the "Edit always opens a blank Add
   // form" bug).
-  function goToSection(target) {
+  const LAST_SECTION_KEY = "azuba_admin_last_section";
+  // Sections that only make sense freshly opened (an empty "Add new" form,
+  // for instance) are never restored on reload — that would resurrect a
+  // half-filled form as if it still applied, which is more confusing than
+  // just landing on Overview.
+  const NON_RESTORABLE_SECTIONS = new Set(["store-add-product", "store-add-category", "store-add-brand", "store-add-coupon"]);
+
+  function goToSection(target, opts) {
     document.querySelectorAll(".sidebar .nav-btn").forEach((b) => b.classList.remove("active"));
     const sidebarMatch = document.querySelector(`.sidebar .nav-btn[data-target="${target}"]`);
     if (sidebarMatch) sidebarMatch.classList.add("active");
     document.querySelectorAll(".section").forEach((s) => s.classList.remove("active"));
-    document.getElementById(target).classList.add("active");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    const el = document.getElementById(target);
+    if (!el) return;
+    el.classList.add("active");
+    if (!NON_RESTORABLE_SECTIONS.has(target)) {
+      try { localStorage.setItem(LAST_SECTION_KEY, target); } catch (err) { /* storage unavailable, ignore */ }
+    }
+    if (!(opts && opts.silent)) window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   document.querySelectorAll(".nav-btn").forEach((btn) => {
@@ -66,6 +79,7 @@ setTimeout(() => {
       if (fresh === "product") resetProductForm();
       if (fresh === "category") resetCategoryForm();
       if (fresh === "brand") resetBrandForm();
+      if (fresh === "coupon") resetCouponForm();
     });
   });
 
@@ -170,11 +184,18 @@ setTimeout(() => {
     document.getElementById("category-form-title").textContent = "Add New Category";
   }
 
-  async function loadCategories() {
-    const snap = await getDocs(collection(db, "categories"));
-    categoriesList = [];
-    snap.forEach((d) => categoriesList.push({ id: d.id, ...d.data() }));
+  let unsubCategories = null;
+  function listenCategories() {
+    if (unsubCategories) return;
+    unsubCategories = onSnapshot(collection(db, "categories"), (snap) => {
+      categoriesList = [];
+      snap.forEach((d) => categoriesList.push({ id: d.id, ...d.data() }));
+      renderCategoriesTable();
+      renderDashboard();
+    }, (err) => console.error("categories listener error", err));
+  }
 
+  function renderCategoriesTable() {
     const tbody = document.getElementById("categories-table-body");
     const parentSelect = document.getElementById("parent-cat-select");
     tbody.innerHTML = "";
@@ -227,7 +248,6 @@ setTimeout(() => {
   async function deleteCategory(id) {
     if (!confirm("Delete this category?")) return;
     await deleteDoc(doc(db, "categories", id));
-    loadCategories();
   }
 
   document.getElementById("category-form").addEventListener("submit", async (e) => {
@@ -264,7 +284,6 @@ setTimeout(() => {
       }
       resetCategoryForm();
       goToSection("store-categories");
-      loadCategories();
     } catch (err) {
       alert("Error saving category: " + err.message);
     } finally {
@@ -274,7 +293,6 @@ setTimeout(() => {
 
   wireBulkSelect("categories-table-body", "select-all-categories", "bulk-delete-categories-btn", async (ids) => {
     for (const id of ids) await deleteDoc(doc(db, "categories", id));
-    loadCategories();
   });
 
   // ================================================================
@@ -294,11 +312,18 @@ setTimeout(() => {
     document.getElementById("brand-form-title").textContent = "Add New Brand";
   }
 
-  async function loadBrands() {
-    const snap = await getDocs(collection(db, "brands"));
-    brandsList = [];
-    snap.forEach((d) => brandsList.push({ id: d.id, ...d.data() }));
+  let unsubBrands = null;
+  function listenBrands() {
+    if (unsubBrands) return;
+    unsubBrands = onSnapshot(collection(db, "brands"), (snap) => {
+      brandsList = [];
+      snap.forEach((d) => brandsList.push({ id: d.id, ...d.data() }));
+      renderBrandsTable();
+      renderDashboard();
+    }, (err) => console.error("brands listener error", err));
+  }
 
+  function renderBrandsTable() {
     const tbody = document.getElementById("brands-table-body");
     tbody.innerHTML = "";
     brandsList.forEach((b) => {
@@ -336,7 +361,6 @@ setTimeout(() => {
   async function deleteBrand(id) {
     if (!confirm("Delete this brand?")) return;
     await deleteDoc(doc(db, "brands", id));
-    loadBrands();
   }
 
   document.getElementById("brand-form").addEventListener("submit", async (e) => {
@@ -367,7 +391,6 @@ setTimeout(() => {
       }
       resetBrandForm();
       goToSection("store-brands");
-      loadBrands();
     } catch (err) {
       alert("Error saving brand: " + err.message);
     } finally {
@@ -377,7 +400,6 @@ setTimeout(() => {
 
   wireBulkSelect("brands-table-body", "select-all-brands", "bulk-delete-brands-btn", async (ids) => {
     for (const id of ids) await deleteDoc(doc(db, "brands", id));
-    loadBrands();
   });
 
   function populateCategoryDropdown() {
@@ -395,6 +417,164 @@ setTimeout(() => {
     brandsList.forEach((b) => sel.innerHTML += `<option value="${esc(b.name)}">${esc(b.name)}</option>`);
     sel.value = current;
   }
+
+  // ================================================================
+  // COUPONS
+  // ================================================================
+  let couponsList = [];
+
+  document.getElementById("coupon-code").addEventListener("input", (e) => {
+    // Force uppercase as the shopper types, since codes are matched
+    // case-insensitively but should always be *stored* consistently.
+    const pos = e.target.selectionStart;
+    e.target.value = e.target.value.toUpperCase();
+    e.target.setSelectionRange(pos, pos);
+  });
+
+  function refreshCouponValueLabels() {
+    const isPct = document.getElementById("coupon-type").value === "percentage";
+    document.getElementById("coupon-value-label").textContent = isPct ? "Value (%) *" : "Value (₹) *";
+    document.getElementById("coupon-maxdiscount-field").style.display = isPct ? "" : "none";
+  }
+  document.getElementById("coupon-type").addEventListener("change", refreshCouponValueLabels);
+
+  function resetCouponForm() {
+    document.getElementById("coupon-form").reset();
+    document.getElementById("coupon-id").value = "";
+    document.getElementById("coupon-active").checked = true;
+    document.getElementById("coupon-minorder").value = 0;
+    document.getElementById("coupon-form-title").textContent = "Add New Coupon";
+    document.getElementById("coupon-save-status").textContent = "";
+    refreshCouponValueLabels();
+  }
+
+  let unsubCoupons = null;
+  function listenCoupons() {
+    if (unsubCoupons) return;
+    unsubCoupons = onSnapshot(collection(db, "coupons"), (snap) => {
+      couponsList = [];
+      snap.forEach((d) => couponsList.push({ id: d.id, ...d.data() }));
+      renderCouponsTable();
+    }, (err) => console.error("coupons listener error", err));
+  }
+
+  function couponIsExpired(c) {
+    if (!c.expiryDate) return false;
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    return c.expiryDate < todayStr;
+  }
+
+  function renderCouponsTable() {
+    const tbody = document.getElementById("coupons-table-body");
+    tbody.innerHTML = "";
+    if (couponsList.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--color-muted);">No coupons yet — click "+ Add Coupon" to create one.</td></tr>`;
+      return;
+    }
+    couponsList.forEach((c) => {
+      const expired = couponIsExpired(c);
+      const isActive = c.active && !expired;
+      const statusLabel = expired ? "EXPIRED" : (c.active ? "ACTIVE" : "INACTIVE");
+      const statusColor = expired ? "var(--color-danger)" : (c.active ? "var(--color-success)" : "var(--color-muted)");
+      const valueDisplay = c.type === "percentage" ? `${c.value}%` : fmtRupee(c.value);
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><input type="checkbox" class="row-select" data-id="${c.id}"></td>
+        <td><strong>${esc(c.code)}</strong></td>
+        <td>${c.type === "percentage" ? "Percentage" : "Flat"}</td>
+        <td>${esc(valueDisplay)}</td>
+        <td>${fmtRupee(c.minOrderValue || 0)}</td>
+        <td>${c.type === "percentage" && c.maxDiscount ? fmtRupee(c.maxDiscount) : "—"}</td>
+        <td>${c.expiryDate ? esc(c.expiryDate) : "No expiry"}</td>
+        <td style="color:${statusColor}; font-weight:bold;">${statusLabel}</td>
+        <td>
+          <button class="btn btn-outline toggle-coupon-btn" data-id="${c.id}" data-active="${c.active ? "1" : "0"}" style="padding:4px 8px; font-size:0.8rem;">${c.active ? "Deactivate" : "Activate"}</button>
+          <button class="btn btn-outline edit-coupon-btn" data-id="${c.id}" style="padding:4px 8px; font-size:0.8rem;">Edit</button>
+          <button class="btn btn-outline del-coupon-btn" data-id="${c.id}" style="color:var(--color-danger); padding:4px 8px; font-size:0.8rem;">Delete</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll(".edit-coupon-btn").forEach((b) => b.addEventListener("click", () => editCoupon(b.dataset.id)));
+    tbody.querySelectorAll(".del-coupon-btn").forEach((b) => b.addEventListener("click", () => deleteCoupon(b.dataset.id)));
+    tbody.querySelectorAll(".toggle-coupon-btn").forEach((b) => b.addEventListener("click", () => toggleCouponActive(b.dataset.id, b.dataset.active === "1")));
+  }
+
+  function editCoupon(id) {
+    const c = couponsList.find((x) => x.id === id);
+    if (!c) return;
+    document.getElementById("coupon-id").value = c.id;
+    document.getElementById("coupon-code").value = c.code || "";
+    document.getElementById("coupon-type").value = c.type || "percentage";
+    document.getElementById("coupon-value").value = c.value ?? "";
+    document.getElementById("coupon-maxdiscount").value = c.maxDiscount ?? "";
+    document.getElementById("coupon-minorder").value = c.minOrderValue ?? 0;
+    document.getElementById("coupon-expiry").value = c.expiryDate || "";
+    document.getElementById("coupon-active").checked = c.active !== false;
+    refreshCouponValueLabels();
+    document.getElementById("coupon-form-title").textContent = "Edit Coupon";
+    goToSection("store-add-coupon");
+  }
+
+  async function deleteCoupon(id) {
+    if (!confirm("Delete this coupon? Shoppers won't be able to apply it anymore.")) return;
+    await deleteDoc(doc(db, "coupons", id));
+  }
+
+  async function toggleCouponActive(id, currentlyActive) {
+    await updateDoc(doc(db, "coupons", id), { active: !currentlyActive });
+  }
+
+  document.getElementById("coupon-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById("save-coupon-btn");
+    const statusEl = document.getElementById("coupon-save-status");
+    const code = document.getElementById("coupon-code").value.trim().toUpperCase();
+    const id = document.getElementById("coupon-id").value;
+
+    if (!code) { statusEl.textContent = "Coupon code is required."; statusEl.style.color = "var(--color-danger)"; return; }
+
+    // Prevent duplicate codes (case-insensitive), except when editing that same coupon.
+    const duplicate = couponsList.find((c) => c.id !== id && String(c.code || "").toUpperCase() === code);
+    if (duplicate) {
+      statusEl.textContent = `A coupon with code "${code}" already exists.`;
+      statusEl.style.color = "var(--color-danger)";
+      return;
+    }
+
+    btn.textContent = "Saving..."; btn.disabled = true;
+    statusEl.textContent = "";
+    try {
+      const data = {
+        code,
+        type: document.getElementById("coupon-type").value,
+        value: Number(document.getElementById("coupon-value").value) || 0,
+        maxDiscount: document.getElementById("coupon-maxdiscount").value === "" ? null : Number(document.getElementById("coupon-maxdiscount").value),
+        minOrderValue: Number(document.getElementById("coupon-minorder").value) || 0,
+        expiryDate: document.getElementById("coupon-expiry").value || "",
+        active: document.getElementById("coupon-active").checked,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (id) {
+        await updateDoc(doc(db, "coupons", id), data);
+      } else {
+        data.createdAt = new Date().toISOString();
+        await addDoc(collection(db, "coupons"), data);
+      }
+      resetCouponForm();
+      goToSection("store-coupons");
+    } catch (err) {
+      statusEl.textContent = "Error: " + err.message;
+      statusEl.style.color = "var(--color-danger)";
+    } finally {
+      btn.textContent = "Save Coupon"; btn.disabled = false;
+    }
+  });
+
+  wireBulkSelect("coupons-table-body", "select-all-coupons", "bulk-delete-coupons-btn", async (ids) => {
+    for (const id of ids) await deleteDoc(doc(db, "coupons", id));
+  });
 
   // ================================================================
   // PRODUCTS
@@ -419,11 +599,19 @@ setTimeout(() => {
     document.getElementById("product-form-title").textContent = "Add New Product";
   }
 
-  async function loadProducts() {
-    const snap = await getDocs(collection(db, "products"));
-    productsList = [];
-    snap.forEach((d) => productsList.push({ id: d.id, ...d.data() }));
+  let unsubProducts = null;
+  function listenProducts() {
+    if (unsubProducts) return;
+    unsubProducts = onSnapshot(collection(db, "products"), (snap) => {
+      productsList = [];
+      snap.forEach((d) => productsList.push({ id: d.id, ...d.data() }));
+      renderProductsTable();
+      renderDashboard();
+      renderAnalytics();
+    }, (err) => console.error("products listener error", err));
+  }
 
+  function renderProductsTable() {
     const tbody = document.getElementById("products-table-body");
     tbody.innerHTML = "";
     productsList.forEach((p) => {
@@ -486,13 +674,11 @@ setTimeout(() => {
   async function toggleProductStatus(id, currentStatus) {
     const newStatus = currentStatus === "active" ? "draft" : "active";
     await updateDoc(doc(db, "products", id), { status: newStatus });
-    loadProducts();
   }
 
   async function deleteProduct(id) {
     if (!confirm("Delete this product permanently?")) return;
     await deleteDoc(doc(db, "products", id));
-    loadProducts();
   }
 
   async function handleProductSave(status) {
@@ -555,7 +741,6 @@ setTimeout(() => {
       }
       resetProductForm();
       goToSection("store-products");
-      loadProducts();
     } catch (err) {
       document.getElementById("product-save-status").textContent = "Error: " + err.message;
       document.getElementById("product-save-status").style.color = "var(--color-danger)";
@@ -569,7 +754,6 @@ setTimeout(() => {
 
   wireBulkSelect("products-table-body", "select-all-products", "bulk-delete-products-btn", async (ids) => {
     for (const id of ids) await deleteDoc(doc(db, "products", id));
-    loadProducts();
   });
 
   // ================================================================
@@ -589,12 +773,23 @@ setTimeout(() => {
     return true;
   }
 
-  async function loadOrders() {
-    const snap = await getDocs(collection(db, "orders"));
-    ordersList = [];
-    snap.forEach((d) => ordersList.push({ id: d.id, ...d.data() }));
-    ordersList.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-    renderOrdersTable();
+  let unsubOrders = null;
+  function listenOrders() {
+    if (unsubOrders) return;
+    unsubOrders = onSnapshot(collection(db, "orders"), (snap) => {
+      ordersList = [];
+      snap.forEach((d) => ordersList.push({ id: d.id, ...d.data() }));
+      ordersList.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      renderOrdersTable();
+      renderDashboard();
+      renderAnalytics();
+      // Keep an already-open order details modal in sync too (e.g. status
+      // changed from another tab/device while this admin had it open).
+      if (currentEditingOrderId && document.getElementById("order-details-modal").style.display !== "none") {
+        const stillExists = ordersList.some((o) => o.id === currentEditingOrderId);
+        if (stillExists) viewOrder(currentEditingOrderId);
+      }
+    }, (err) => console.error("orders listener error", err));
   }
 
   function renderOrdersTable() {
@@ -636,7 +831,8 @@ setTimeout(() => {
     custDetails.innerHTML = "";
     const lines = [
       ["Name", o.customerName], ["Phone", o.customerPhone], ["Email", o.customerEmail],
-      ["Address", `${o.customerAddress || ""}, ${o.customerCity || ""}, ${o.customerState || ""} - ${o.customerPincode || ""}`]
+      ["Address", `${o.customerAddress || ""}, ${o.customerCity || ""}, ${o.customerState || ""} - ${o.customerPincode || ""}`],
+      ["Payment Method", o.paymentMethod]
     ];
     lines.forEach(([label, val]) => {
       const p = document.createElement("div");
@@ -676,7 +872,6 @@ setTimeout(() => {
     const newStatus = document.getElementById("modal-order-status").value;
     await updateDoc(doc(db, "orders", currentEditingOrderId), { status: newStatus });
     alert("Status updated!");
-    loadOrders();
   });
 
   // ================================================================
@@ -710,6 +905,17 @@ setTimeout(() => {
     });
   }
 
+  // Local YYYY-MM-DD (not UTC) — the previous version keyed days off
+  // toISOString(), which is UTC, while the bar *label* used the local
+  // weekday. Since IST is UTC+5:30, any order placed in the first ~5.5
+  // hours of the local day landed in the previous UTC day's bucket, so it
+  // silently showed up under the wrong day (or was missing from "today").
+  // Using local date parts everywhere keeps the bucket and its label in
+  // sync with the admin's own calendar.
+  function localDateKey(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
   function renderAnalytics() {
     // Revenue, last 7 days
     const days = [];
@@ -719,9 +925,9 @@ setTimeout(() => {
       days.push(d);
     }
     const dayRevenue = days.map((d) => {
-      const key = d.toISOString().slice(0, 10);
+      const key = localDateKey(d);
       const total = ordersList
-        .filter((o) => o.status !== "Cancelled" && (o.createdAt || "").slice(0, 10) === key)
+        .filter((o) => o.status !== "Cancelled" && o.createdAt && localDateKey(new Date(o.createdAt)) === key)
         .reduce((sum, o) => sum + (Number(o.finalTotal) || 0), 0);
       return { label: d.toLocaleDateString("en-IN", { weekday: "short" }), value: total };
     });
@@ -836,16 +1042,42 @@ setTimeout(() => {
   });
 
   // ================================================================
-  // Boot sequence
+  // Boot sequence — realtime sync
   // ================================================================
-  async function loadAllData() {
+  // Every list (products/categories/brands/coupons/orders) is now backed by
+  // an onSnapshot listener instead of a one-time getDocs call, so placing a
+  // new order, editing a product from another tab, etc. shows up here the
+  // instant Firestore pushes the change — no manual reload, no hard reload.
+  let syncStarted = false;
+
+  async function startRealtimeSync() {
+    if (syncStarted) return;
+    syncStarted = true;
+
     await loadSettings();
-    await loadCategories();
-    await loadBrands();
-    await loadProducts();
-    await loadOrders();
-    renderDashboard();
-    renderAnalytics();
+    listenCategories();
+    listenBrands();
+    listenCoupons();
+    listenProducts();
+    listenOrders();
+
+    // Reopen whichever section the admin was last looking at (Overview by
+    // default) instead of always resetting to the first sidebar item on a
+    // browser reload.
+    let target = "dash-overview";
+    try {
+      const saved = localStorage.getItem(LAST_SECTION_KEY);
+      if (saved && document.getElementById(saved)) target = saved;
+    } catch (err) { /* storage unavailable, fall back to default */ }
+    goToSection(target, { silent: true });
+  }
+
+  function stopRealtimeSync() {
+    [unsubCategories, unsubBrands, unsubCoupons, unsubProducts, unsubOrders].forEach((unsub) => {
+      if (typeof unsub === "function") unsub();
+    });
+    unsubCategories = unsubBrands = unsubCoupons = unsubProducts = unsubOrders = null;
+    syncStarted = false;
   }
 
 }, 500);

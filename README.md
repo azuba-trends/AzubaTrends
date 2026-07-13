@@ -4,6 +4,12 @@ A guest-checkout e-commerce site for West-Bengal-only delivery, deployable as
 a static site (GitHub Pages / Vercel) with **Firebase (Firestore + Auth) as
 the database** — no server code to run or host yourself.
 
+> **One-time action after this update:** coupons moved from
+> `config/coupons.json` into a new Firestore `coupons` collection, and
+> `firestore.rules` now has a rule for it. Re-paste the full contents of
+> `firestore.rules` into Firebase Console -> Firestore Database -> Rules ->
+> Publish, or coupon codes won't validate at checkout.
+
 ## The database question, answered directly
 
 > "Mujhe GitHub par hi chalana hai, database kaise possible hoga?"
@@ -59,7 +65,7 @@ AzubaTrends/
 │   ├── product-loader.js    Reads /products from Firestore, renders cards
 │   ├── search.js            Fuzzy search, autosuggest, out-of-stock ranking
 │   ├── cart.js               Cart state (add/remove/update qty), localStorage
-│   ├── coupon.js             Validates coupons against config/coupons.json
+│   ├── coupon.js             Validates coupons against Firestore's `coupons` collection
 │   ├── checkout.js           Guest checkout: validation, geo-check, order write, payment
 │   ├── qr-generator.js       Generates UPI QR code client-side
 │   ├── reviews.js            Product reviews (localStorage only — see limitations)
@@ -69,7 +75,8 @@ AzubaTrends/
 ├── partials/header.html, footer.html
 ├── config/
 │   ├── geo-config.json      Admin-editable allowed state/cities/pincodes
-│   └── coupons.json         Coupon definitions
+│   └── coupons.json         Deprecated — kept only as a historical reference;
+│                              coupons are now managed from Admin > All Coupons
 │
 ├── api/product.js            Vercel serverless function: per-product OG tags for link
 │                              previews on WhatsApp/social (Vercel-only — see below)
@@ -89,13 +96,23 @@ Login at `/admin.html` with the email/password you create in **Firebase
 Console -> Authentication -> Users** (there's no public sign-up — you create
 this account yourself, once).
 
+- **Everything updates live.** Products, categories, brands, coupons, and
+  orders are all backed by Firestore realtime listeners (`onSnapshot`), not
+  one-time reads — a new order placed on the storefront, or an edit made
+  from a second tab/device, appears here immediately. No manual reload or
+  hard reload needed. The panel also remembers which section you were on
+  and reopens it after a browser refresh instead of always jumping back to
+  Overview.
 - **Dashboard**
   - *Overview* — total products, live vs paused, out-of-stock count, total
     orders, total revenue (sum of every non-Cancelled order's final total).
   - *Analytics* — revenue for the last 7 days, an orders-by-status
     breakdown, and a top-5-products-by-units-sold table. All computed
     client-side from your existing Firestore data — no extra service needed.
-    (See "Analytics at scale" below for the honest trade-off.)
+    Day buckets use your browser's local calendar day consistently (not a
+    UTC/local mix), so orders always land on the correct day/weekday bar
+    regardless of time zone. (See "Analytics at scale" below for the honest
+    trade-off.)
 - **Store**
   - *All Products / Add Product* — name, auto-slug (editable), category,
     brand (dropdown, managed under Brands), MRP, sale price, stock, SKU,
@@ -109,6 +126,12 @@ this account yourself, once).
     title/description, optional image. Edit/Delete per row.
   - *All Brands / Add Brand* — same idea as categories, without the
     parent/child concept.
+  - *All Coupons / Add Coupon* — code, percentage or flat discount, max
+    discount cap (percentage coupons), minimum order value, optional expiry
+    date, and an Active/Inactive toggle. Coupons live in Firestore's
+    `coupons` collection and are validated live from `cart.html`/
+    `checkout.html` — create, edit, activate/deactivate, or delete one here
+    and it's live on the storefront immediately, no git push required.
   - *All Orders* — tabbed by Active / Finished (Delivered) / Cancelled / All.
     "Process" opens the full order: customer details, full price breakdown
     (subtotal, discount, delivery fee, COD charge, final total), items, and
