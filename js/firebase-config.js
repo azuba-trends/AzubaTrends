@@ -3,15 +3,21 @@ import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 
-// Yahan apni original apiKey daalna mat bhulna
-const firebaseConfig = {
-  apiKey: "AIzaSyBimjySQnhOfYCnQV0Drdx3wRb0x173bbs", 
-  authDomain: "azubatrends-32349.firebaseapp.com",
-  projectId: "azubatrends-32349",
-  storageBucket: "azubatrends-32349.firebasestorage.app",
-  messagingSenderId: "767815210504",
-  appId: "1:767815210504:web:39a81e27237fc66e29a3bd"
-};
+// Your Firebase project config now lives in config/firebase-config.json —
+// setting up a new Firebase project (or rotating keys) means editing that
+// one JSON file, not this code. (Note: Firebase's apiKey is designed to be
+// public in client-side apps — see the _comment in that file for why this
+// isn't a secret the way an ImgBB/EmailJS key is. Real access control is
+// firestore.rules.)
+async function loadFirebaseConfig() {
+  const res = await fetch("config/firebase-config.json");
+  if (!res.ok) throw new Error("Could not load config/firebase-config.json (HTTP " + res.status + ")");
+  const cfg = await res.json();
+  delete cfg._comment;
+  return cfg;
+}
+
+const firebaseConfig = await loadFirebaseConfig();
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);

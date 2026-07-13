@@ -424,7 +424,7 @@
     };
 
     try {
-      const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js');
+      const { doc, setDoc, updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js');
       while (!window.FirebaseApp) { await new Promise((r) => setTimeout(r, 100)); }
       const db = window.FirebaseApp.db;
       await setDoc(doc(db, 'orders', currentOrderId), orderPayload);
@@ -443,7 +443,19 @@
       );
 
       if (window.OrderEmail) {
-        window.OrderEmail.send(orderPayload).catch((e) => console.log('EmailJS failed, but order saved in DB.', e));
+        window.OrderEmail.send(orderPayload)
+          .then(() => updateDoc(doc(db, 'orders', currentOrderId), { emailStatus: 'sent' }).catch(() => {}))
+          .catch((e) => {
+            // Don't block the order on email failure, but DO record it —
+            // this used to fail completely silently (console.log only),
+            // which made "the customer says no email arrived" impossible
+            // to diagnose. Now it shows up on the order in Admin > Orders.
+            console.warn('EmailJS failed, but order saved in DB.', e);
+            updateDoc(doc(db, 'orders', currentOrderId), {
+              emailStatus: 'failed',
+              emailError: String((e && (e.text || e.message)) || e)
+            }).catch(() => {});
+          });
       }
     } catch (err) {
       console.error(err);

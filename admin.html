@@ -73,6 +73,72 @@
   }
   .field-hint { font-size: 0.78rem; color: #64748b; margin-top: 6px; }
   .required-star { color: var(--color-danger); }
+
+  /* ================================================================
+     MOBILE RESPONSIVE
+     The layout above was built desktop-only (fixed 250px sidebar,
+     always-visible, no breakpoints). Below turns the sidebar into an
+     off-canvas drawer under 860px and adjusts spacing/grids so nothing
+     gets squeezed into an unusable column on a phone.
+     ================================================================ */
+  .mobile-topbar { display: none; }
+  #sidebar-backdrop { display: none; }
+
+  @media (max-width: 860px) {
+    #admin-layout.open-layout, #admin-layout { flex-direction: column; }
+
+    .mobile-topbar {
+      display: flex; align-items: center; gap: 14px;
+      background: var(--color-primary-dark); color: white;
+      padding: 14px 16px; position: sticky; top: 0; z-index: 40;
+      flex-shrink: 0;
+    }
+    .mobile-topbar button {
+      background: none; border: none; color: white; font-size: 1.5rem;
+      cursor: pointer; line-height: 1; padding: 2px 6px; border-radius: 4px;
+    }
+    .mobile-topbar button:active { background: rgba(255,255,255,0.15); }
+    .mobile-topbar-title { font-weight: 700; font-size: 1.05rem; }
+
+    .sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0; z-index: 60;
+      width: 260px; max-width: 82vw;
+      transform: translateX(-100%);
+      transition: transform 0.25s ease;
+      box-shadow: 2px 0 16px rgba(0,0,0,0.25);
+    }
+    .sidebar.open { transform: translateX(0); }
+
+    #sidebar-backdrop {
+      display: block; position: fixed; inset: 0; background: rgba(15,23,42,0.45);
+      z-index: 55; opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+    }
+    #sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
+
+    .main-content { padding: 16px; }
+
+    .form-grid { grid-template-columns: 1fr; gap: 14px; }
+    .full-width { grid-column: span 1; }
+
+    .stat-cards { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .stat-card { padding: 14px; }
+    .stat-card .stat-value { font-size: 1.4rem; }
+
+    table { font-size: 0.82rem; }
+    th, td { padding: 9px 8px; white-space: nowrap; }
+
+    .section-header-row { flex-wrap: wrap; gap: 10px; }
+    .section-header-row h2 { font-size: 1.25rem; }
+
+    .bar-row .bar-label { width: 58px; font-size: 0.72rem; }
+    .bar-row .bar-value { width: 55px; font-size: 0.75rem; }
+
+    .login-container { margin: 40px 16px; max-width: none; }
+  }
+
+  @media (max-width: 480px) {
+    .stat-cards { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -96,6 +162,13 @@
 
 <!-- ADMIN LAYOUT -->
 <div id="admin-layout">
+  <!-- Mobile-only topbar: hamburger opens the sidebar as a drawer -->
+  <div class="mobile-topbar">
+    <button id="mobile-menu-btn" aria-label="Open menu" aria-expanded="false">☰</button>
+    <span class="mobile-topbar-title" data-site-name>AzubaTrends Admin</span>
+  </div>
+  <div id="sidebar-backdrop"></div>
+
   <!-- Sidebar -->
   <div class="sidebar">
     <div class="sidebar-header" data-site-name>AzubaTrends Admin</div>
@@ -157,16 +230,18 @@
 
       <div class="card">
         <h3 style="margin-top:0;">Top Selling Products (by quantity sold)</h3>
-        <table>
-          <thead><tr><th>#</th><th>Product</th><th>Units Sold</th><th>Revenue</th></tr></thead>
-          <tbody id="analytics-top-products"></tbody>
-        </table>
+        <div style="overflow-x: auto;">
+          <table>
+            <thead><tr><th>#</th><th>Product</th><th>Units Sold</th><th>Revenue</th></tr></thead>
+            <tbody id="analytics-top-products"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
     <!-- ============ STORE: ALL PRODUCTS ============ -->
     <div id="store-products" class="section">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <div class="section-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h2>All Products</h2>
         <div style="display:flex; gap:8px;">
           <button id="bulk-delete-products-btn" class="btn btn-outline" style="color:var(--color-danger); border-color:var(--color-danger); display:none;">Delete Selected</button>
@@ -286,7 +361,7 @@
 
     <!-- ============ STORE: ALL CATEGORIES ============ -->
     <div id="store-categories" class="section">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <div class="section-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h2>All Categories</h2>
         <div style="display:flex; gap:8px;">
           <button id="bulk-delete-categories-btn" class="btn btn-outline" style="color:var(--color-danger); border-color:var(--color-danger); display:none;">Delete Selected</button>
@@ -294,10 +369,12 @@
         </div>
       </div>
       <div class="card">
-        <table>
-          <thead><tr><th><input type="checkbox" id="select-all-categories"></th><th>Name</th><th>Type</th><th>Slug</th><th>Actions</th></tr></thead>
-          <tbody id="categories-table-body"></tbody>
-        </table>
+        <div style="overflow-x: auto;">
+          <table>
+            <thead><tr><th><input type="checkbox" id="select-all-categories"></th><th>Name</th><th>Type</th><th>Slug</th><th>Actions</th></tr></thead>
+            <tbody id="categories-table-body"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -353,7 +430,7 @@
 
     <!-- ============ STORE: ALL BRANDS ============ -->
     <div id="store-brands" class="section">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <div class="section-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h2>All Brands</h2>
         <div style="display:flex; gap:8px;">
           <button id="bulk-delete-brands-btn" class="btn btn-outline" style="color:var(--color-danger); border-color:var(--color-danger); display:none;">Delete Selected</button>
@@ -361,10 +438,12 @@
         </div>
       </div>
       <div class="card">
-        <table>
-          <thead><tr><th><input type="checkbox" id="select-all-brands"></th><th>Name</th><th>Slug</th><th>Actions</th></tr></thead>
-          <tbody id="brands-table-body"></tbody>
-        </table>
+        <div style="overflow-x: auto;">
+          <table>
+            <thead><tr><th><input type="checkbox" id="select-all-brands"></th><th>Name</th><th>Slug</th><th>Actions</th></tr></thead>
+            <tbody id="brands-table-body"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -409,7 +488,7 @@
 
     <!-- ============ STORE: ALL COUPONS ============ -->
     <div id="store-coupons" class="section">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <div class="section-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h2>All Coupons</h2>
         <div style="display:flex; gap:8px;">
           <button id="bulk-delete-coupons-btn" class="btn btn-outline" style="color:var(--color-danger); border-color:var(--color-danger); display:none;">Delete Selected</button>

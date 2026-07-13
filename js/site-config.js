@@ -15,14 +15,12 @@ window.SITE_CONFIG_READY = (async function() {
   const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js");
   const { getFirestore, doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js");
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyBimjySQnhOfYCnQV0Drdx3wRb0x173bbs", // ⚠️ YAHAN APNI API KEY DALIYE (Pichle code me jo thi)
-    authDomain: "azubatrends-32349.firebaseapp.com",
-    projectId: "azubatrends-32349",
-    storageBucket: "azubatrends-32349.firebasestorage.app",
-    messagingSenderId: "767815210504",
-    appId: "1:767815210504:web:39a81e27237fc66e29a3bd"
-  };
+  // Firebase project config lives in config/firebase-config.json now, not
+  // hardcoded here — edit that one JSON file if you ever need to point
+  // this site at a different Firebase project.
+  const res = await fetch("config/firebase-config.json");
+  const firebaseConfig = await res.json();
+  delete firebaseConfig._comment;
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);

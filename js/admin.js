@@ -70,10 +70,36 @@ setTimeout(() => {
     if (!(opts && opts.silent)) window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  // --- Mobile sidebar drawer (hamburger menu) ---
+  // On screens under 860px the sidebar is fixed/off-canvas (see admin.html
+  // CSS); this just toggles the classes that slide it in/out and dims the
+  // rest of the screen behind it.
+  const mobileMenuBtn = document.getElementById("mobile-menu-btn");
+  const sidebarEl = document.querySelector(".sidebar");
+  const sidebarBackdrop = document.getElementById("sidebar-backdrop");
+
+  function openMobileSidebar() {
+    sidebarEl.classList.add("open");
+    sidebarBackdrop.classList.add("open");
+    mobileMenuBtn.setAttribute("aria-expanded", "true");
+  }
+  function closeMobileSidebar() {
+    sidebarEl.classList.remove("open");
+    sidebarBackdrop.classList.remove("open");
+    mobileMenuBtn.setAttribute("aria-expanded", "false");
+  }
+  if (mobileMenuBtn) {
+    mobileMenuBtn.addEventListener("click", () => {
+      sidebarEl.classList.contains("open") ? closeMobileSidebar() : openMobileSidebar();
+    });
+    sidebarBackdrop.addEventListener("click", closeMobileSidebar);
+  }
+
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       const target = e.currentTarget.dataset.target;
       goToSection(target);
+      closeMobileSidebar();
 
       const fresh = e.currentTarget.dataset.freshForm;
       if (fresh === "product") resetProductForm();
@@ -832,7 +858,8 @@ setTimeout(() => {
     const lines = [
       ["Name", o.customerName], ["Phone", o.customerPhone], ["Email", o.customerEmail],
       ["Address", `${o.customerAddress || ""}, ${o.customerCity || ""}, ${o.customerState || ""} - ${o.customerPincode || ""}`],
-      ["Payment Method", o.paymentMethod]
+      ["Payment Method", o.paymentMethod],
+      ["Order Email", o.emailStatus === "sent" ? "✓ Sent" : o.emailStatus === "failed" ? `✗ Failed — ${o.emailError || "unknown error"}` : "— (not attempted / still sending)"]
     ];
     lines.forEach(([label, val]) => {
       const p = document.createElement("div");

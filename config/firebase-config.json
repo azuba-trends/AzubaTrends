@@ -1,0 +1,9 @@
+{
+  "_comment": "Firebase project config, read by js/firebase-config.js (admin) and js/site-config.js (storefront) at page load. Copy this from Firebase Console -> Project Settings -> General -> Your apps -> SDK setup and configuration -> Config. IMPORTANT: this is NOT a secret — Firebase's apiKey is meant to be public in client-side apps (Google's own docs confirm this); it only identifies which Firebase project to talk to. The actual access control is firestore.rules (paste that into Firebase Console -> Firestore -> Rules) and, optionally, restricting this API key to your domain(s) in Google Cloud Console -> APIs & Services -> Credentials.",
+  "apiKey": "AIzaSyBimjySQnhOfYCnQV0Drdx3wRb0x173bbs",
+  "authDomain": "azubatrends-32349.firebaseapp.com",
+  "projectId": "azubatrends-32349",
+  "storageBucket": "azubatrends-32349.firebasestorage.app",
+  "messagingSenderId": "767815210504",
+  "appId": "1:767815210504:web:39a81e27237fc66e29a3bd"
+}
