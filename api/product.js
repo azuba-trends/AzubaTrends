@@ -1,4 +1,20 @@
 // api/product.js
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// Safe specifically for embedding inside a <script> block as a JS string
+// literal (escapeHtml alone isn't enough there — </script> or a stray quote
+// could still break out).
+function escapeForScript(str) {
+  return String(str ?? "").replace(/[<>&'"\\]/g, (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"));
+}
+
 export default async function handler(req, res) {
   const { id } = req.query;
 
@@ -10,16 +26,21 @@ export default async function handler(req, res) {
   try {
     // 1. Firebase REST API se data fetch karna
     // Note: Project ID 'azubatrends-32349' aapki firebaseConfig se li gayi hai
-    const firebaseUrl = `https://firestore.googleapis.com/v1/projects/azubatrends-32349/databases/(default)/documents/products/${id}`;
-    
+    const firebaseUrl = `https://firestore.googleapis.com/v1/projects/azubatrends-32349/databases/(default)/documents/products/${encodeURIComponent(id)}`;
+
     const response = await fetch(firebaseUrl);
     const data = await response.json();
 
     // 2. Data extract karna (Firestore REST API ka format thoda alag hota hai)
     const product = data.fields;
-    const title = product?.title?.stringValue || "AzubaTrends Product";
-    const description = product?.shortDescription?.stringValue || "Buy amazing products on AzubaTrends.";
-    const imageUrl = product?.images?.arrayValue?.values?.[0]?.stringValue || "https://yourwebsite.com/images/logo-placeholder.png";
+    const rawTitle = product?.title?.stringValue || "AzubaTrends Product";
+    const rawDescription = product?.shortDescription?.stringValue || "Buy amazing products on AzubaTrends.";
+    const rawImageUrl = product?.images?.arrayValue?.values?.[0]?.stringValue || "https://yourwebsite.com/images/logo-placeholder.png";
+
+    const title = escapeHtml(rawTitle);
+    const description = escapeHtml(rawDescription);
+    const imageUrl = escapeHtml(rawImageUrl);
+    const safeIdForScript = escapeForScript(id);
 
     // 3. Custom HTML banakar (Meta Tags ke sath) bhejna
     const html = `
@@ -28,7 +49,7 @@ export default async function handler(req, res) {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        
+
         <!-- STANDARD SEO -->
         <title>${title} - AzubaTrends</title>
         <meta name="description" content="${description}">
@@ -38,7 +59,7 @@ export default async function handler(req, res) {
         <meta property="og:description" content="${description}">
         <meta property="og:image" content="${imageUrl}">
         <meta property="og:type" content="product">
-        
+
         <!-- TWITTER -->
         <meta name="twitter:card" content="summary_large_image">
         <meta name="twitter:title" content="${title}">
@@ -47,9 +68,9 @@ export default async function handler(req, res) {
 
         <!-- Redirect to real page for normal users -->
         <script>
-          // Jab normal user (chrome/safari) ise open karega, 
+          // Jab normal user (chrome/safari) ise open karega,
           // toh wo original product page par chala jayega jahan cart/UI load hoga.
-          window.location.replace("/product.html?id=${id}");
+          window.location.replace("/product.html?id=${safeIdForScript}");
         </script>
       </head>
       <body>
@@ -66,6 +87,6 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error(error);
-    res.redirect(301, '/product.html?id=' + id);
+    res.redirect(301, '/product.html?id=' + encodeURIComponent(id));
   }
 }

@@ -7,7 +7,11 @@ window.SITE_CONFIG = {
   upiAutoConfirmSeconds: 60
 };
 
-(async function() {
+// Other scripts (checkout.js, product-loader.js, etc.) can
+// `await window.SITE_CONFIG_READY` to be sure upiId/codExtraCharge/emailjs
+// have actually come back from Firestore before using them, instead of
+// racing this async IIFE.
+window.SITE_CONFIG_READY = (async function() {
   const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js");
   const { getFirestore, doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js");
 
@@ -33,6 +37,9 @@ window.SITE_CONFIG = {
       window.SITE_CONFIG.upiId = data.upiId || "";
       window.SITE_CONFIG.adminEmail = data.supportEmail || "azubatrends@gmail.com";
       window.SITE_CONFIG.supportPhone = data.supportPhone || "";
+      window.SITE_CONFIG.codExtraCharge = (data.codExtraCharge !== undefined && data.codExtraCharge !== null)
+        ? Number(data.codExtraCharge)
+        : window.SITE_CONFIG.codExtraCharge;
       window.SITE_CONFIG.emailjs = {
         publicKey: data.emailjs_publicKey || "",
         serviceId: data.emailjs_serviceId || "",
@@ -47,4 +54,5 @@ window.SITE_CONFIG = {
   } catch(e) {
     console.error("Could not load settings from DB", e);
   }
+  window.dispatchEvent(new Event("siteconfig:ready"));
 })();

@@ -30,7 +30,17 @@
         return res.json();
       })
       .then((data) => {
-        couponsCache = Array.isArray(data) ? data : [];
+        // coupons.json's actual shape is { coupons: [...] } (with a leading
+        // _comment key for admins editing the file by hand) — NOT a bare
+        // array. Support both shapes defensively so this doesn't silently
+        // break again if the file format changes.
+        if (Array.isArray(data)) {
+          couponsCache = data;
+        } else if (data && Array.isArray(data.coupons)) {
+          couponsCache = data.coupons;
+        } else {
+          couponsCache = [];
+        }
         return couponsCache;
       })
       .catch((err) => {

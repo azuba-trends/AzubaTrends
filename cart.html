@@ -98,12 +98,14 @@
       container.innerHTML = "";
 
       items.forEach(item => {
+        const safeTitle = Security.escapeHTML(item.title);
+        const safeImage = Security.escapeHTML(item.image || 'images/logo-placeholder.svg');
         container.innerHTML += `
           <div class="cart-item">
-            <img src="${item.image || 'images/logo-placeholder.png'}" alt="Product">
+            <img src="${safeImage}" alt="Product">
             <div class="cart-item-details">
               <div>
-                <h3 style="margin: 0; font-size: 1.2rem;">${item.title}</h3>
+                <h3 style="margin: 0; font-size: 1.2rem;">${safeTitle}</h3>
                 <p style="margin: 5px 0; font-weight: bold; color: var(--color-primary);">₹${item.price}</p>
               </div>
               <div class="qty-controls">

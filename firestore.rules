@@ -1,0 +1,67 @@
+rules_version = '2';
+
+// ============================================================================
+// HOW TO USE THIS FILE
+// ----------------------------------------------------------------------------
+// This repo has NO server, so nothing here gets deployed automatically when
+// you push to GitHub or Vercel. You must paste this into:
+//
+//   Firebase Console -> your project -> Firestore Database -> Rules tab
+//   -> replace everything there with this file's contents -> Publish
+//
+// Without this (or something equivalent), your Firestore is either wide open
+// (if you started in "test mode") or fully locked (if you started in
+// "production mode" with the default deny-all rules) — either way, the admin
+// panel and/or the storefront will misbehave until real rules are in place.
+//
+// ASSUMPTION THIS FILE MAKES: there is exactly one admin account, created by
+// you directly in Firebase Console -> Authentication -> Users (email +
+// password). Customers never sign in — checkout is guest-only. So "is this
+// request from the admin?" is simply "is there ANY signed-in user?". If you
+// ever add more admin accounts or customer logins, tighten `isAdmin()` to
+// check a custom claim or an explicit allow-list instead.
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null;
+    }
+
+    // Product catalog — anyone can read (that's how the storefront works
+    // without a server), only the logged-in admin can write.
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Categories & brands — same pattern.
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /brands/{brandId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Store settings (UPI id, support contact, EmailJS/ImgBB keys) — every
+    // page needs to READ this without logging in, but only the admin panel
+    // may write it.
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Orders — guests can CREATE an order (that's checkout, and checkout
+    // never logs in), but only the admin can read the order list, view any
+    // single order's details, update status, or delete anything. Without
+    // this, either guests couldn't check out at all, or (worse) anyone could
+    // read every customer's name/phone/address by guessing the collection.
+    match /orders/{orderId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+  }
+}

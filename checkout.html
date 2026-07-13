@@ -14,10 +14,12 @@
   .form-field label { display: block; font-weight: 500; font-size: 0.9rem; margin-bottom: 6px; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
   input[type="text"], input[type="tel"], input[type="email"], textarea, select { width: 100%; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 8px; font-family: inherit; }
-  .field-error { color: red; font-size: 0.8rem; display: block; margin-top: 4px; }
+  .field-error { color: var(--color-danger); font-size: 0.8rem; display: block; margin-top: 4px; min-height: 1em; }
   .summary-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 0.95rem; }
   .summary-row--total { border-top: 1px solid var(--color-border); margin-top: 8px; padding-top: 12px; font-weight: bold; font-size: 1.2rem; }
   .payment-option { display: flex; align-items: center; gap: 10px; border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; cursor: pointer; margin-bottom: 10px; }
+  /* Honeypot: hidden from real visitors, only bots that auto-fill every field will trip it */
+  .hp-field { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
   @media (max-width: 760px) { .checkout-grid { grid-template-columns: 1fr; } .form-row { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -28,37 +30,51 @@
 <main class="checkout-main">
   <h1>Checkout</h1>
 
-  <!-- Empty Cart Message -->
-  <div id="empty-cart-message" hidden style="text-align:center; margin-top:50px;">
+  <div id="empty-cart-message" style="display: none; text-align:center; margin-top:50px;">
     <h2>Your cart is empty.</h2>
     <p><a href="index.html" class="btn btn-primary" style="margin-top:20px;">Continue shopping</a></p>
   </div>
 
-  <!-- Main Checkout Content -->
-  <div id="checkout-content" hidden>
+  <div id="checkout-content" style="display: none;">
     <div class="checkout-grid">
 
       <!-- Left Column -->
       <div>
+        <!-- Address Section -->
         <section id="delivery-section" class="checkout-card">
           <h2>Delivery Details</h2>
           <form id="delivery-form" novalidate>
+
+            <!-- Honeypot field — real users never see or fill this in -->
+            <div class="hp-field" aria-hidden="true">
+              <label for="website">Website</label>
+              <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+            </div>
+
             <div class="form-field">
               <label>Full name</label>
               <input type="text" id="field-name" required>
+              <span class="field-error" id="error-name"></span>
             </div>
+
             <div class="form-field">
               <label>Phone number</label>
               <input type="tel" id="field-phone" placeholder="10-digit mobile number" required>
+              <span class="field-error" id="error-phone"></span>
             </div>
+
             <div class="form-field">
-              <label>Email (optional)</label>
-              <input type="email" id="field-email" placeholder="you@example.com">
+              <label>Email</label>
+              <input type="email" id="field-email" placeholder="you@example.com" required>
+              <span class="field-error" id="error-email"></span>
             </div>
+
             <div class="form-field">
-              <label>Full Address (House, Street, Area)</label>
+              <label>Full Address</label>
               <textarea id="field-address" rows="3" required></textarea>
+              <span class="field-error" id="error-address"></span>
             </div>
+
             <div class="form-row">
               <div class="form-field">
                 <label>State</label>
@@ -71,13 +87,20 @@
                 <select id="field-city" required>
                   <option value="">Select City</option>
                 </select>
+                <span class="field-error" id="error-city"></span>
               </div>
               <div class="form-field">
                 <label>Pincode</label>
-                <input type="text" id="field-pincode" placeholder="e.g. 700001" required>
+                <input type="text" id="field-pincode" placeholder="e.g. 700001" inputmode="numeric" maxlength="6" required>
                 <span class="field-error" id="error-pincode"></span>
               </div>
             </div>
+
+            <div class="form-field" id="field-city-other-wrap" style="display:none;">
+              <label>Your city/town name</label>
+              <input type="text" id="field-city-other" placeholder="Type your city or town">
+            </div>
+
             <button type="submit" class="btn btn-primary" style="margin-top: 15px;">Continue to Payment</button>
           </form>
         </section>
@@ -96,13 +119,13 @@
             <span>Pay via UPI (Online)</span>
           </label>
 
-          <div id="cod-section" hidden style="margin-top: 20px;">
+          <div id="cod-section" style="display: none; margin-top: 20px;">
             <button type="button" id="place-order-cod-btn" class="btn btn-primary">Place Order (COD)</button>
           </div>
 
-          <div id="upi-section" hidden style="margin-top: 20px; text-align: center;">
+          <div id="upi-section" style="display: none; margin-top: 20px; text-align: center;">
             <canvas id="upi-qr-canvas" style="margin: 0 auto; display: block;"></canvas>
-            <a id="upi-pay-link" href="#" hidden style="color: var(--color-primary); font-weight: bold; margin-top: 10px;">Click here to Pay via UPI App</a>
+            <a id="upi-pay-link" href="#" style="display: none; color: var(--color-primary); font-weight: bold; margin-top: 10px;">Click here to Pay via UPI App</a>
             <p id="upi-amount-text" style="font-weight: bold; font-size: 1.1rem; margin-top: 15px;"></p>
             <button type="button" id="upi-done-btn" class="btn btn-primary" style="margin-top: 15px;">I have paid, Place Order</button>
           </div>
@@ -110,27 +133,34 @@
 
         <!-- Success Section -->
         <section id="confirmation-section" class="checkout-card" hidden style="text-align: center; padding: 40px 20px;">
-          <h2 style="color: green;">Order Placed Successfully! 🎉</h2>
+          <h2 style="color: var(--color-success);">Order Placed Successfully! 🎉</h2>
           <p>Your Order ID is <strong id="confirmation-order-id" style="font-size: 1.2rem;"></strong></p>
           <p id="confirmation-payment-note" style="color: #555; margin-top: 10px;"></p>
           <a href="index.html" class="btn btn-primary" style="margin-top: 20px;">Continue Shopping</a>
         </section>
+
       </div>
 
       <!-- Right Column: Summary -->
       <aside class="checkout-card" style="position: sticky; top: 90px;" id="summary-aside">
         <h3 style="margin-top: 0;">Order Summary</h3>
         <div id="checkout-items-list" style="margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 15px; font-size: 0.9rem;"></div>
-        
-        <div class="summary-row"><span>Subtotal</span><span id="summary-subtotal">₹0</span></div>
-        <div class="summary-row" id="summary-discount-row" hidden style="color: green;">
-          <span>Discount</span><span id="summary-discount-amount">-₹0</span>
+
+        <div class="summary-row">
+          <span>Subtotal</span>
+          <span id="summary-subtotal">₹0</span>
         </div>
-        <div class="summary-row" id="summary-cod-row" hidden>
-          <span>COD Charge</span><span id="summary-cod-amount">+₹0</span>
+        <div class="summary-row" id="summary-discount-row" style="display: none; color: var(--color-success);">
+          <span>Discount</span>
+          <span id="summary-discount-amount">-₹0</span>
+        </div>
+        <div class="summary-row" id="summary-cod-row" style="display: none;">
+          <span>COD Charge</span>
+          <span id="summary-cod-amount">+₹0</span>
         </div>
         <div class="summary-row summary-row--total">
-          <span>Total to Pay</span><span id="summary-total" style="color: var(--color-primary);">₹0</span>
+          <span>Total to Pay</span>
+          <span id="summary-total" style="color: var(--color-primary);">₹0</span>
         </div>
       </aside>
 
@@ -144,6 +174,8 @@
 <script src="js/security.js"></script>
 <script src="js/layout.js"></script>
 <script src="js/cart.js"></script>
+<script src="js/geo-restriction.js"></script>
+<script src="js/coupon.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1/build/qrcode.min.js"></script>
 <script src="js/qr-generator.js"></script>
 <script src="js/emailjs-integration.js"></script>

@@ -58,19 +58,26 @@ const ProductLoader = (function () {
     card.className = "product-card" + (product.stock === 0 ? " is-out-of-stock" : "");
 
     const discount = calcDiscount(product);
-    const image = (product.images && product.images[0]) ? product.images[0] : "images/logo-placeholder.png";
+    const image = (product.images && product.images[0]) ? product.images[0] : "images/logo-placeholder.svg";
+    // All product-supplied text is escaped before going into innerHTML —
+    // product data comes from the admin panel, which is itself reachable by
+    // anyone who can get a malicious string into a field, so it's treated as
+    // untrusted the same way user-typed text would be.
+    const safeTitle = window.Security ? window.Security.escapeHTML(product.title) : String(product.title || "");
+    const safeCategory = window.Security ? window.Security.escapeHTML(product.category) : String(product.category || "");
+    const safeImage = window.Security ? window.Security.escapeHTML(image) : image;
 
     card.innerHTML = `
-      <a href="product.html?id=${product.id}" class="product-card__link">
+      <a href="product.html?id=${encodeURIComponent(product.id)}" class="product-card__link">
         <div class="product-card__media">
           ${discount > 0 && product.stock > 0 ? `<span class="price-tag">${discount}% OFF</span>` : ''}
           ${product.stock === 0 ? `<span class="price-tag price-tag--stock">Out of Stock</span>` : ''}
-          <img src="${image}" alt="${product.title}" loading="lazy">
+          <img src="${safeImage}" alt="${safeTitle}" loading="lazy">
         </div>
       </a>
       <div class="product-card__body">
-        <span class="product-card__category">${product.category}</span>
-        <h3 class="product-card__title">${product.title}</h3>
+        <span class="product-card__category">${safeCategory}</span>
+        <h3 class="product-card__title">${safeTitle}</h3>
         <div class="product-card__price-row">
           <span class="price-current">${formatPrice(product.sellingPrice)}</span>
           ${discount > 0 ? `<span class="price-mrp">${formatPrice(product.mrp)}</span>` : ''}
@@ -79,9 +86,9 @@ const ProductLoader = (function () {
           <button class="btn btn-outline btn-block" ${product.stock === 0 ? 'disabled' : ''} 
             data-add-to-cart 
             data-product-id="${product.id}" 
-            data-product-title="${product.title}" 
+            data-product-title="${safeTitle}" 
             data-product-price="${product.sellingPrice}" 
-            data-product-image="${image}">
+            data-product-image="${safeImage}">
             ${product.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
           </button>
         </div>
@@ -121,8 +128,8 @@ const ProductLoader = (function () {
     document.querySelectorAll("[data-site-name]").forEach(el => el.textContent = siteName);
     
     // Update Page Title if it contains old name
-    if(document.title.includes("Angan")) {
-      document.title = document.title.replace("Angan", siteName);
+    if(document.title.includes("AzubaTrends") && siteName !== "AzubaTrends") {
+      document.title = document.title.replace("AzubaTrends", siteName);
     }
 
     const setBadge = (count) => {

@@ -24,7 +24,7 @@
  */
 
 const Reviews = (function () {
-  const STORAGE_KEY = "angan_reviews_v1";
+  const STORAGE_KEY = "azubatrends_reviews_v1";
   const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2MB
   const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
