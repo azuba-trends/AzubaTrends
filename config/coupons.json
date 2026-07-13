@@ -5,7 +5,7 @@
       "code": "WELCOME10",
       "type": "percentage",
       "value": 10,
-      "minOrderValue": 500,
+      "minOrderValue": 1,
       "maxDiscount": 200,
       "expiryDate": "2026-12-31",
       "active": true
