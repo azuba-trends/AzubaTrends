@@ -1,15 +1,24 @@
 {
+  "⚠️_STOP_DO_NOT_EDIT_THIS_FILE_⚠️": "THIS FILE IS DEPRECATED AND IS NOT READ BY THE LIVE SITE ANYMORE. Editing it will do NOTHING on your real store. All product/coupon data now lives in Firestore and is managed ONLY from the Admin Panel (Admin > All Products / All Coupons). This file is kept only as an old historical backup.",
   "id": "prod-007",
   "title": "Madurkathi Table Mat Set (6 Pieces)",
   "slug": "madurkathi-table-mats",
   "category": "Kitchen",
-  "tags": ["madurkathi", "table mat", "reed", "handwoven", "dining"],
+  "tags": [
+    "madurkathi",
+    "table mat",
+    "reed",
+    "handwoven",
+    "dining"
+  ],
   "shortDescription": "Reed table mats woven in the traditional Midnapore madur style.",
   "description": "Six placemats hand-woven from madurkathi reed using the traditional technique from Paschim Medinipur. Naturally cooling to the touch and heat-resistant enough for warm serving dishes. Spot clean with a damp cloth.",
   "mrp": 649,
   "sellingPrice": 549,
   "stock": 31,
   "sku": "AGN-MAT-MAD6",
-  "images": ["images/products/prod-007.svg"],
+  "images": [
+    "images/products/prod-007.svg"
+  ],
   "createdDate": "2026-02-08"
 }

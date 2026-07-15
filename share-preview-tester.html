@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Share Preview Tester - AzubaTrends (internal tool)</title>
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/components.css">
+<style>
+  .tester-wrap { max-width: 640px; margin: 0 auto; padding: 40px 20px 80px; }
+  .tester-wrap h1 { margin-bottom: 6px; }
+  .tester-note { color: var(--color-ink-soft); font-size: 0.9rem; margin-bottom: 24px; line-height: 1.6; }
+  .tester-note code { background: var(--color-surface-sunken); padding: 2px 6px; border-radius: 4px; }
+  .tester-form { display: flex; gap: 10px; margin-bottom: 24px; }
+  .tester-form input { flex: 1; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 6px; }
+  #tester-status { font-size: 0.85rem; margin-bottom: 16px; min-height: 1.2em; }
+  #tester-status.error { color: var(--color-danger); }
+  #tester-status.ok { color: var(--color-success); }
+
+  /* WhatsApp-style link preview card */
+  .wa-card { border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; max-width: 380px; box-shadow: var(--shadow-sm); display: none; }
+  .wa-card img { width: 100%; height: 200px; object-fit: cover; background: #eee; display: block; }
+  .wa-card__body { padding: 10px 14px; background: #f4f4f4; }
+  .wa-card__title { font-weight: 700; font-size: 0.95rem; margin-bottom: 2px; }
+  .wa-card__desc { font-size: 0.82rem; color: #555; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .wa-card__domain { font-size: 0.72rem; color: #888; text-transform: uppercase; margin-top: 4px; }
+
+  .raw-tags { margin-top: 24px; font-size: 0.8rem; background: var(--color-surface-sunken); padding: 14px; border-radius: 8px; white-space: pre-wrap; word-break: break-all; display: none; }
+</style>
+</head>
+<body>
+
+<div id="header-mount"></div>
+
+<main class="tester-wrap">
+  <h1>Share Preview Tester</h1>
+  <p class="tester-note">
+    Internal tool — not linked from the storefront, delete or ignore once you're done testing.
+    <br><br>
+    This page fetches <code>/api/product?id=YOUR_ID</code> (the Vercel serverless function in <code>api/product.js</code>)
+    and reads back the Open Graph meta tags (<code>og:title</code>, <code>og:description</code>, <code>og:image</code>)
+    it returns — the same tags WhatsApp/Facebook/Twitter read when someone shares a product link.
+    <br><br>
+    <strong>This only works when this page itself is deployed on Vercel</strong> (same place <code>api/product.js</code> runs) —
+    it will NOT work on GitHub Pages or when just opened as a local file, since there's no serverless function to call there.
+    Deploy this file to your Vercel project alongside everything else, then open it at
+    <code>https://your-site.vercel.app/share-preview-tester.html</code>.
+  </p>
+
+  <form class="tester-form" id="tester-form">
+    <input type="text" id="tester-input" placeholder="Product ID (e.g. prod-001) or full product.html?id=... URL" required>
+    <button type="submit" class="btn btn-primary">Check Preview</button>
+  </form>
+
+  <p id="tester-status"></p>
+
+  <div class="wa-card" id="wa-card">
+    <img id="wa-card-img" src="" alt="">
+    <div class="wa-card__body">
+      <div class="wa-card__title" id="wa-card-title"></div>
+      <div class="wa-card__desc" id="wa-card-desc"></div>
+      <div class="wa-card__domain" id="wa-card-domain"></div>
+    </div>
+  </div>
+
+  <pre class="raw-tags" id="raw-tags"></pre>
+</main>
+
+<div id="footer-mount"></div>
+
+<script src="js/site-config.js"></script>
+<script src="js/layout.js"></script>
+<script>window.addEventListener("layout:ready", () => {});</script>
+
+<script>
+function extractProductId(input) {
+  const trimmed = input.trim();
+  // Accept a bare ID, or a full URL like /product.html?id=prod-001 (or api/product?id=... too)
+  try {
+    const asUrl = new URL(trimmed, window.location.origin);
+    const idParam = asUrl.searchParams.get("id");
+    if (idParam) return idParam;
+  } catch (err) { /* not a URL — treat as a bare ID below */ }
+  return trimmed;
+}
+
+document.getElementById("tester-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const status = document.getElementById("tester-status");
+  const card = document.getElementById("wa-card");
+  const rawBox = document.getElementById("raw-tags");
+  card.style.display = "none";
+  rawBox.style.display = "none";
+  status.className = "";
+  status.textContent = "Fetching /api/product...";
+
+  const id = extractProductId(document.getElementById("tester-input").value);
+  if (!id) {
+    status.className = "error";
+    status.textContent = "Please enter a product ID or product URL.";
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/product?id=${encodeURIComponent(id)}`);
+    if (res.status === 404) {
+      status.className = "error";
+      status.textContent = "Got a 404 for /api/product — this route doesn't exist on whatever is currently hosting this page. Make sure you're viewing this on your Vercel deployment, not GitHub Pages or a local file.";
+      return;
+    }
+    const html = await res.text();
+    const doc = new DOMParser().parseFromString(html, "text/html");
+
+    const get = (prop) => doc.querySelector(`meta[property="${prop}"]`)?.getAttribute("content") || doc.querySelector(`meta[name="${prop}"]`)?.getAttribute("content") || "";
+    const title = get("og:title") || doc.title || "(no title found)";
+    const description = get("og:description") || get("description") || "(no description found)";
+    const image = get("og:image");
+
+    document.getElementById("wa-card-title").textContent = title;
+    document.getElementById("wa-card-desc").textContent = description;
+    document.getElementById("wa-card-domain").textContent = window.location.host;
+    const imgEl = document.getElementById("wa-card-img");
+    if (image) { imgEl.src = image; imgEl.style.display = "block"; } else { imgEl.style.display = "none"; }
+    card.style.display = "block";
+
+    rawBox.textContent = `og:title = ${title}\nog:description = ${description}\nog:image = ${image || "(none)"}`;
+    rawBox.style.display = "block";
+
+    status.className = "ok";
+    status.textContent = "✓ api/product.js responded — this is what a link preview should look like when this product is shared.";
+  } catch (err) {
+    status.className = "error";
+    status.textContent = "Fetch failed: " + (err.message || err);
+  }
+});
+</script>
+</body>
+</html>

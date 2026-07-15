@@ -1,5 +1,5 @@
 {
-  "_comment": "DEPRECATED as of the Admin > All Coupons update: this file is no longer read by the site. Coupons now live in Firestore's `coupons` collection and are fully managed from Admin -> Store -> All Coupons / Add Coupon (create, edit, activate/deactivate, delete) — changes go live instantly, no git push needed. This file is kept only as a historical reference of the two coupons that used to ship by default (WELCOME10, FLAT50); recreate them from the admin panel if you still want them.",
+  "⚠️_STOP_DO_NOT_EDIT_THIS_FILE_⚠️": "THIS FILE IS DEPRECATED AND IS NOT READ BY THE LIVE SITE ANYMORE. Editing it will do NOTHING on your real store. All product/coupon data now lives in Firestore and is managed ONLY from the Admin Panel (Admin > All Products / All Coupons). This file is kept only as an old historical backup.",
   "coupons": [
     {
       "code": "WELCOME10",

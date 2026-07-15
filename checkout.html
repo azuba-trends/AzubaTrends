@@ -134,6 +134,16 @@
             <a id="upi-pay-link" href="#" style="display: none; color: var(--color-primary); font-weight: bold; margin-top: 10px;">Click here to Pay via UPI App</a>
             <p id="upi-amount-text" style="font-weight: bold; font-size: 1.1rem; margin-top: 15px;"></p>
             <p id="upi-countdown-text" style="color: var(--color-ink-soft); font-size: 0.85rem; margin-top: 6px;"></p>
+
+            <div class="form-field" style="text-align: left; margin-top: 18px;">
+              <label for="upi-txn-ref">Last 6 digits of your UPI Transaction ID / UTR</label>
+              <input type="text" id="upi-txn-ref" inputmode="numeric" maxlength="12" placeholder="e.g. 482913">
+              <span class="field-error" id="error-upi-txn-ref"></span>
+              <p style="color: var(--color-ink-soft); font-size: 0.8rem; margin-top: 4px;">
+                Apne payment app (GPay/PhonePe/Paytm) ke "Transaction History" mein iska UTR / Ref. No milega — sirf last 6 digit type karna kaafi hai, poora number copy karne ki zaroorat nahi. Yeh humein aapka payment bank statement se match karke jaldi confirm karne mein madad karta hai.
+              </p>
+            </div>
+
             <button type="button" id="upi-done-btn" class="btn btn-primary" style="margin-top: 15px;">I have paid, Place Order</button>
           </div>
         </section>

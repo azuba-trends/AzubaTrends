@@ -1,15 +1,24 @@
 {
+  "⚠️_STOP_DO_NOT_EDIT_THIS_FILE_⚠️": "THIS FILE IS DEPRECATED AND IS NOT READ BY THE LIVE SITE ANYMORE. Editing it will do NOTHING on your real store. All product/coupon data now lives in Firestore and is managed ONLY from the Admin Panel (Admin > All Products / All Coupons). This file is kept only as an old historical backup.",
   "id": "prod-005",
   "title": "Bamboo Storage Basket, Large",
   "slug": "bamboo-storage-basket",
   "category": "Storage",
-  "tags": ["bamboo", "basket", "storage", "handwoven", "organizer"],
+  "tags": [
+    "bamboo",
+    "basket",
+    "storage",
+    "handwoven",
+    "organizer"
+  ],
   "shortDescription": "A sturdy, hand-woven bamboo basket for laundry or storage.",
   "description": "Hand-woven from split bamboo by artisans in the Dooars region, this basket is sturdy enough for laundry, blankets, or general storage. Approx. 18-inch diameter, 16-inch height. Wipe with a dry cloth; avoid prolonged damp storage.",
   "mrp": 1099,
   "sellingPrice": 799,
   "stock": 9,
   "sku": "AGN-BASK-LG01",
-  "images": ["images/products/prod-005.svg"],
+  "images": [
+    "images/products/prod-005.svg"
+  ],
   "createdDate": "2026-03-19"
 }

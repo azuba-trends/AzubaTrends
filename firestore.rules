@@ -71,5 +71,24 @@ service cloud.firestore {
       allow create: if true;
       allow read, update, delete: if isAdmin();
     }
+
+    // Reviews — anyone can read (that's how they show up on product.html
+    // for every visitor, not just the device that wrote them) and anyone
+    // can create one (guest checkout site, no customer accounts to gate
+    // this behind). A few basic shape checks are enforced here since this
+    // is a public write: rating must be a whole number 1-5, comment can't
+    // be a huge wall of text, and the client can't forge createdAt in the
+    // past/future to game any "recent reviews" sorting.
+    // Only the admin can edit or delete a review (e.g. to remove spam).
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if request.resource.data.rating is int
+                    && request.resource.data.rating >= 1
+                    && request.resource.data.rating <= 5
+                    && request.resource.data.comment is string
+                    && request.resource.data.comment.size() <= 1000
+                    && request.resource.data.productId is string;
+      allow update, delete: if isAdmin();
+    }
   }
 }

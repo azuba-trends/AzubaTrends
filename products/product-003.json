@@ -1,15 +1,23 @@
 {
+  "⚠️_STOP_DO_NOT_EDIT_THIS_FILE_⚠️": "THIS FILE IS DEPRECATED AND IS NOT READ BY THE LIVE SITE ANYMORE. Editing it will do NOTHING on your real store. All product/coupon data now lives in Firestore and is managed ONLY from the Admin Panel (Admin > All Products / All Coupons). This file is kept only as an old historical backup.",
   "id": "prod-003",
   "title": "Brass Table Lamp with Fabric Shade",
   "slug": "brass-table-lamp",
   "category": "Lighting",
-  "tags": ["brass", "lamp", "lighting", "living room"],
+  "tags": [
+    "brass",
+    "lamp",
+    "lighting",
+    "living room"
+  ],
   "shortDescription": "Solid brass base with a hand-stitched linen shade.",
   "description": "A weighty, solid-brass lamp base paired with a hand-stitched linen shade. Ships with a 1.5m fabric-braided cord and a standard E27 fitting; bulb not included. Polish occasionally with a dry cloth to keep the shine.",
   "mrp": 1899,
   "sellingPrice": 1499,
   "stock": 17,
   "sku": "AGN-LAMP-BR01",
-  "images": ["images/products/prod-003.svg"],
+  "images": [
+    "images/products/prod-003.svg"
+  ],
   "createdDate": "2026-06-01"
 }

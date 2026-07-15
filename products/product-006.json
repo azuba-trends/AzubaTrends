@@ -1,15 +1,24 @@
 {
+  "⚠️_STOP_DO_NOT_EDIT_THIS_FILE_⚠️": "THIS FILE IS DEPRECATED AND IS NOT READ BY THE LIVE SITE ANYMORE. Editing it will do NOTHING on your real store. All product/coupon data now lives in Firestore and is managed ONLY from the Admin Panel (Admin > All Products / All Coupons). This file is kept only as an old historical backup.",
   "id": "prod-006",
   "title": "Hammered Copper Water Jug, 1.5L",
   "slug": "copper-water-jug",
   "category": "Kitchen",
-  "tags": ["copper", "jug", "kitchen", "drinkware", "handmade"],
+  "tags": [
+    "copper",
+    "jug",
+    "kitchen",
+    "drinkware",
+    "handmade"
+  ],
   "shortDescription": "Hand-hammered pure copper jug, said to help alkalize stored water.",
   "description": "A 1.5-litre pure copper jug, hand-hammered by metalworkers in Howrah. Many households use copper vessels to store drinking water overnight. Hand wash only; a natural patina will develop over time and can be polished away with lemon and salt if preferred.",
   "mrp": 1299,
   "sellingPrice": 999,
   "stock": 25,
   "sku": "AGN-JUG-CU15",
-  "images": ["images/products/prod-006.svg"],
+  "images": [
+    "images/products/prod-006.svg"
+  ],
   "createdDate": "2026-06-15"
 }

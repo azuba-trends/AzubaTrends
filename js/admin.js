@@ -859,6 +859,7 @@ setTimeout(() => {
       ["Name", o.customerName], ["Phone", o.customerPhone], ["Email", o.customerEmail],
       ["Address", `${o.customerAddress || ""}, ${o.customerCity || ""}, ${o.customerState || ""} - ${o.customerPincode || ""}`],
       ["Payment Method", o.paymentMethod],
+      ["UPI Txn Ref (last digits)", o.paymentMethod === "UPI" ? (o.upiTxnRef || "— not entered") : "— (COD order)"],
       ["Order Email", o.emailStatus === "sent" ? "✓ Sent" : o.emailStatus === "failed" ? `✗ Failed — ${o.emailError || "unknown error"}` : "— (not attempted / still sending)"]
     ];
     lines.forEach(([label, val]) => {
@@ -890,15 +891,89 @@ setTimeout(() => {
       itemsUl.appendChild(li);
     });
     document.getElementById("order-details-modal").style.display = "block";
+
+    const notifyNote = document.getElementById("modal-notify-status-note");
+    const notifyBox = document.getElementById("modal-notify-customer");
+    if (!SETTINGS.emailjs_statusTemplateId) {
+      notifyBox.checked = false;
+      notifyBox.disabled = true;
+      notifyNote.textContent = "Set up an \"Order Status Update Template ID\" in Settings > Account to enable this.";
+    } else if (!o.customerEmail) {
+      notifyBox.checked = false;
+      notifyBox.disabled = true;
+      notifyNote.textContent = "This order has no customer email on file — can't notify.";
+    } else {
+      notifyBox.disabled = false;
+      notifyBox.checked = true;
+      notifyNote.textContent = `Will email ${o.customerEmail}`;
+    }
   }
 
   document.getElementById("close-order-modal").addEventListener("click", () => {
     document.getElementById("order-details-modal").style.display = "none";
   });
+  // Sends a status-change email directly to the GUEST's own address (the
+  // one they typed at checkout — no customer account exists, so this is
+  // the only "contact point" we have, same as OrderEmail.send in
+  // checkout.js but pointed at the customer instead of the admin, using a
+  // SEPARATE EmailJS template (SETTINGS.emailjs_statusTemplateId) so the
+  // wording can say "your order shipped" instead of "new order received".
+  let statusEmailSdkReady = false;
+  function loadEmailJsSdk() {
+    return new Promise((resolve, reject) => {
+      if (statusEmailSdkReady && window.emailjs) return resolve();
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js";
+      script.onload = () => {
+        try {
+          window.emailjs.init({ publicKey: SETTINGS.emailjs_publicKey });
+          statusEmailSdkReady = true;
+          resolve();
+        } catch (err) { reject(err); }
+      };
+      script.onerror = () => reject(new Error("Failed to load EmailJS SDK"));
+      document.head.appendChild(script);
+    });
+  }
+
+  async function sendStatusUpdateEmail(order, newStatus) {
+    await loadEmailJsSdk();
+    return window.emailjs.send(SETTINGS.emailjs_serviceId, SETTINGS.emailjs_statusTemplateId, {
+      order_id: order.orderId,
+      customer_name: order.customerName,
+      new_status: newStatus,
+      final_total: fmtRupee(order.finalTotal),
+      to_email: order.customerEmail
+    });
+  }
+
   document.getElementById("update-status-btn").addEventListener("click", async () => {
     const newStatus = document.getElementById("modal-order-status").value;
-    await updateDoc(doc(db, "orders", currentEditingOrderId), { status: newStatus });
-    alert("Status updated!");
+    const shouldNotify = document.getElementById("modal-notify-customer").checked && !document.getElementById("modal-notify-customer").disabled;
+    const order = ordersList.find((o) => o.id === currentEditingOrderId);
+    const btn = document.getElementById("update-status-btn");
+    btn.disabled = true; btn.textContent = "Updating...";
+
+    try {
+      await updateDoc(doc(db, "orders", currentEditingOrderId), { status: newStatus });
+    } catch (err) {
+      alert("Could not update status: " + (err.message || err));
+      btn.disabled = false; btn.textContent = "Update";
+      return;
+    }
+
+    if (shouldNotify && order) {
+      try {
+        await sendStatusUpdateEmail(order, newStatus);
+        alert("Status updated and customer notified by email!");
+      } catch (err) {
+        console.warn("Status-update email failed", err);
+        alert("Status updated, but the customer email failed to send. (Order status itself is saved correctly.)");
+      }
+    } else {
+      alert("Status updated!");
+    }
+    btn.disabled = false; btn.textContent = "Update";
   });
 
   // ================================================================
@@ -959,7 +1034,28 @@ setTimeout(() => {
       return { label: d.toLocaleDateString("en-IN", { weekday: "short" }), value: total };
     });
     const maxRevenue = Math.max(1, ...dayRevenue.map((d) => d.value));
-    renderBarList(document.getElementById("analytics-revenue-bars"), dayRevenue, maxRevenue);
+    const revenueContainer = document.getElementById("analytics-revenue-bars");
+    renderBarList(revenueContainer, dayRevenue, maxRevenue);
+
+    // If every bar is ₹0, the raw bars look identical to "broken" (empty
+    // grey tracks, no colour). That's usually not a bug — it means every
+    // order in the database is dated outside this exact 7-day window
+    // (common with old seed/test orders). Say so explicitly instead of
+    // leaving an ambiguous blank chart, and point at where the all-time
+    // numbers (which DO include everything, any date) can be found.
+    const totalRevenueThisWeek = dayRevenue.reduce((s, d) => s + d.value, 0);
+    let emptyNote = document.getElementById("analytics-revenue-empty-note");
+    if (totalRevenueThisWeek === 0 && ordersList.length > 0) {
+      if (!emptyNote) {
+        emptyNote = document.createElement("p");
+        emptyNote.id = "analytics-revenue-empty-note";
+        emptyNote.style.cssText = "color:var(--color-ink-soft); font-size:0.85rem; margin-top:10px;";
+        revenueContainer.parentElement.appendChild(emptyNote);
+      }
+      emptyNote.textContent = `No revenue in the last 7 days specifically, even though there are ${ordersList.length} order(s) total in the database — they're just dated outside this window (older test orders, etc). See "Total Sales" on the Overview tab for the all-time figure.`;
+    } else if (emptyNote) {
+      emptyNote.remove();
+    }
 
     // Orders by status
     const statuses = ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"];
@@ -1017,6 +1113,7 @@ setTimeout(() => {
     document.getElementById("set-email-pub").value = SETTINGS.emailjs_publicKey || "";
     document.getElementById("set-email-srv").value = SETTINGS.emailjs_serviceId || "";
     document.getElementById("set-email-tpl").value = SETTINGS.emailjs_templateId || "";
+    document.getElementById("set-email-status-tpl").value = SETTINGS.emailjs_statusTemplateId || "";
     document.getElementById("set-upi-id").value = SETTINGS.upiId || "";
     document.getElementById("set-cod-charge").value = SETTINGS.codExtraCharge ?? 30;
     document.getElementById("set-support-email").value = SETTINGS.supportEmail || "";
@@ -1049,6 +1146,7 @@ setTimeout(() => {
       emailjs_publicKey: document.getElementById("set-email-pub").value,
       emailjs_serviceId: document.getElementById("set-email-srv").value,
       emailjs_templateId: document.getElementById("set-email-tpl").value,
+      emailjs_statusTemplateId: document.getElementById("set-email-status-tpl").value,
     }, document.getElementById("save-account-settings-btn"));
   });
 

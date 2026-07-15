@@ -43,6 +43,11 @@ window.SITE_CONFIG_READY = (async function() {
         serviceId: data.emailjs_serviceId || "",
         templateId: data.emailjs_templateId || ""
       };
+      // Used by reviews.js so a guest submitting a review photo can upload
+      // it the same way the admin panel uploads product images — same
+      // ImgBB key, same "not actually secret" exposure model as everything
+      // else in this file (see the big comment at the top).
+      window.SITE_CONFIG.imgbbKey = data.imgbbKey || "";
       
       // Update UI with new settings dynamically
       if(window.ProductLoader && window.ProductLoader.initHeader) {

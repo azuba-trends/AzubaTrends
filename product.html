@@ -90,15 +90,16 @@
           <span class="reviews-summary__score" id="review-avg-score">—</span>
           <div>
             <span id="review-avg-stars"></span>
-            <p class="reviews-summary__note" id="review-count-note">No reviews yet on this device</p>
+            <p class="reviews-summary__note" id="review-count-note">No reviews yet</p>
           </div>
-          <p class="reviews-summary__note" style="flex-basis:100%;">
-            Reviews are stored on your own device only (no backend on this site yet), so you'll see reviews you've
-            submitted here, but not ones from other visitors.
-          </p>
         </div>
 
         <form class="review-form" id="review-form" novalidate>
+          <!-- Honeypot field — real users never see or fill this in -->
+          <div style="position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden;" aria-hidden="true">
+            <label for="review-website">Website</label>
+            <input type="text" id="review-website" name="website" tabindex="-1" autocomplete="off">
+          </div>
           <div class="form-field">
             <label>Your rating</label>
             <div class="star-input" id="review-star-input"></div>
@@ -113,7 +114,7 @@
             <span class="form-hint">JPG, PNG, or WEBP · up to 2MB</span>
           </div>
           <p class="form-error" id="review-error"></p>
-          <p class="review-toast" id="review-toast">Thanks — your review was saved on this device.</p>
+          <p class="review-toast" id="review-toast">Thanks — your review is now live for everyone to see.</p>
           <button type="submit" class="btn btn-accent" style="align-self:flex-start;">Submit review</button>
         </form>
 

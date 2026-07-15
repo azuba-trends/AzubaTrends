@@ -596,7 +596,7 @@
           </div>
           <div>
             <strong>Update Status:</strong>
-            <div style="display: flex; gap: 10px; margin-top: 5px;">
+            <div style="display: flex; gap: 10px; margin-top: 5px; flex-wrap: wrap; align-items: center;">
               <select id="modal-order-status" style="padding: 8px;">
                 <option value="Pending">Pending</option>
                 <option value="Processing">Processing</option>
@@ -606,6 +606,11 @@
               </select>
               <button class="btn btn-primary" id="update-status-btn">Update</button>
             </div>
+            <label style="display:flex; align-items:center; gap:6px; margin-top:8px; font-size:0.85rem; font-weight:normal;">
+              <input type="checkbox" id="modal-notify-customer" checked>
+              Also email the customer about this status change
+            </label>
+            <p id="modal-notify-status-note" style="font-size:0.78rem; color:var(--color-ink-soft); margin-top:2px;"></p>
           </div>
         </div>
         <h4 style="margin-top: 20px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Price Breakdown</h4>
@@ -659,6 +664,10 @@
             <div class="form-field">
               <label>Template ID</label>
               <input type="text" id="set-email-tpl">
+            </div>
+            <div class="form-field full-width">
+              <label>Order Status Update Template ID <span class="field-hint" style="display:inline;">(optional — separate EmailJS template addressed to the CUSTOMER, not you. Leave blank to skip customer status emails.)</span></label>
+              <input type="text" id="set-email-status-tpl" placeholder="e.g. template_xyz123">
             </div>
             <div class="form-field">
               <button type="submit" class="btn btn-primary" id="save-account-settings-btn" style="width:100%; margin-top:22px;">Save Account Settings</button>

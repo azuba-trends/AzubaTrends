@@ -141,7 +141,40 @@
     function calculateTotals() {
       const subtotal = window.Cart.getTotal();
       document.getElementById("cart-subtotal").textContent = "₹" + subtotal;
-      
+
+      // Re-check any applied coupon against the CURRENT subtotal every time
+      // totals are recalculated (qty +/-, item removed, or page just
+      // loaded). Without this, a coupon that was valid at ₹600 stays
+      // "applied" in the UI even after the shopper drops the cart to ₹300,
+      // below its minOrderValue — this is what fixes that.
+      const msg = document.getElementById("coupon-msg");
+      const saved = sessionStorage.getItem("applied_coupon");
+      if (saved) {
+        let parsed;
+        try { parsed = JSON.parse(saved); } catch (err) { parsed = null; }
+        if (parsed && parsed.code) {
+          window.Coupon.validate(parsed.code, subtotal).then((result) => {
+            if (result.valid) {
+              appliedDiscount = result.discount;
+              msg.textContent = result.message;
+              msg.style.color = "green";
+              document.getElementById("discount-row").style.display = "flex";
+              document.getElementById("cart-discount").textContent = "-₹" + appliedDiscount;
+              sessionStorage.setItem("applied_coupon", JSON.stringify({ code: result.coupon.code, discount: appliedDiscount }));
+            } else {
+              appliedDiscount = 0;
+              msg.textContent = "Coupon removed — " + result.message;
+              msg.style.color = "red";
+              document.getElementById("discount-row").style.display = "none";
+              sessionStorage.removeItem("applied_coupon");
+            }
+            const finalTotal = subtotal - appliedDiscount;
+            document.getElementById("cart-final-total").textContent = "₹" + (finalTotal > 0 ? finalTotal : 0);
+          });
+          return; // final-total text gets updated inside the .then() above
+        }
+      }
+
       const finalTotal = subtotal - appliedDiscount;
       document.getElementById("cart-final-total").textContent = "₹" + (finalTotal > 0 ? finalTotal : 0);
     }

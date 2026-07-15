@@ -389,6 +389,24 @@
   async function finalizeOrder(method) {
     if (!Security.canSubmit('checkout-place-order', 3000)) return;
 
+    // For UPI, require the shopper to enter at least the last few digits
+    // of their UTR/Transaction ID before we accept "I have paid" — this is
+    // what lets admin match the order to a real bank-statement entry during
+    // manual verification. Digits only, 4-12 chars (full UTRs are 12 digits,
+    // but we deliberately don't force the whole thing since re-typing all
+    // 12 correctly on a phone is exactly the friction we're avoiding).
+    let upiTxnRef = null;
+    if (method === 'UPI') {
+      const raw = ($('upi-txn-ref')?.value || '').trim();
+      const digitsOnly = raw.replace(/\D/g, '');
+      showFieldError('error-upi-txn-ref', '');
+      if (digitsOnly.length < 4) {
+        showFieldError('error-upi-txn-ref', 'Please enter at least the last 4-6 digits of your UTR/Transaction ID.');
+        return;
+      }
+      upiTxnRef = digitsOnly;
+    }
+
     const btnId = method === 'COD' ? 'place-order-cod-btn' : 'upi-done-btn';
     const btn = $(btnId);
     btn.disabled = true;
@@ -402,7 +420,7 @@
     const deliveryFee = getDeliveryFeeTotal();
     const finalTotal = Math.max(0, subtotal - discount + codCharge + deliveryFee);
 
-    const orderPayload = {
+    let orderPayload = {
       orderId: currentOrderId,
       customerName: deliveryDetails.name,
       customerPhone: deliveryDetails.phone,
@@ -419,15 +437,65 @@
       codCharge: codCharge,
       finalTotal: finalTotal,
       paymentMethod: method,
+      upiTxnRef: upiTxnRef, // last 4-12 digits of UTR/Ref No, entered by shopper — for admin's manual bank-statement match
       status: 'Pending',
       createdAt: new Date().toISOString()
     };
 
+    const { doc, setDoc, updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js');
+    while (!window.FirebaseApp) { await new Promise((r) => setTimeout(r, 100)); }
+    const db = window.FirebaseApp.db;
+
+    // Try the server-side-verified path first: api/place-order.js
+    // re-fetches real prices/coupon rules from Firestore and computes the
+    // total itself, ignoring whatever the browser sent — this is what
+    // stops DevTools price tampering. If that route 404s (this build is
+    // hosted somewhere without serverless functions, e.g. GitHub Pages),
+    // fall back to the old direct client write so checkout still works,
+    // just without that extra server-side check on this particular host.
+    let serverVerified = false;
     try {
-      const { doc, setDoc, updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js');
-      while (!window.FirebaseApp) { await new Promise((r) => setTimeout(r, 100)); }
-      const db = window.FirebaseApp.db;
-      await setDoc(doc(db, 'orders', currentOrderId), orderPayload);
+      const apiRes = await fetch('/api/place-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: currentOrderId,
+          items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+          deliveryDetails,
+          paymentMethod: method,
+          couponCode: appliedCoupon ? appliedCoupon.code : null,
+          upiTxnRef
+        })
+      });
+
+      if (apiRes.status === 404) {
+        throw { isFallback: true }; // route doesn't exist on this host — fall back below
+      }
+      if (!apiRes.ok) {
+        const errBody = await apiRes.json().catch(() => ({}));
+        throw new Error(errBody.error || 'We could not verify your order. Please refresh and try again.');
+      }
+      const result = await apiRes.json();
+      orderPayload = result.order; // use the server's verified numbers for the email + confirmation screen
+      serverVerified = true;
+    } catch (err) {
+      if (!(err && err.isFallback)) {
+        // A real rejection from the server (out of stock, invalid coupon,
+        // bad payment method, etc) — surface it and stop, don't fall back
+        // to an unverified write.
+        console.error('Server-verified order placement failed:', err);
+        alert(err.message || 'Something went wrong while placing your order. Please try again.');
+        btn.disabled = false;
+        btn.textContent = method === 'COD' ? 'Place Order (COD)' : 'I have paid, Place Order';
+        return;
+      }
+      console.warn('api/place-order not available on this host — falling back to direct client write (no server-side price re-check).');
+    }
+
+    try {
+      if (!serverVerified) {
+        await setDoc(doc(db, 'orders', currentOrderId), orderPayload);
+      }
 
       window.Cart.clear();
       sessionStorage.removeItem('applied_coupon');
@@ -470,7 +538,10 @@
     window.addEventListener('cart:updated', () => {
       renderPageVisibility();
       renderCartList();
-      renderSummary();
+      // Cart may have just dropped below the applied coupon's minOrderValue
+      // (qty reduced, item removed) — re-check it live instead of only at
+      // final submit, so the summary the shopper is looking at is never wrong.
+      reValidateCoupon().then(renderSummary);
     });
 
     if (!window.Cart || window.Cart.getItems().length === 0) return; // nothing else to boot on an empty cart
