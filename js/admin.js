@@ -655,6 +655,7 @@ setTimeout(() => {
         <td>${dateStr}</td>
         <td style="color:${p.stock > 0 ? 'inherit' : 'var(--color-danger)'}; font-weight:bold;">${p.stock}</td>
         <td style="color:${sColor}; font-weight:bold;">${esc((p.status || "").toUpperCase())}</td>
+        <td>${p.sourcePlatformUrl ? `<button class="btn btn-outline source-platform-btn" data-url="${esc(p.sourcePlatformUrl)}" style="padding:4px 8px; font-size:0.8rem;">Source Platform</button>` : '<span style="color:var(--color-ink-soft); font-size:0.8rem;">—</span>'}</td>
         <td>
           <button class="btn btn-outline pause-prod-btn" data-id="${p.id}" data-status="${p.status}" style="padding:4px 8px; font-size:0.8rem;">${p.status === 'active' ? 'Pause' : 'Live'}</button>
           <button class="btn btn-outline edit-prod-btn" data-id="${p.id}" style="padding:4px 8px; font-size:0.8rem;">Edit</button>
@@ -666,6 +667,7 @@ setTimeout(() => {
     tbody.querySelectorAll(".pause-prod-btn").forEach((b) => b.addEventListener("click", () => toggleProductStatus(b.dataset.id, b.dataset.status)));
     tbody.querySelectorAll(".edit-prod-btn").forEach((b) => b.addEventListener("click", () => editProduct(b.dataset.id)));
     tbody.querySelectorAll(".del-prod-btn").forEach((b) => b.addEventListener("click", () => deleteProduct(b.dataset.id)));
+    tbody.querySelectorAll(".source-platform-btn").forEach((b) => b.addEventListener("click", () => window.open(b.dataset.url, "_blank", "noopener,noreferrer")));
   }
 
   function editProduct(id) {
@@ -679,6 +681,7 @@ setTimeout(() => {
     document.getElementById("prod-stock").value = p.stock ?? "";
     document.getElementById("prod-tags").value = (p.tags || []).join(", ");
     document.getElementById("prod-sku").value = p.sku || "";
+    document.getElementById("prod-source-url").value = p.sourcePlatformUrl || "";
     document.getElementById("prod-short-desc").value = p.shortDescription || "";
     document.getElementById("prod-long-desc").value = p.description || "";
     document.getElementById("prod-delivery-fee").value = p.deliveryFee ?? 0;
@@ -747,6 +750,7 @@ setTimeout(() => {
         sellingPrice: Number(document.getElementById("prod-price").value) || 0,
         stock: Number(document.getElementById("prod-stock").value) || 0,
         sku: document.getElementById("prod-sku").value,
+        sourcePlatformUrl: document.getElementById("prod-source-url").value.trim(),
         tags: document.getElementById("prod-tags").value.split(",").map((t) => t.trim()).filter(Boolean),
         shortDescription: document.getElementById("prod-short-desc").value,
         description: document.getElementById("prod-long-desc").value,
@@ -886,8 +890,28 @@ setTimeout(() => {
     itemsUl.innerHTML = "";
     (o.items || []).forEach((item) => {
       const li = document.createElement("li");
-      li.style.padding = "5px 0"; li.style.borderBottom = "1px dashed #ddd";
-      li.textContent = `${item.title} x ${item.quantity} (₹${item.price} each)`;
+      li.style.cssText = "padding:5px 0; border-bottom:1px dashed #ddd; display:flex; align-items:center; justify-content:space-between; gap:10px;";
+
+      const label = document.createElement("span");
+      label.textContent = `${item.title} x ${item.quantity} (₹${item.price} each)`;
+      li.appendChild(label);
+
+      // The order stores a snapshot of the item at purchase time, not the
+      // source link — look that up on the CURRENT product record instead,
+      // since the source platform URL can change/be added after the order
+      // was placed. If the product was since deleted, there's nothing to
+      // link to.
+      const product = productsList.find((p) => p.id === item.productId);
+      if (product && product.sourcePlatformUrl) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn btn-outline";
+        btn.style.cssText = "padding:4px 8px; font-size:0.78rem; flex-shrink:0;";
+        btn.textContent = "Source Platform";
+        btn.addEventListener("click", () => window.open(product.sourcePlatformUrl, "_blank", "noopener,noreferrer"));
+        li.appendChild(btn);
+      }
+
       itemsUl.appendChild(li);
     });
     document.getElementById("order-details-modal").style.display = "block";

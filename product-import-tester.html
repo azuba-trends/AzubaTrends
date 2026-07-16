@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Product Import Tester - AzubaTrends (internal tool)</title>
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/components.css">
+<style>
+  .tester-wrap { max-width: 640px; margin: 0 auto; padding: 40px 20px 80px; }
+  .tester-wrap h1 { margin-bottom: 6px; }
+  .tester-note { color: var(--color-ink-soft); font-size: 0.9rem; margin-bottom: 24px; line-height: 1.6; }
+  .tester-note code { background: var(--color-surface-sunken); padding: 2px 6px; border-radius: 4px; }
+  .tester-form { display: flex; gap: 10px; margin-bottom: 24px; }
+  .tester-form input { flex: 1; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 6px; }
+  #tester-status { font-size: 0.85rem; margin-bottom: 16px; min-height: 1.2em; }
+  #tester-status.error { color: var(--color-danger); }
+  #tester-status.ok { color: var(--color-success); }
+
+  .result-card { border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; display: none; }
+  .result-card img { width: 100%; max-height: 320px; object-fit: contain; background: var(--color-surface-sunken); display: block; }
+  .result-card__body { padding: 16px; }
+  .result-card__body label { font-weight: 700; font-size: 0.78rem; text-transform: uppercase; color: var(--color-ink-soft); display: block; margin-top: 12px; }
+  .result-card__body label:first-child { margin-top: 0; }
+  .result-card__body p { margin: 2px 0 0; font-size: 0.92rem; }
+</style>
+</head>
+<body>
+
+<div id="header-mount"></div>
+
+<main class="tester-wrap">
+  <h1>Product Import Tester</h1>
+  <p class="tester-note">
+    Internal tool — not linked from the storefront or the admin panel, delete once you're happy with it.
+    <br><br>
+    Paste any third-party product page URL below. This calls <code>/api/import-product?url=...</code>,
+    which fetches that page on the server and reads back its <code>og:title</code>, <code>og:description</code>,
+    and <code>og:image</code> tags — the same way a link preview is built. It also downloads the image itself so
+    you can see exactly what would get pulled in.
+    <br><br>
+    This is a <strong>one-time import helper</strong>, not a live sync — it does not keep watching the source
+    page or auto-update price/stock later. Price is deliberately never auto-filled (every site formats it
+    differently); you'll always type that in yourself.
+    <br><br>
+    <strong>Works on Vercel only</strong> — same as <code>api/product.js</code>. Deploy this file alongside your
+    project and open it at <code>https://your-site.vercel.app/product-import-tester.html</code>.
+  </p>
+
+  <form class="tester-form" id="tester-form">
+    <input type="url" id="tester-input" placeholder="https://example-store.com/product/xyz" required>
+    <button type="submit" class="btn btn-primary">Import</button>
+  </form>
+
+  <p id="tester-status"></p>
+
+  <div class="result-card" id="result-card">
+    <img id="result-img" src="" alt="">
+    <div class="result-card__body">
+      <label>Title</label>
+      <p id="result-title"></p>
+      <label>Description</label>
+      <p id="result-desc"></p>
+      <label>Source Image URL</label>
+      <p id="result-source-url" style="word-break: break-all;"></p>
+    </div>
+  </div>
+</main>
+
+<div id="footer-mount"></div>
+
+<script src="js/site-config.js"></script>
+<script src="js/layout.js"></script>
+
+<script>
+document.getElementById("tester-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const status = document.getElementById("tester-status");
+  const card = document.getElementById("result-card");
+  card.style.display = "none";
+  status.className = "";
+  status.textContent = "Fetching that page and reading its tags...";
+
+  const url = document.getElementById("tester-input").value.trim();
+
+  try {
+    const res = await fetch(`/api/import-product?url=${encodeURIComponent(url)}`);
+    if (res.status === 404) {
+      status.className = "error";
+      status.textContent = "Got a 404 for /api/import-product — make sure you're viewing this on your Vercel deployment, not GitHub Pages or a local file.";
+      return;
+    }
+    const data = await res.json();
+    if (!res.ok) {
+      status.className = "error";
+      status.textContent = data.error || "Import failed.";
+      return;
+    }
+
+    document.getElementById("result-title").textContent = data.title || "(none found)";
+    document.getElementById("result-desc").textContent = data.description || "(none found)";
+    document.getElementById("result-source-url").textContent = data.sourceImageUrl || "(none found)";
+    const img = document.getElementById("result-img");
+    if (data.imageDataUrl) {
+      img.src = data.imageDataUrl;
+      img.style.display = "block";
+    } else {
+      img.style.display = "none";
+    }
+    card.style.display = "block";
+
+    status.className = "ok";
+    status.textContent = "✓ Import worked — this is what would prefill the Add Product form.";
+  } catch (err) {
+    status.className = "error";
+    status.textContent = "Request failed: " + (err.message || err);
+  }
+});
+</script>
+</body>
+</html>

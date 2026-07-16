@@ -254,7 +254,7 @@
             <thead>
               <tr>
                 <th><input type="checkbox" id="select-all-products"></th>
-                <th>Image</th><th>Name</th><th>Brand</th><th>Tags</th><th>Categories</th><th>Date</th><th>Stock</th><th>Status</th><th>Actions</th>
+                <th>Image</th><th>Name</th><th>Brand</th><th>Tags</th><th>Categories</th><th>Date</th><th>Stock</th><th>Status</th><th>Source Platform</th><th>Actions</th>
               </tr>
             </thead>
             <tbody id="products-table-body"></tbody>
@@ -320,6 +320,10 @@
           <div class="form-field full-width">
             <label>Tags (comma separated, e.g. cotton, summer, red)</label>
             <input type="text" id="prod-tags">
+          </div>
+          <div class="form-field full-width">
+            <label>Source Platform URL <span class="field-hint" style="display:inline;">(link only — the third-party page you're reselling this from, e.g. Meesho/IndiaMART/AliExpress product link. Shown as a quick-open button on the products list and inside orders.)</span></label>
+            <input type="url" id="prod-source-url" placeholder="https://...">
           </div>
           <div class="form-field full-width">
             <label>Short Description <span class="required-star">*</span></label>
