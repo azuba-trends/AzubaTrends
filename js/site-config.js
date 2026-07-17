@@ -48,6 +48,10 @@ window.SITE_CONFIG_READY = (async function() {
       // ImgBB key, same "not actually secret" exposure model as everything
       // else in this file (see the big comment at the top).
       window.SITE_CONFIG.imgbbKey = data.imgbbKey || "";
+      // This is the lightweight abuse-throttle key for api/telegram-notify.js
+      // (set as the TELEGRAM_NOTIFY_API_KEY env var in Vercel) — NOT a bot
+      // token, safe to expose the same way the keys above are.
+      window.SITE_CONFIG.telegramApiKey = data.telegramApiKey || "";
       
       // Update UI with new settings dynamically
       if(window.ProductLoader && window.ProductLoader.initHeader) {

@@ -301,6 +301,26 @@ const Reviews = (function () {
         return;
       }
 
+      // Best-effort Telegram alert so the admin can spot spam/inappropriate
+      // reviews quickly — never blocks or fails the review itself, which
+      // already saved successfully above.
+      if (window.SITE_CONFIG && window.SITE_CONFIG.telegramApiKey) {
+        fetch("/api/telegram-notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-API-Key": window.SITE_CONFIG.telegramApiKey },
+          body: JSON.stringify({
+            event: "new_review",
+            data: {
+              productId,
+              productTitle: els.productTitle || productId,
+              rating: review.rating,
+              comment: review.comment,
+              productUrl: `${window.location.origin}/product.html?id=${encodeURIComponent(productId)}`
+            }
+          })
+        }).catch((err) => console.warn("Telegram new_review notify failed (non-fatal):", err));
+      }
+
       // Reset form
       els.form.reset();
       selectedRating = 0;

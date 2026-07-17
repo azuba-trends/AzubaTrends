@@ -32,7 +32,40 @@ not need to touch anything else.
 
 
 
+## Telegram Integration — new in this update
+
+**New files:**
+
+| File | Purpose |
+|---|---|
+| `package.json` | Adds the `firebase-admin` dependency (Vercel installs it automatically on deploy). |
+| `lib/firebase-admin.js` | Shared Admin SDK initializer (service-account-based, bypasses Firestore rules — used only by trusted server code). |
+| `lib/telegram.js` | Builds the message text + inline buttons for every event type, sends via the real Telegram Bot API, loops over all configured bots. Never throws. |
+| `api/telegram-notify.js` | Generic, API-key-protected endpoint: `POST { event, data }` → forwarded to Telegram. Called from `reviews.js` (new_review) and `admin.js` (order_cancelled). |
+| `api/telegram-test.js` | Backs the "Fetch Chat ID" and "Send Test Message" buttons in the admin panel. |
+| `api/cron-daily-digest.js` | Runs once a day (Vercel Cron): sales summary + UPI orders still pending verification + coupons expiring in 2 days, combined into one job (Hobby plan only allows once-daily cron cadence). |
+| `SERVICE-ACCOUNT-SETUP-GUIDE.md` | Step-by-step: generate the Firebase service account key, base64-encode it, add as a Vercel env var, plus the two other env vars this needs. **Do this first — nothing Telegram-related works until you do.** |
+
+**Rewritten:**
+- `api/place-order.js` — now uses the Admin SDK instead of the public REST API. This unlocked two things at once: (1) **stock now actually auto-decrements after a successful order** (it never did before — it was a fully manual number), and (2) it can read the admin-only `telegram_bots` collection to fire `new_order`, and `out_of_stock`/`low_stock` when a decrement crosses a threshold (out of stock = 0 left, low stock = ≤3 left).
+
+**Modified:**
+- `firestore.rules` — new `telegram_bots` collection, admin-only read/write (bot tokens are real secrets, unlike every other key already used on this site).
+- `vercel.json` — added the daily digest cron (`30 17 * * *` = 11:00 PM IST).
+- `admin.html` / `js/admin.js` — new **Settings → Telegram Integration** tab: add/edit/delete bots, per-bot event checkboxes, Fetch Chat ID, Send Test Message. Also fires `order_cancelled` when an order's status is set to Cancelled.
+- `js/reviews.js` / `product.html` — fires `new_review` after a review saves successfully (fire-and-forget, never blocks the review).
+- `js/site-config.js` / `admin.html` Account tab — new `telegramApiKey` setting (the **abuse-throttle** key for `api/telegram-notify.js` — safe to expose publicly, this is NOT the bot token).
+
+**Events implemented:** 🛒 New Order (full customer + payment breakdown + items with Source Platform buttons), ⚠️ Out of Stock, 🟡 Low Stock (≤3 left), ⭐ New Review, ❌ Order Cancelled, 📊 Daily Summary (sales + pending UPI + expiring coupons).
+
+**A note on frequency:** Vercel's free Hobby plan only allows cron jobs to run **once per day** (not hourly/every-30-min). A true real-time "this UPI payment has been pending 30 minutes" reminder isn't possible on the free plan — the daily digest catches anything still pending once a day instead. If you ever want that tighter cadence, it needs Vercel Pro ($20/mo).
+
 ## Manual setup steps you must do yourself
+
+0. **Telegram Integration needs the service account first.** Follow
+   `SERVICE-ACCOUNT-SETUP-GUIDE.md` completely before anything else in this
+   section — it covers the Firebase service account AND the two other env
+   vars (`TELEGRAM_NOTIFY_API_KEY`, `CRON_SECRET`) this update needs.
 
 1. **Republish Firestore rules.** Firebase Console → Firestore Database →
    Rules → paste the new `firestore.rules` contents → Publish. Without this,

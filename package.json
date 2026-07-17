@@ -1,0 +1,10 @@
+{
+  "name": "azubatrends",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AzubaTrends storefront serverless functions",
+  "dependencies": {
+    "firebase-admin": "^12.1.0"
+  }
+}

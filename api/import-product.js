@@ -59,14 +59,25 @@ export default async function handler(req, res) {
   try {
     const pageRes = await fetch(target.toString(), {
       headers: {
-        // Some sites serve a stripped-down page (or block) requests with
-        // no User-Agent at all — a normal browser UA gets us the same
-        // page a human visitor would see.
-        "User-Agent": "Mozilla/5.0 (compatible; AzubaTrendsProductImporter/1.0)"
+        // A closer approximation of a real browser request. This helps on
+        // sites doing light User-Agent checks, but will NOT reliably get
+        // past serious bot-protection (Cloudflare/Akamai/PerimeterX-style
+        // WAFs) that big marketplaces like Meesho/Flipkart/Amazon run —
+        // those detect far more than just headers, and bypassing them
+        // properly needs a full headless browser, which is out of scope
+        // for a lightweight tool like this.
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-IN,en;q=0.9"
       }
     });
 
     if (!pageRes.ok) {
+      if (pageRes.status === 403 || pageRes.status === 429) {
+        return res.status(502).json({
+          error: `This site is actively blocking automated requests (HTTP ${pageRes.status}). This is common on large marketplaces (Meesho, Flipkart, Amazon, Myntra) that run bot-protection — it's not fixable from this tool. Smaller/independent stores usually work fine.`
+        });
+      }
       return res.status(502).json({ error: `That page returned an error (HTTP ${pageRes.status}). It may block automated requests.` });
     }
 

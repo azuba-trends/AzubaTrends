@@ -986,6 +986,24 @@ setTimeout(() => {
       return;
     }
 
+    if (newStatus === "Cancelled" && order && SETTINGS.telegramApiKey) {
+      // Fire-and-forget — a Telegram hiccup should never block the status
+      // update itself, which already succeeded above.
+      fetch("/api/telegram-notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-Key": SETTINGS.telegramApiKey },
+        body: JSON.stringify({
+          event: "order_cancelled",
+          data: {
+            orderId: order.orderId,
+            customerName: order.customerName,
+            finalTotal: order.finalTotal,
+            adminOrderUrl: `${window.location.origin}/admin.html`
+          }
+        })
+      }).catch((err) => console.warn("Telegram order_cancelled notify failed (non-fatal):", err));
+    }
+
     if (shouldNotify && order) {
       try {
         await sendStatusUpdateEmail(order, newStatus);
@@ -1138,6 +1156,7 @@ setTimeout(() => {
     document.getElementById("set-email-srv").value = SETTINGS.emailjs_serviceId || "";
     document.getElementById("set-email-tpl").value = SETTINGS.emailjs_templateId || "";
     document.getElementById("set-email-status-tpl").value = SETTINGS.emailjs_statusTemplateId || "";
+    document.getElementById("set-telegram-api-key").value = SETTINGS.telegramApiKey || "";
     document.getElementById("set-upi-id").value = SETTINGS.upiId || "";
     document.getElementById("set-cod-charge").value = SETTINGS.codExtraCharge ?? 30;
     document.getElementById("set-support-email").value = SETTINGS.supportEmail || "";
@@ -1171,6 +1190,7 @@ setTimeout(() => {
       emailjs_serviceId: document.getElementById("set-email-srv").value,
       emailjs_templateId: document.getElementById("set-email-tpl").value,
       emailjs_statusTemplateId: document.getElementById("set-email-status-tpl").value,
+      telegramApiKey: document.getElementById("set-telegram-api-key").value,
     }, document.getElementById("save-account-settings-btn"));
   });
 
@@ -1191,6 +1211,171 @@ setTimeout(() => {
   });
 
   // ================================================================
+  // Telegram Integration
+  // ================================================================
+  let telegramBotsList = [];
+  let unsubTelegramBots = null;
+
+  function listenTelegramBots() {
+    if (unsubTelegramBots) return;
+    unsubTelegramBots = onSnapshot(collection(db, "telegram_bots"), (snap) => {
+      telegramBotsList = [];
+      snap.forEach((d) => telegramBotsList.push({ id: d.id, ...d.data() }));
+      renderTelegramBotsTable();
+    });
+  }
+
+  const EVENT_LABELS = {
+    new_order: "🛒 New Order",
+    out_of_stock: "⚠️ Out of Stock",
+    low_stock: "🟡 Low Stock",
+    new_review: "⭐ New Review",
+    order_cancelled: "❌ Order Cancelled",
+    daily_digest: "📊 Daily Summary"
+  };
+
+  function renderTelegramBotsTable() {
+    const tbody = document.getElementById("telegram-bots-table-body");
+    tbody.innerHTML = "";
+    if (telegramBotsList.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--color-muted);">No bots added yet — use the form below.</td></tr>`;
+      return;
+    }
+    telegramBotsList.forEach((b) => {
+      const eventsLabel = (b.events || []).map((e) => EVENT_LABELS[e] || e).join(", ") || "—";
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${esc(b.name)}</td>
+        <td style="font-family:monospace; font-size:0.8rem;">${esc(b.chatId)}</td>
+        <td style="font-size:0.8rem;">${esc(eventsLabel)}</td>
+        <td style="color:${b.active ? 'var(--color-success)' : 'var(--color-ink-soft)'}; font-weight:bold;">${b.active ? "Yes" : "No"}</td>
+        <td>
+          <button class="btn btn-outline tg-edit-btn" data-id="${b.id}" style="padding:4px 8px; font-size:0.8rem;">Edit</button>
+          <button class="btn btn-outline tg-del-btn" data-id="${b.id}" style="color:var(--color-danger); padding:4px 8px; font-size:0.8rem;">Delete</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll(".tg-edit-btn").forEach((btn) => btn.addEventListener("click", () => editTelegramBot(btn.dataset.id)));
+    tbody.querySelectorAll(".tg-del-btn").forEach((btn) => btn.addEventListener("click", () => deleteTelegramBot(btn.dataset.id)));
+  }
+
+  function resetTelegramForm() {
+    document.getElementById("telegram-bot-form").reset();
+    document.getElementById("tg-edit-id").value = "";
+    document.getElementById("telegram-form-title").textContent = "Add Bot";
+    document.getElementById("tg-cancel-edit-btn").style.display = "none";
+    document.getElementById("tg-status-msg").textContent = "";
+    document.querySelectorAll(".tg-event-check").forEach((c) => { c.checked = (c.value === "new_order" || c.value === "out_of_stock"); });
+  }
+
+  function editTelegramBot(id) {
+    const b = telegramBotsList.find((x) => x.id === id);
+    if (!b) return;
+    document.getElementById("tg-edit-id").value = id;
+    document.getElementById("tg-name").value = b.name || "";
+    document.getElementById("tg-token").value = b.token || "";
+    document.getElementById("tg-chat-id").value = b.chatId || "";
+    document.getElementById("tg-active").checked = !!b.active;
+    document.querySelectorAll(".tg-event-check").forEach((c) => { c.checked = (b.events || []).includes(c.value); });
+    document.getElementById("telegram-form-title").textContent = `Edit Bot: ${b.name}`;
+    document.getElementById("tg-cancel-edit-btn").style.display = "inline-block";
+    document.getElementById("tg-status-msg").textContent = "";
+    document.getElementById("settings-tab-telegram").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function deleteTelegramBot(id) {
+    if (!confirm("Delete this bot? It will stop receiving notifications immediately.")) return;
+    await deleteDoc(doc(db, "telegram_bots", id));
+  }
+
+  document.getElementById("tg-cancel-edit-btn").addEventListener("click", resetTelegramForm);
+
+  document.getElementById("telegram-bot-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const editId = document.getElementById("tg-edit-id").value;
+    const payload = {
+      name: document.getElementById("tg-name").value.trim(),
+      token: document.getElementById("tg-token").value.trim(),
+      chatId: document.getElementById("tg-chat-id").value.trim(),
+      active: document.getElementById("tg-active").checked,
+      events: Array.from(document.querySelectorAll(".tg-event-check:checked")).map((c) => c.value)
+    };
+    const btn = document.getElementById("save-telegram-bot-btn");
+    btn.disabled = true; btn.textContent = "Saving...";
+    try {
+      if (editId) {
+        await updateDoc(doc(db, "telegram_bots", editId), payload);
+      } else {
+        await addDoc(collection(db, "telegram_bots"), payload);
+      }
+      document.getElementById("tg-status-msg").style.color = "var(--color-success)";
+      document.getElementById("tg-status-msg").textContent = "✓ Saved.";
+      resetTelegramForm();
+    } catch (err) {
+      document.getElementById("tg-status-msg").style.color = "var(--color-danger)";
+      document.getElementById("tg-status-msg").textContent = "Could not save: " + (err.message || err);
+    }
+    btn.disabled = false; btn.textContent = "Save Bot";
+  });
+
+  async function callTelegramTestApi(action) {
+    const statusEl = document.getElementById("tg-status-msg");
+    if (!SETTINGS.telegramApiKey) {
+      statusEl.style.color = "var(--color-danger)";
+      statusEl.textContent = "Set a \"Telegram Notify API Key\" in Settings > Account first (must match TELEGRAM_NOTIFY_API_KEY in Vercel).";
+      return;
+    }
+    const token = document.getElementById("tg-token").value.trim();
+    const chatId = document.getElementById("tg-chat-id").value.trim();
+    if (!token) {
+      statusEl.style.color = "var(--color-danger)";
+      statusEl.textContent = "Enter a bot token first.";
+      return;
+    }
+    if (action === "test" && !chatId) {
+      statusEl.style.color = "var(--color-danger)";
+      statusEl.textContent = "Enter a Chat ID first (or use Fetch Chat ID).";
+      return;
+    }
+
+    statusEl.style.color = "var(--color-ink-soft)";
+    statusEl.textContent = action === "test" ? "Sending test message..." : "Fetching chat ID...";
+
+    try {
+      const res = await fetch("/api/telegram-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-Key": SETTINGS.telegramApiKey },
+        body: JSON.stringify({ action, token, chatId })
+      });
+      if (res.status === 404) {
+        statusEl.style.color = "var(--color-danger)";
+        statusEl.textContent = "api/telegram-test not found — make sure you're on the Vercel deployment, not GitHub Pages or a local file.";
+        return;
+      }
+      const data = await res.json();
+      if (!data.ok) {
+        statusEl.style.color = "var(--color-danger)";
+        statusEl.textContent = data.error || "Something went wrong.";
+        return;
+      }
+      if (action === "fetchChatId") {
+        document.getElementById("tg-chat-id").value = data.chatId;
+        statusEl.style.color = "var(--color-success)";
+        statusEl.textContent = `✓ Found chat: ${data.chatTitle || data.chatId}`;
+      } else {
+        statusEl.style.color = "var(--color-success)";
+        statusEl.textContent = "✓ Test message sent — check your Telegram chat.";
+      }
+    } catch (err) {
+      statusEl.style.color = "var(--color-danger)";
+      statusEl.textContent = "Request failed: " + (err.message || err);
+    }
+  }
+
+  document.getElementById("tg-fetch-chat-id-btn").addEventListener("click", () => callTelegramTestApi("fetchChatId"));
+  document.getElementById("tg-test-btn").addEventListener("click", () => callTelegramTestApi("test"));
+
+  // ================================================================
   // Boot sequence — realtime sync
   // ================================================================
   // Every list (products/categories/brands/coupons/orders) is now backed by
@@ -1209,6 +1394,7 @@ setTimeout(() => {
     listenCoupons();
     listenProducts();
     listenOrders();
+    listenTelegramBots();
 
     // Reopen whichever section the admin was last looking at (Overview by
     // default) instead of always resetting to the first sidebar item on a
@@ -1222,10 +1408,10 @@ setTimeout(() => {
   }
 
   function stopRealtimeSync() {
-    [unsubCategories, unsubBrands, unsubCoupons, unsubProducts, unsubOrders].forEach((unsub) => {
+    [unsubCategories, unsubBrands, unsubCoupons, unsubProducts, unsubOrders, unsubTelegramBots].forEach((unsub) => {
       if (typeof unsub === "function") unsub();
     });
-    unsubCategories = unsubBrands = unsubCoupons = unsubProducts = unsubOrders = null;
+    unsubCategories = unsubBrands = unsubCoupons = unsubProducts = unsubOrders = unsubTelegramBots = null;
     syncStarted = false;
   }
 

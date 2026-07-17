@@ -90,5 +90,21 @@ service cloud.firestore {
                     && request.resource.data.productId is string;
       allow update, delete: if isAdmin();
     }
+
+    // Telegram bot configs — UNLIKE every other collection above, this is
+    // NOT public-read. A Telegram bot token is a real secret: whoever has
+    // it can send messages as your bot into any chat/group it's in, and
+    // potentially reconfigure or hijack it. So only the signed-in admin
+    // can read or write this collection from the browser (Admin Panel).
+    //
+    // The serverless functions that actually SEND Telegram messages
+    // (api/place-order.js, api/telegram-notify.js, api/cron-daily-digest.js)
+    // do NOT read this collection through these rules at all — they use
+    // the Firebase Admin SDK with a service account, which bypasses
+    // Firestore rules entirely by design. That's what the service account
+    // setup step is for. See SERVICE-ACCOUNT-SETUP-GUIDE.md.
+    match /telegram_bots/{botId} {
+      allow read, write: if isAdmin();
+    }
   }
 }

@@ -291,6 +291,7 @@
 
     // ---- Reviews ---------------------------------------------
     Reviews.init(product.id, {
+      productTitle: product.title,
       form: document.getElementById("review-form"),
       starInput: document.getElementById("review-star-input"),
       commentInput: document.getElementById("review-comment"),
