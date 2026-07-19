@@ -433,9 +433,9 @@ main { flex: 1; }
    the count in two places at once on a small screen was redundant. */
 @media (max-width: 767px) {
   .header-cart { display: none; }
-  .search-wrap {
+  .site-header__bar .search-wrap {
     order: 3;
-    flex-basis: 100%;
+    flex: 1 1 100%;
     max-width: none;
     margin-top: 2px;
   }
