@@ -302,6 +302,17 @@ main { flex: 1; }
   padding: var(--space-4);
 }
 
+/* IMPORTANT: without this, the modal never actually hides. The `hidden`
+   HTML attribute relies on the browser's default `[hidden]{display:none}`
+   rule, which has the exact same specificity (0,1,0) as `.account-dev-modal`
+   above — and author CSS wins specificity ties over the UA stylesheet, so
+   `display:flex` was winning and showing the modal on every page load
+   regardless of the `hidden` attribute. This selector has higher
+   specificity (0,2,0), so it correctly wins instead. */
+.account-dev-modal[hidden] {
+  display: none;
+}
+
 .account-dev-modal__card {
   background: var(--color-surface);
   border-radius: var(--radius-md);
