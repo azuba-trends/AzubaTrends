@@ -386,6 +386,26 @@
   background: var(--color-ink-soft);
 }
 
+/* Inline variant — sits next to the price in the price row instead of
+   overlaying the product image. Kept for Google Merchant Center / Meta
+   catalog compliance: product images with promotional badges/overlays
+   (like "% OFF") are not allowed since they read as ad creative rather
+   than a clean product photo, and the feed's own `price` value already
+   communicates the discount when paired with the strikethrough MRP. */
+.price-tag--inline {
+  position: static;
+  padding: 3px 10px 3px 14px;
+  font-size: 0.68rem;
+  clip-path: polygon(10px 0, 100% 0, 100% 100%, 10px 100%, 0 50%);
+  filter: none;
+}
+
+.price-tag--inline::after {
+  left: 5px;
+  width: 3px;
+  height: 3px;
+}
+
 /* ---------- Out of stock overlay/state ---------- */
 .oos-pill {
   display: inline-flex;

@@ -91,7 +91,6 @@ const ProductLoader = (function () {
     card.innerHTML = `
       <a href="product.html?id=${encodeURIComponent(product.id)}" class="product-card__link">
         <div class="product-card__media">
-          ${discount > 0 && product.stock > 0 ? `<span class="price-tag">${discount}% OFF</span>` : ''}
           ${product.stock === 0 ? `<span class="price-tag price-tag--stock">Out of Stock</span>` : ''}
           <img src="${safeImage}" alt="${safeTitle}" loading="lazy">
         </div>
@@ -102,6 +101,7 @@ const ProductLoader = (function () {
         <div class="product-card__price-row">
           <span class="price-current">${formatPrice(product.sellingPrice)}</span>
           ${discount > 0 ? `<span class="price-mrp">${formatPrice(product.mrp)}</span>` : ''}
+          ${discount > 0 && product.stock > 0 ? `<span class="price-tag price-tag--inline">${discount}% OFF</span>` : ''}
         </div>
         <div class="product-card__cta" data-cta-mount></div>
       </div>
