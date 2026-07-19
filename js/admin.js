@@ -127,13 +127,71 @@ setTimeout(() => {
 
   function fmtRupee(n) { return '₹' + Number(n || 0).toLocaleString('en-IN'); }
 
+  // Resizes/compresses an image file in the browser before upload — phone
+  // camera photos are often 3-10 MB at 4000px+ wide, which is massive
+  // overkill for a product card/gallery and makes the storefront feel slow
+  // on customers' mobile data. This scales the longest edge down to a
+  // sensible max and re-encodes as JPEG at a quality that keeps the file
+  // small while still looking sharp when zoomed in the lightbox.
+  const MAX_IMAGE_DIMENSION = 1600; // px, longest edge
+  const IMAGE_QUALITY = 0.82;
+
+  function compressImage(file) {
+    return new Promise((resolve) => {
+      // Only compress actual raster images ImgBB/browsers can re-encode;
+      // pass anything else (e.g. an already-tiny file, or a format canvas
+      // can't touch) straight through rather than risk breaking it.
+      if (!file.type || !file.type.startsWith("image/") || file.type === "image/gif") {
+        return resolve(file);
+      }
+
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+
+        let { width, height } = img;
+        if (width <= MAX_IMAGE_DIMENSION && height <= MAX_IMAGE_DIMENSION && file.size < 700 * 1024) {
+          // Already small enough — skip re-encoding to avoid needless
+          // quality loss on images that don't need it.
+          return resolve(file);
+        }
+
+        const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(width, height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(width * scale);
+        canvas.height = Math.round(height * scale);
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) return resolve(file); // fallback: upload original if canvas export fails
+            resolve(new File([blob], (file.name || "image").replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }));
+          },
+          "image/jpeg",
+          IMAGE_QUALITY
+        );
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(file); // fallback: upload original rather than blocking the whole save
+      };
+
+      img.src = objectUrl;
+    });
+  }
+
   // Helper: Upload image via ImgBB, using the key from Settings (never hardcoded)
   async function uploadToImgBB(file) {
     if (!SETTINGS.imgbbKey) {
       throw new Error("No ImgBB API key set. Add one in Settings > Account before uploading images.");
     }
+    const uploadFile = await compressImage(file);
     const formData = new FormData();
-    formData.append("image", file);
+    formData.append("image", uploadFile);
     const res = await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(SETTINGS.imgbbKey)}`, { method: "POST", body: formData });
     const data = await res.json();
     if (data.success) return data.data.url;
@@ -1182,6 +1240,7 @@ setTimeout(() => {
     document.getElementById("set-email-pub").value = SETTINGS.emailjs_publicKey || "";
     document.getElementById("set-email-srv").value = SETTINGS.emailjs_serviceId || "";
     document.getElementById("set-email-tpl").value = SETTINGS.emailjs_templateId || "";
+    document.getElementById("set-email-customer-tpl").value = SETTINGS.emailjs_customerTemplateId || "";
     document.getElementById("set-email-status-tpl").value = SETTINGS.emailjs_statusTemplateId || "";
     document.getElementById("set-telegram-api-key").value = SETTINGS.telegramApiKey || "";
     document.getElementById("set-ga4-id").value = SETTINGS.ga4MeasurementId || "";
@@ -1221,6 +1280,7 @@ setTimeout(() => {
       emailjs_publicKey: document.getElementById("set-email-pub").value,
       emailjs_serviceId: document.getElementById("set-email-srv").value,
       emailjs_templateId: document.getElementById("set-email-tpl").value,
+      emailjs_customerTemplateId: document.getElementById("set-email-customer-tpl").value,
       emailjs_statusTemplateId: document.getElementById("set-email-status-tpl").value,
       telegramApiKey: document.getElementById("set-telegram-api-key").value,
     }, document.getElementById("save-account-settings-btn"));

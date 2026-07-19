@@ -50,7 +50,8 @@ window.SITE_CONFIG_READY = (async function() {
       window.SITE_CONFIG.emailjs = {
         publicKey: data.emailjs_publicKey || "",
         serviceId: data.emailjs_serviceId || "",
-        templateId: data.emailjs_templateId || ""
+        templateId: data.emailjs_templateId || "",
+        customerTemplateId: data.emailjs_customerTemplateId || ""
       };
       // Used by reviews.js so a guest submitting a review photo can upload
       // it the same way the admin panel uploads product images — same

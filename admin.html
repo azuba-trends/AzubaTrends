@@ -670,8 +670,12 @@
               <input type="text" id="set-email-srv">
             </div>
             <div class="form-field">
-              <label>Template ID</label>
+              <label>Template ID <span class="field-hint" style="display:inline;">(admin-facing "New Order Received" copy)</span></label>
               <input type="text" id="set-email-tpl">
+            </div>
+            <div class="form-field full-width">
+              <label>Customer Order Confirmation Template ID <span class="field-hint" style="display:inline;">(optional — separate EmailJS template addressed to the CUSTOMER with "Thank you for your order!" wording. Leave blank to reuse the admin template above for the customer copy too.)</span></label>
+              <input type="text" id="set-email-customer-tpl" placeholder="e.g. template_abc456">
             </div>
             <div class="form-field full-width">
               <label>Order Status Update Template ID <span class="field-hint" style="display:inline;">(optional — separate EmailJS template addressed to the CUSTOMER, not you. Leave blank to skip customer status emails.)</span></label>

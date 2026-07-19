@@ -125,7 +125,31 @@ const OrderEmail = (function () {
       SITE_CONFIG.emailjs.serviceId,
       SITE_CONFIG.emailjs.templateId,
       templateParams
-    );
+    ).then(async (adminResult) => {
+      // Also send a copy to the customer's own email so they have their
+      // order details in their inbox. Best-effort: if this fails (bad
+      // email typo, quota hit, etc.) it should NOT make the whole order
+      // placement look like it failed — the admin copy above already
+      // succeeded and the order itself is already saved, so we just log
+      // and swallow the error here rather than rejecting.
+      const customerEmail = order.customerEmail;
+      if (customerEmail && customerEmail.includes('@')) {
+        // Prefer a dedicated customer-facing template ("Thank you for your
+        // order!") if the admin has set one up; otherwise fall back to
+        // reusing the admin template so this still works out of the box.
+        const customerTemplateId = SITE_CONFIG.emailjs.customerTemplateId || SITE_CONFIG.emailjs.templateId;
+        try {
+          await window.emailjs.send(
+            SITE_CONFIG.emailjs.serviceId,
+            customerTemplateId,
+            { ...templateParams, to_email: customerEmail }
+          );
+        } catch (err) {
+          console.warn('OrderEmail.send: customer confirmation copy failed (order itself is unaffected):', err);
+        }
+      }
+      return adminResult;
+    });
   }
 
   return { send };
