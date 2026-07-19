@@ -1,0 +1,22 @@
+██████████████████████████████████████████████████████████████████
+█                                                                    █
+█   STOP — DO NOT EDIT config/coupons.json                          █
+█                                                                    █
+██████████████████████████████████████████████████████████████████
+
+This file is LEFTOVER FROM AN OLD VERSION of the site and is NOT read
+by the live store anymore.
+
+Editing it will change NOTHING on your real website.
+
+Where coupons actually live now:
+  -> Firestore database, "coupons" collection
+  -> Managed from: Admin Panel -> Store -> All Coupons / Add Coupon
+
+If you want to add, edit, activate/deactivate, or delete a coupon, log
+in to /admin.html and use the Coupons section there. Changes save
+instantly to the live store — no git commit, no redeploy needed.
+
+geo-config.json and firebase-config.json in this same folder are
+DIFFERENT — those two are still actively used by the live site. Only
+coupons.json is deprecated.
