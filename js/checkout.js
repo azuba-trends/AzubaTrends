@@ -611,6 +611,7 @@
 
       $('payment-section').hidden = true;
       $('confirmation-section').hidden = false;
+      if ($('summary-aside')) $('summary-aside').style.display = 'none';
       Security.setTextSafely($('confirmation-order-id'), currentOrderId);
       let paymentNote;
       if (method === 'COD') {
