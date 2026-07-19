@@ -29,7 +29,7 @@ export default async function handler(req, res) {
 
   const columns = [
     "id", "title", "description", "link", "image_link",
-    "availability", "price", "condition", "brand", "product_type"
+    "availability", "price", "condition", "brand", "product_type", "shipping"
   ];
 
   let rows = [];
@@ -53,6 +53,16 @@ export default async function handler(req, res) {
       const image = (p.images && p.images[0]) || p.image || "";
       const categoryName = categoryNameById[p.category] || p.category || "";
 
+      // Per-product shipping override for Merchant Center / Meta Commerce
+      // Manager. Account-level setting stays "Free shipping" (matches the
+      // common case, since most products have no deliveryFee), but any
+      // product the admin DOES set a deliveryFee on gets its real cost
+      // reported here instead — so the feed always matches what checkout.js
+      // actually charges, no manual re-sync needed when admin changes it.
+      // Format required by both platforms: "country::service:price".
+      const deliveryFee = p.deliveryFee ? Number(p.deliveryFee) || 0 : 0;
+      const shipping = `IN::Standard:${deliveryFee.toFixed(2)} INR`;
+
       rows.push([
         doc.id,
         p.title,
@@ -63,7 +73,8 @@ export default async function handler(req, res) {
         `${Number(p.sellingPrice).toFixed(2)} INR`,
         "new",
         p.brand || "",
-        categoryName
+        categoryName,
+        shipping
       ]);
     });
   } catch (err) {
