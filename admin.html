@@ -631,6 +631,7 @@
         <button class="tab-btn active" data-settings-tab="account">Account</button>
         <button class="tab-btn" data-settings-tab="payment">Payment</button>
         <button class="tab-btn" data-settings-tab="support">Support</button>
+        <button class="tab-btn" data-settings-tab="marketing">Marketing</button>
         <button class="tab-btn" data-settings-tab="telegram">Telegram Integration</button>
       </div>
 
@@ -720,6 +721,34 @@
               <button type="submit" class="btn btn-primary" id="save-support-settings-btn">Save Support Settings</button>
             </div>
           </form>
+        </div>
+      </div>
+
+      <!-- Marketing tab -->
+      <div class="tab-panel" id="settings-tab-marketing">
+        <div class="card">
+          <form id="marketing-settings-form" class="form-grid">
+            <div class="form-field">
+              <label>Google Analytics 4 Measurement ID <span class="field-hint" style="display:inline;">(looks like G-XXXXXXXXXX — from analytics.google.com)</span></label>
+              <input type="text" id="set-ga4-id" placeholder="G-XXXXXXXXXX">
+            </div>
+            <div class="form-field">
+              <label>Meta Pixel ID <span class="field-hint" style="display:inline;">(numeric ID from Meta Events Manager)</span></label>
+              <input type="text" id="set-meta-pixel-id" placeholder="e.g. 1234567890123456">
+            </div>
+            <div class="form-field full-width">
+              <button type="submit" class="btn btn-primary" id="save-marketing-settings-btn">Save Marketing Settings</button>
+            </div>
+          </form>
+        </div>
+        <div class="card" style="margin-top:20px;">
+          <h3 style="margin-top:0;">Feeds &amp; SEO files (auto-generated, always live)</h3>
+          <p class="field-hint">These update automatically as your products change — nothing to re-upload manually. Give these exact URLs to Google Search Console / Merchant Center / Meta Commerce Manager.</p>
+          <ul style="margin-top:10px; line-height:2;">
+            <li><code id="feed-sitemap-url"></code></li>
+            <li><code id="feed-robots-url"></code></li>
+            <li><code id="feed-product-url"></code> <span class="field-hint">(Google Merchant Center + Meta Commerce Manager both use this same file)</span></li>
+          </ul>
         </div>
       </div>
 

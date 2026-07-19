@@ -154,11 +154,41 @@ const Reviews = (function () {
         img.className = "review-item__image";
         img.src = review.imageUrl;
         img.alt = "Photo attached to review by " + (review.authorLabel || "a guest");
+        img.style.cursor = "zoom-in";
+        img.addEventListener("click", () => openReviewLightbox(review, img));
         item.appendChild(img);
       }
 
       container.appendChild(item);
     });
+  }
+
+  // Reuses the page's existing #lightbox (already present on product.html
+  // for the main product gallery) so there's exactly one lightbox
+  // implementation on the page instead of a second competing one. Falls
+  // back to just opening the image in a new tab if that lightbox markup
+  // isn't present for some reason.
+  function openReviewLightbox(review, imgEl) {
+    const lightbox = document.getElementById("lightbox");
+    const lightboxImg = document.getElementById("lightbox-img");
+    if (!lightbox || !lightboxImg) {
+      window.open(imgEl.src, "_blank", "noopener,noreferrer");
+      return;
+    }
+    lightboxImg.src = imgEl.src;
+    lightboxImg.alt = imgEl.alt;
+
+    const caption = document.getElementById("lightbox-caption");
+    if (caption) {
+      const starsEl = document.getElementById("lightbox-caption-stars");
+      if (starsEl) renderStars(starsEl, review.rating);
+      const authorEl = document.getElementById("lightbox-caption-author");
+      if (authorEl) Security.setTextSafely(authorEl, review.authorLabel || "Guest");
+      const commentEl = document.getElementById("lightbox-caption-comment");
+      if (commentEl) Security.setTextSafely(commentEl, review.comment);
+      caption.hidden = false;
+    }
+    lightbox.hidden = false;
   }
 
   /**
@@ -200,6 +230,7 @@ const Reviews = (function () {
         els.summaryCount,
         count > 0 ? `${count} review${count > 1 ? "s" : ""}` : "No reviews yet"
       );
+      if (typeof els.onSummary === "function") els.onSummary({ average, count });
     }
 
     async function refresh() {
@@ -232,6 +263,15 @@ const Reviews = (function () {
       }
     });
 
+    const charCountEl = document.getElementById("review-char-count");
+    if (charCountEl) {
+      els.commentInput.addEventListener("input", () => {
+        const len = els.commentInput.value.length;
+        charCountEl.textContent = `${len} / 1000`;
+        charCountEl.style.color = len > 1000 ? "var(--color-danger)" : "";
+      });
+    }
+
     els.form.addEventListener("submit", async (e) => {
       e.preventDefault();
       els.imageError.classList.remove("is-visible");
@@ -246,8 +286,8 @@ const Reviews = (function () {
         return;
       }
       const comment = els.commentInput.value.trim();
-      if (!comment) {
-        Security.setTextSafely(els.imageError, "Please add a short comment.");
+      if (comment.length < 10) {
+        Security.setTextSafely(els.imageError, "Please write at least 10 characters so your review is useful to others.");
         els.imageError.classList.add("is-visible");
         return;
       }
@@ -280,45 +320,34 @@ const Reviews = (function () {
         }
       }
 
-      const review = {
-        productId,
-        rating: selectedRating,
-        comment: comment,
-        imageUrl,
-        authorLabel: "Guest",
-        date: new Date().toISOString()
-      };
-
+      // The real enforcement (rate limit, profanity, length) happens
+      // server-side in api/submit-review.js — this can't be bypassed by
+      // skipping this file and hitting Firestore directly, unlike the old
+      // approach. This request also carries the honeypot field's value
+      // so the server can do the same silent-bot-catch check.
+      const honeypotField = els.form.querySelector('[name="website"]');
       try {
-        const db = await waitForDb();
-        const { collection, addDoc, serverTimestamp } = await import(FIRESTORE_SDK);
-        await addDoc(collection(db, "reviews"), { ...review, createdAt: serverTimestamp() });
+        const res = await fetch("/api/submit-review", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            productId,
+            rating: selectedRating,
+            comment,
+            imageUrl,
+            website: honeypotField ? honeypotField.value : ""
+          })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Your review couldn't be submitted. Please try again.");
+        }
       } catch (err) {
-        console.error("Reviews: could not save to database", err);
-        Security.setTextSafely(els.imageError, "Your review couldn't be saved — please check your connection and try again.");
+        console.error("Reviews: could not save via api/submit-review", err);
+        Security.setTextSafely(els.imageError, err.message || "Your review couldn't be saved — please check your connection and try again.");
         els.imageError.classList.add("is-visible");
         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Submit Review"; }
         return;
-      }
-
-      // Best-effort Telegram alert so the admin can spot spam/inappropriate
-      // reviews quickly — never blocks or fails the review itself, which
-      // already saved successfully above.
-      if (window.SITE_CONFIG && window.SITE_CONFIG.telegramApiKey) {
-        fetch("/api/telegram-notify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-API-Key": window.SITE_CONFIG.telegramApiKey },
-          body: JSON.stringify({
-            event: "new_review",
-            data: {
-              productId,
-              productTitle: els.productTitle || productId,
-              rating: review.rating,
-              comment: review.comment,
-              productUrl: `${window.location.origin}/product.html?id=${encodeURIComponent(productId)}`
-            }
-          })
-        }).catch((err) => console.warn("Telegram new_review notify failed (non-fatal):", err));
       }
 
       // Reset form

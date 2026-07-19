@@ -69,7 +69,7 @@ export default async function handler(req, res) {
 
   try {
     const body = req.body || {};
-    const { orderId, items, deliveryDetails, paymentMethod, couponCode, upiTxnRef } = body;
+    const { orderId, items, deliveryDetails, paymentMethod, couponCode, paymentScreenshotUrl, autoPlaced } = body;
 
     if (!orderId || !Array.isArray(items) || items.length === 0 || !deliveryDetails) {
       return res.status(400).json({ error: "Missing required order fields." });
@@ -77,8 +77,14 @@ export default async function handler(req, res) {
     if (paymentMethod !== "COD" && paymentMethod !== "UPI") {
       return res.status(400).json({ error: "Invalid payment method." });
     }
-    if (paymentMethod === "UPI" && (!upiTxnRef || String(upiTxnRef).replace(/\D/g, "").length < 4)) {
-      return res.status(400).json({ error: "A valid UPI Transaction ID/UTR (at least 4 digits) is required." });
+    // The manual UTR/last-6-digit box has been replaced with a mandatory
+    // payment screenshot upload — this is the real verification proof now.
+    // Exception: `autoPlaced` orders (the 3-minute checkout timer expired
+    // with no action from the shopper) are allowed through without one —
+    // they land as "Pending" either way and admin verifies/deletes them
+    // manually, per the agreed flow.
+    if (paymentMethod === "UPI" && !autoPlaced && !paymentScreenshotUrl) {
+      return res.status(400).json({ error: "Please upload a screenshot of your payment before placing the order." });
     }
 
     // 1. Re-fetch REAL prices/stock/deliveryFee/sourcePlatformUrl — never
@@ -162,7 +168,8 @@ export default async function handler(req, res) {
       codCharge,
       finalTotal,
       paymentMethod,
-      upiTxnRef: paymentMethod === "UPI" ? String(upiTxnRef).replace(/\D/g, "") : null,
+      paymentScreenshotUrl: paymentMethod === "UPI" ? (paymentScreenshotUrl || null) : null,
+      autoPlaced: !!autoPlaced,
       status: "Pending",
       createdAt,
       verifiedServerSide: true

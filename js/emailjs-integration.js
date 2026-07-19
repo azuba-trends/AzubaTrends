@@ -74,6 +74,22 @@ const OrderEmail = (function () {
   async function send(order) {
     await loadSdk();
 
+    // The 422 "recipients address is empty" error means EmailJS received
+    // to_email as blank/undefined — fail loudly and early with a clear
+    // message instead of letting EmailJS's own cryptic error surface,
+    // so this is easy to diagnose the next time it happens.
+    const toEmail = SITE_CONFIG.adminEmail;
+    if (!toEmail || !toEmail.includes('@')) {
+      throw new Error(
+        'OrderEmail.send: SITE_CONFIG.adminEmail is missing/invalid — set "Support Email" in Admin > Settings so order emails have somewhere to go.'
+      );
+    }
+    if (!SITE_CONFIG.emailjs || !SITE_CONFIG.emailjs.serviceId || !SITE_CONFIG.emailjs.templateId || !SITE_CONFIG.emailjs.publicKey) {
+      throw new Error('OrderEmail.send: EmailJS is not fully configured in Admin > Settings (public key / service ID / template ID).');
+    }
+
+    // Every field the order can possibly have — nothing left out, so the
+    // EmailJS template can show as much or as little of this as wanted.
     const templateParams = {
       order_id: order.orderId,
       customer_name: order.customerName,
@@ -88,15 +104,21 @@ const OrderEmail = (function () {
       discount: order.discount
         ? `-${SITE_CONFIG.currencySymbol}${order.discount}`
         : `${SITE_CONFIG.currencySymbol}0`,
+      coupon_code: order.couponCode || 'None',
+      delivery_fee: order.deliveryFee
+        ? `${SITE_CONFIG.currencySymbol}${order.deliveryFee}`
+        : `${SITE_CONFIG.currencySymbol}0`,
       cod_charge: order.codCharge
         ? `${SITE_CONFIG.currencySymbol}${order.codCharge}`
         : `${SITE_CONFIG.currencySymbol}0`,
       final_total: `${SITE_CONFIG.currencySymbol}${order.finalTotal}`,
       payment_method: order.paymentMethod,
+      upi_payment_screenshot: order.paymentScreenshotUrl || 'Not applicable (COD order)',
+      order_status: order.status || 'Pending',
       order_date: new Date().toLocaleString("en-IN", {
         timeZone: "Asia/Kolkata",
       }),
-      to_email: SITE_CONFIG.adminEmail,
+      to_email: toEmail,
     };
 
     return window.emailjs.send(

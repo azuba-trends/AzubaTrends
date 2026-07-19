@@ -8,6 +8,27 @@ const ProductLoader = (function () {
     if (inFlightRequest) return inFlightRequest;
 
     inFlightRequest = (async () => {
+      // Try the server-cached endpoint first — this is what makes product
+      // loading fast and stops every page load from hitting Firestore
+      // directly from the browser. See api/products.js for the full
+      // caching explanation.
+      try {
+        const res = await fetch("/api/products");
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.products)) {
+            cachedProducts = data.products;
+            return cachedProducts;
+          }
+        }
+        console.warn("ProductLoader: /api/products unavailable (status " + res.status + "), falling back to direct Firestore read.");
+      } catch (err) {
+        console.warn("ProductLoader: /api/products fetch failed, falling back to direct Firestore read.", err);
+      }
+
+      // Fallback: the original direct-from-browser Firestore read. Keeps
+      // the site working even when hosted somewhere without serverless
+      // functions, or before the service account is configured.
       try {
         while(!window.FirebaseApp) { await new Promise(r => setTimeout(r, 100)); }
         
@@ -82,19 +103,41 @@ const ProductLoader = (function () {
           <span class="price-current">${formatPrice(product.sellingPrice)}</span>
           ${discount > 0 ? `<span class="price-mrp">${formatPrice(product.mrp)}</span>` : ''}
         </div>
-        <div class="product-card__cta">
-          <button class="btn btn-outline btn-block" ${product.stock === 0 ? 'disabled' : ''} 
-            data-add-to-cart 
-            data-product-id="${product.id}" 
-            data-product-title="${safeTitle}" 
-            data-product-price="${product.sellingPrice}" 
-            data-product-image="${safeImage}">
-            ${product.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
-          </button>
-        </div>
+        <div class="product-card__cta" data-cta-mount></div>
       </div>
     `;
+
+    if (product.stock !== 0) {
+      const ctaMount = card.querySelector("[data-cta-mount]");
+      window.CartButtonUI && window.CartButtonUI.mount(ctaMount, {
+        productId: product.id,
+        title: safeTitle,
+        price: product.sellingPrice,
+        image: safeImage,
+        stock: product.stock
+      });
+    } else {
+      card.querySelector("[data-cta-mount]").innerHTML = `<button class="btn btn-outline btn-block" disabled>Out of Stock</button>`;
+    }
     return card;
+  }
+
+  function renderSkeletonGrid(container, count = 6) {
+    if (!container) return;
+    container.innerHTML = "";
+    for (let i = 0; i < count; i++) {
+      const card = document.createElement("div");
+      card.className = "product-card product-card--skeleton";
+      card.innerHTML = `
+        <div class="skeleton skeleton--media"></div>
+        <div class="product-card__body">
+          <div class="skeleton skeleton--line" style="width:40%;"></div>
+          <div class="skeleton skeleton--line" style="width:80%; height:1.1em;"></div>
+          <div class="skeleton skeleton--line" style="width:55%;"></div>
+          <div class="skeleton skeleton--line skeleton--btn"></div>
+        </div>`;
+      container.appendChild(card);
+    }
   }
 
   function renderGrid(container, products, emptyMessage) {
@@ -121,6 +164,88 @@ const ProductLoader = (function () {
     });
   }
 
+  // ------------------------------------------------------------------
+  // Lightweight interest tracking (cookie-based) + related/recommended
+  // products. No third-party analytics involved — just a small cookie
+  // (`interest_categories`) counting how many times each category has been
+  // viewed on this browser, read back to rank "Recommended for you".
+  // ------------------------------------------------------------------
+  function trackCategoryInterest(category) {
+    if (!category) return;
+    try {
+      const raw = document.cookie.split("; ").find((c) => c.startsWith("interest_categories="));
+      const data = raw ? JSON.parse(decodeURIComponent(raw.split("=")[1])) : {};
+      data[category] = (data[category] || 0) + 1;
+      document.cookie = `interest_categories=${encodeURIComponent(JSON.stringify(data))}; path=/; max-age=${60 * 60 * 24 * 180}; SameSite=Lax`;
+    } catch (err) { /* cookies disabled or blocked — recommendations just fall back to "no preference" */ }
+  }
+
+  function getTopInterestCategories() {
+    try {
+      const raw = document.cookie.split("; ").find((c) => c.startsWith("interest_categories="));
+      if (!raw) return [];
+      const data = JSON.parse(decodeURIComponent(raw.split("=")[1]));
+      return Object.entries(data).sort((a, b) => b[1] - a[1]).map(([cat]) => cat);
+    } catch (err) {
+      return [];
+    }
+  }
+
+  /** Picks related/recommended products: same category as `excludeId`'s
+   *  product first (if given), then the shopper's most-viewed categories
+   *  from the interest cookie, then just newest-in-stock as a last resort —
+   *  so this never comes up empty as long as *some* other product exists. */
+  function pickRelatedProducts(allProducts, { excludeId, category, limit = 8 } = {}) {
+    const pool = allProducts.filter((p) => String(p.id) !== String(excludeId));
+    const buckets = [];
+    if (category) buckets.push(pool.filter((p) => p.category === category));
+    getTopInterestCategories().forEach((cat) => buckets.push(pool.filter((p) => p.category === cat)));
+    buckets.push(pool); // fallback: anything else
+
+    const seen = new Set();
+    const result = [];
+    for (const bucket of buckets) {
+      for (const p of bucket) {
+        if (seen.has(p.id)) continue;
+        seen.add(p.id);
+        result.push(p);
+        if (result.length >= limit) return result;
+      }
+    }
+    return result;
+  }
+
+  /** Lazy-loads a related-products row into `container` only once it
+   *  scrolls into view (shopper isn't looking at it yet, so there's no
+   *  reason to render/fetch before that) — shows the same skeleton
+   *  shimmer while it "arrives", and a clean empty-state if there's
+   *  genuinely nothing else to show. */
+  function mountRelatedProducts(container, opts) {
+    if (!container || !("IntersectionObserver" in window)) {
+      renderRelatedProductsNow(container, opts);
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        observer.disconnect();
+        renderRelatedProductsNow(container, opts);
+      }
+    }, { rootMargin: "200px" });
+    observer.observe(container);
+  }
+
+  async function renderRelatedProductsNow(container, opts) {
+    renderSkeletonGrid(container, 4);
+    const all = await loadAllProducts();
+    const related = pickRelatedProducts(all, opts);
+    if (related.length === 0) {
+      container.innerHTML = `<div class="empty-state"><h2>No related products yet</h2><p>Check back soon as more products are added.</p></div>`;
+      return;
+    }
+    container.innerHTML = "";
+    related.forEach((p) => container.appendChild(renderProductCard(p)));
+  }
+
   function initHeader() {
     const siteName = window.SITE_CONFIG.siteName || "AzubaTrends";
     
@@ -139,7 +264,7 @@ const ProductLoader = (function () {
     window.addEventListener("cart:updated", (e) => setBadge(e.detail.count));
   }
 
-  const API = { loadAllProducts, getProductById, calcDiscount, formatPrice, sortByStock, getCategories, renderProductCard, renderGrid, renderCategoryChips, initHeader };
+  const API = { loadAllProducts, getProductById, calcDiscount, formatPrice, sortByStock, getCategories, renderProductCard, renderGrid, renderSkeletonGrid, renderCategoryChips, initHeader, trackCategoryInterest, mountRelatedProducts };
   window.ProductLoader = API;
   return API;
 })();

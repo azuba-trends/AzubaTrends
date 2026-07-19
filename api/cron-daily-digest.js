@@ -49,7 +49,7 @@ export default async function handler(req, res) {
       // Any UPI order still "Pending" regardless of when it was placed —
       // catches ones that slipped through past midnight too.
       if (o.paymentMethod === "UPI" && o.status === "Pending") {
-        pendingUpiOrders.push({ orderId: o.orderId, finalTotal: o.finalTotal, upiTxnRef: o.upiTxnRef });
+        pendingUpiOrders.push({ orderId: o.orderId, finalTotal: o.finalTotal, paymentScreenshotUrl: o.paymentScreenshotUrl, autoPlaced: o.autoPlaced });
       }
     });
 

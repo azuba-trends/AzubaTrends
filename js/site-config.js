@@ -4,7 +4,16 @@ window.SITE_CONFIG = {
   deliveryRegion: "West Bengal, India",
   logoUrl: "", 
   codExtraCharge: 30,
-  upiAutoConfirmSeconds: 60
+  upiAutoConfirmSeconds: 180,
+  // IMPORTANT: this MUST always have a value, even before the Firestore
+  // settings doc has loaded (or if it fails to load). Previously there was
+  // no default here at all — if settings/store_config didn't exist yet or
+  // the fetch failed, window.SITE_CONFIG.adminEmail stayed `undefined`,
+  // EmailJS was sent `to_email: undefined`, and EmailJS's API rejected it
+  // with "The recipients address is empty" (422). This fallback is
+  // overwritten below by the real supportEmail from Firestore once it
+  // loads, so it only ever matters as a safety net.
+  adminEmail: "admin@example.com"
 };
 
 // Other scripts (checkout.js, product-loader.js, etc.) can
@@ -52,6 +61,10 @@ window.SITE_CONFIG_READY = (async function() {
       // (set as the TELEGRAM_NOTIFY_API_KEY env var in Vercel) — NOT a bot
       // token, safe to expose the same way the keys above are.
       window.SITE_CONFIG.telegramApiKey = data.telegramApiKey || "";
+      // Public-safe analytics identifiers — see js/tracking.js for why
+      // these are fine to expose the same way every other key here is.
+      window.SITE_CONFIG.ga4MeasurementId = data.ga4MeasurementId || "";
+      window.SITE_CONFIG.metaPixelId = data.metaPixelId || "";
       
       // Update UI with new settings dynamically
       if(window.ProductLoader && window.ProductLoader.initHeader) {

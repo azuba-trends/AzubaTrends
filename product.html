@@ -26,6 +26,7 @@
 
     <div id="product-root" hidden>
       <div class="breadcrumb">
+        <a href="index.html" id="product-back-btn">← Back</a> &nbsp;/&nbsp;
         <a href="index.html">Home</a> / <a href="category.html" id="breadcrumb-category">Category</a>
       </div>
 
@@ -61,12 +62,7 @@
           <div id="product-stock-pill"></div>
 
           <div class="product-info__actions">
-            <div>
-              <label for="qty-input" class="visually-hidden">Quantity</label>
-              <input type="number" id="qty-input" data-qty-input min="1" step="1" value="1"
-                     style="width:70px; padding:10px; border:1px solid var(--color-border); border-radius:var(--radius-sm); text-align:center;">
-            </div>
-            <button type="button" id="add-to-cart-btn" class="btn btn-primary">Add to Cart</button>
+            <div id="add-to-cart-mount" style="flex: 1; min-width: 140px;"></div>
             <button type="button" id="buy-now-btn" class="btn btn-outline">Buy Now</button>
           </div>
 
@@ -106,7 +102,8 @@
           </div>
           <div class="form-field">
             <label for="review-comment">Your review</label>
-            <textarea id="review-comment" placeholder="What did you think?" required></textarea>
+            <textarea id="review-comment" placeholder="What did you think? (min 10 characters)" required maxlength="1000"></textarea>
+            <span class="form-hint" id="review-char-count">0 / 1000</span>
           </div>
           <div class="form-field">
             <label for="review-image">Add a photo (optional)</label>
@@ -120,6 +117,14 @@
 
         <div class="review-list" id="review-list"></div>
       </section>
+
+      <!-- Related products — loads only once scrolled into view, ranked by
+           this product's category first, then the shopper's own browsing
+           interest (cookie), see ProductLoader.mountRelatedProducts -->
+      <section aria-labelledby="related-heading" style="margin-top: var(--space-8);">
+        <h2 id="related-heading">You might also like</h2>
+        <div class="product-grid" id="related-products-grid"></div>
+      </section>
     </div>
 
   </div>
@@ -127,15 +132,24 @@
 
 <div class="lightbox" id="lightbox" hidden>
   <button class="lightbox__close" id="lightbox-close" aria-label="Close image">&times;</button>
-  <img id="lightbox-img" src="" alt="">
+  <div class="lightbox__content">
+    <img id="lightbox-img" src="" alt="">
+    <div class="lightbox__caption" id="lightbox-caption" hidden>
+      <span id="lightbox-caption-stars"></span>
+      <strong id="lightbox-caption-author"></strong>
+      <p id="lightbox-caption-comment"></p>
+    </div>
+  </div>
 </div>
 
 <div id="footer-mount"></div>
 
 <script src="js/site-config.js"></script>
+<script src="js/tracking.js"></script>
 <script src="js/security.js"></script>
 <script src="js/layout.js"></script>
     <script src="js/cart.js"></script>
+    <script src="js/cart-button-ui.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
 <script src="js/product-loader.js"></script>
 <script src="js/search.js"></script>
@@ -144,6 +158,31 @@
   window.addEventListener("layout:ready", () => ProductLoader.initHeader());
 
   document.addEventListener("DOMContentLoaded", async () => {
+
+    // ---- Back button ---------------------------------------------
+    // Internal navigation (Home/Category -> this product): document.referrer
+    // is same-origin AND this tab has real history to go back to, so use
+    // the actual browser back — it returns to the exact scroll position /
+    // filter state the shopper left, not just a fresh reload of the list.
+    // External link or a fresh tab/bookmark straight to this product: there
+    // is no same-site place to go "back" to, so go Home instead of exiting
+    // to the third-party referrer (or doing nothing).
+    const backBtn = document.getElementById("product-back-btn");
+    if (backBtn) {
+      backBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        let cameFromSameSite = false;
+        try {
+          cameFromSameSite = !!document.referrer && new URL(document.referrer).origin === window.location.origin;
+        } catch (err) { /* malformed referrer — treat as external */ }
+
+        if (cameFromSameSite && window.history.length > 1) {
+          window.history.back();
+        } else {
+          window.location.href = "index.html";
+        }
+      });
+    }
 
     const params = new URLSearchParams(window.location.search);
     const productId = params.get("id");
@@ -154,6 +193,9 @@
       return;
     }
     document.getElementById("product-root").hidden = false;
+
+    // Interest tracking for "You might also like" / home page recommendations
+    window.ProductLoader.trackCategoryInterest(product.category);
 
     // ---- SEO meta tags ---------------------------------------------
     // This is a client-rendered page: there is no server templating,
@@ -168,6 +210,23 @@
     document.title = `${product.title} — ${SITE_CONFIG.siteName}`;
     document.getElementById("page-description").setAttribute("content", product.shortDescription || product.title);
 
+    if (window.Tracking) {
+      window.Tracking.trackEvent({
+        ga4: {
+          name: "view_item",
+          params: {
+            currency: "INR",
+            value: Number(product.sellingPrice) || 0,
+            items: [{ item_id: String(product.id), item_name: String(product.title || ""), price: Number(product.sellingPrice) || 0 }]
+          }
+        },
+        meta: {
+          name: "ViewContent",
+          params: { content_ids: [String(product.id)], content_name: String(product.title || ""), content_type: "product", currency: "INR", value: Number(product.sellingPrice) || 0 }
+        }
+      });
+    }
+
     // ---- Breadcrumb ---------------------------------------------
     const catLink = document.getElementById("breadcrumb-category");
     Security.setTextSafely(catLink, product.category || "Category");
@@ -177,6 +236,21 @@
     const images = (product.images && product.images.length > 0) ? product.images : [""];
     const mainImg = document.getElementById("gallery-main-img");
     const thumbsWrap = document.getElementById("gallery-thumbs");
+    const galleryMain = document.getElementById("gallery-main");
+    let currentImageIndex = 0;
+
+    function showImage(index, { fromLightbox } = {}) {
+      currentImageIndex = ((index % images.length) + images.length) % images.length;
+      mainImg.src = images[currentImageIndex];
+      thumbsWrap.querySelectorAll(".gallery__thumb").forEach((t, i) => t.classList.toggle("is-active", i === currentImageIndex));
+      const dots = document.getElementById("gallery-dots");
+      if (dots) dots.querySelectorAll(".gallery__dot").forEach((d, i) => d.classList.toggle("is-active", i === currentImageIndex));
+      if (fromLightbox && !lightbox.hidden) {
+        lightboxImg.src = images[currentImageIndex];
+        lightboxImg.alt = `${product.title} — view ${currentImageIndex + 1}`;
+      }
+    }
+
     mainImg.src = images[0];
     mainImg.alt = product.title;
 
@@ -190,26 +264,109 @@
         img.alt = `${product.title} — view ${i + 1}`;
         img.loading = "lazy";
         thumb.appendChild(img);
-        thumb.addEventListener("click", () => {
-          mainImg.src = src;
-          thumbsWrap.querySelectorAll(".gallery__thumb").forEach((t) => t.classList.remove("is-active"));
-          thumb.classList.add("is-active");
-        });
+        thumb.addEventListener("click", () => showImage(i));
         thumbsWrap.appendChild(thumb);
       });
+
+      // Prev/Next arrow buttons (desktop-friendly; also work on mobile).
+      const prevBtn = document.createElement("button");
+      prevBtn.type = "button";
+      prevBtn.className = "gallery__nav gallery__nav--prev";
+      prevBtn.setAttribute("aria-label", "Previous image");
+      prevBtn.innerHTML = "&#10094;";
+      prevBtn.addEventListener("click", (e) => { e.stopPropagation(); showImage(currentImageIndex - 1); });
+
+      const nextBtn = document.createElement("button");
+      nextBtn.type = "button";
+      nextBtn.className = "gallery__nav gallery__nav--next";
+      nextBtn.setAttribute("aria-label", "Next image");
+      nextBtn.innerHTML = "&#10095;";
+      nextBtn.addEventListener("click", (e) => { e.stopPropagation(); showImage(currentImageIndex + 1); });
+
+      galleryMain.appendChild(prevBtn);
+      galleryMain.appendChild(nextBtn);
+
+      // Dot indicator
+      const dots = document.createElement("div");
+      dots.className = "gallery__dots";
+      dots.id = "gallery-dots";
+      images.forEach((_, i) => {
+        const dot = document.createElement("span");
+        dot.className = "gallery__dot" + (i === 0 ? " is-active" : "");
+        dots.appendChild(dot);
+      });
+      galleryMain.appendChild(dots);
+
+      // ---- Swipe / drag gesture (Pointer Events = works for touch AND
+      // mouse in one code path, no separate touchstart/mousedown handling
+      // needed). A horizontal drag past a small threshold changes image;
+      // small movements (taps, or accidental jitter) are ignored so a
+      // normal click-to-zoom still works.
+      let dragStartX = null;
+      let dragStartY = null;
+      let dragging = false;
+      const SWIPE_THRESHOLD = 40; // px
+
+      function attachSwipe(el, onSwipeLeft, onSwipeRight) {
+        el.addEventListener("pointerdown", (e) => {
+          dragStartX = e.clientX;
+          dragStartY = e.clientY;
+          dragging = true;
+        });
+        el.addEventListener("pointerup", (e) => {
+          if (!dragging || dragStartX === null) return;
+          const dx = e.clientX - dragStartX;
+          const dy = e.clientY - dragStartY;
+          dragging = false;
+          // Ignore mostly-vertical drags (that's scrolling, not swiping).
+          if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
+            if (dx < 0) onSwipeLeft(); else onSwipeRight();
+          }
+          dragStartX = null;
+          dragStartY = null;
+        });
+        el.addEventListener("pointercancel", () => { dragging = false; dragStartX = null; });
+        el.style.touchAction = "pan-y"; // allow vertical page scroll, but let us capture horizontal drags
+      }
+
+      attachSwipe(galleryMain, () => showImage(currentImageIndex + 1), () => showImage(currentImageIndex - 1));
     }
 
     const lightbox = document.getElementById("lightbox");
     const lightboxImg = document.getElementById("lightbox-img");
-    document.getElementById("gallery-main").addEventListener("click", () => {
+    galleryMain.addEventListener("click", (e) => {
+      // Don't open the lightbox if the click was really the tail end of a
+      // swipe drag, or landed on the nav arrows (those have their own
+      // stopPropagation already, but this is an extra safety net).
+      if (e.target.closest(".gallery__nav")) return;
       lightboxImg.src = mainImg.src;
       lightboxImg.alt = mainImg.alt;
+      document.getElementById("lightbox-caption").hidden = true;
       lightbox.hidden = false;
     });
+    // Swipe inside the lightbox too, so a zoomed-in view can also be
+    // swiped through without closing and reopening it.
+    if (images.length > 1) {
+      let lbDragStartX = null;
+      lightbox.addEventListener("pointerdown", (e) => { lbDragStartX = e.clientX; });
+      lightbox.addEventListener("pointerup", (e) => {
+        if (lbDragStartX === null || e.target !== lightboxImg) return;
+        const dx = e.clientX - lbDragStartX;
+        lbDragStartX = null;
+        if (Math.abs(dx) > 40) {
+          showImage(currentImageIndex + (dx < 0 ? 1 : -1), { fromLightbox: true });
+        }
+      });
+    }
     function closeLightbox() { lightbox.hidden = true; }
     document.getElementById("lightbox-close").addEventListener("click", closeLightbox);
     lightbox.addEventListener("click", (e) => { if (e.target === lightbox) closeLightbox(); });
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeLightbox(); });
+    document.addEventListener("keydown", (e) => {
+      if (lightbox.hidden) return;
+      if (e.key === "Escape") closeLightbox();
+      if (e.key === "ArrowLeft" && images.length > 1) showImage(currentImageIndex - 1, { fromLightbox: true });
+      if (e.key === "ArrowRight" && images.length > 1) showImage(currentImageIndex + 1, { fromLightbox: true });
+    });
 
     // ---- Info ---------------------------------------------
     const brandEl = document.getElementById("product-brand");
@@ -256,8 +413,7 @@
       deliveryNote.hidden = true;
     }
 
-    const qtyInput = document.getElementById("qty-input");
-    const addBtn = document.getElementById("add-to-cart-btn");
+    const addToCartMount = document.getElementById("add-to-cart-mount");
     const buyNowBtn = document.getElementById("buy-now-btn");
     const stockPill = document.getElementById("product-stock-pill");
     const stockCount = document.getElementById("product-stock-count");
@@ -265,29 +421,79 @@
     if (product.stock === 0) {
       stockPill.innerHTML = '<span class="oos-pill">Out of Stock</span>';
       Security.setTextSafely(stockCount, "");
-      addBtn.textContent = "Out of Stock";
-      addBtn.disabled = true;
-      addBtn.setAttribute("aria-disabled", "true");
+      addToCartMount.innerHTML = '<button class="btn btn-outline btn-block" disabled>Out of Stock</button>';
       buyNowBtn.disabled = true;
       buyNowBtn.setAttribute("aria-disabled", "true");
-      qtyInput.disabled = true;
     } else {
       Security.setTextSafely(stockCount, product.stock <= 5 ? `Only ${product.stock} left` : "In stock");
-      qtyInput.max = String(product.stock);
-      // Cart hooks — see product-loader.js file header for the full
-      // contract. cart.js queries [data-add-to-cart] and [data-buy-now].
-      addBtn.setAttribute("data-add-to-cart", "");
-      addBtn.setAttribute("data-product-id", product.id);
-      addBtn.setAttribute("data-product-title", product.title);
-      addBtn.setAttribute("data-product-price", String(product.sellingPrice));
-      addBtn.setAttribute("data-product-image", images[0]);
 
+      // The Add to Cart button lives inside #add-to-cart-mount and morphs
+      // into a −/qty/+ stepper the instant this product is in the cart
+      // (including immediately on page load if it already was) — see
+      // js/cart-button-ui.js. It self-syncs on every cart change from here
+      // on, no further wiring needed.
+      window.CartButtonUI.mount(addToCartMount, {
+        productId: product.id,
+        title: product.title,
+        price: product.sellingPrice,
+        image: images[0],
+        stock: product.stock
+      });
+
+      // "Buy Now" — see cart.js: uses the item's existing cart quantity if
+      // it's already there (e.g. bumped up via the stepper), otherwise
+      // adds 1, then jumps straight to checkout.
       buyNowBtn.setAttribute("data-buy-now", "");
       buyNowBtn.setAttribute("data-product-id", product.id);
       buyNowBtn.setAttribute("data-product-title", product.title);
       buyNowBtn.setAttribute("data-product-price", String(product.sellingPrice));
       buyNowBtn.setAttribute("data-product-image", images[0]);
     }
+
+    // ---- SEO: Structured Data (Schema.org Product) -------------------
+    // Lets Google show price/availability/star-rating directly in search
+    // results ("rich results"). aggregateRating is added/updated once
+    // Reviews.init below reports the real average — omitted entirely if
+    // there are zero reviews, since Google's guidelines say not to show a
+    // rating with no reviews behind it.
+    function buildProductSchema(ratingInfo) {
+      const schema = {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        name: product.title,
+        description: product.shortDescription || product.title,
+        image: images.filter(Boolean),
+        sku: product.sku || product.id,
+        brand: product.brand ? { "@type": "Brand", name: product.brand } : undefined,
+        offers: {
+          "@type": "Offer",
+          url: window.location.href,
+          priceCurrency: "INR",
+          price: Number(product.sellingPrice).toFixed(2),
+          availability: product.stock === 0 ? "https://schema.org/OutOfStock" : "https://schema.org/InStock"
+        }
+      };
+      if (ratingInfo && ratingInfo.count > 0) {
+        schema.aggregateRating = {
+          "@type": "AggregateRating",
+          ratingValue: ratingInfo.average.toFixed(1),
+          reviewCount: ratingInfo.count
+        };
+      }
+      return schema;
+    }
+
+    function setProductSchema(ratingInfo) {
+      let scriptEl = document.getElementById("product-schema");
+      if (!scriptEl) {
+        scriptEl = document.createElement("script");
+        scriptEl.type = "application/ld+json";
+        scriptEl.id = "product-schema";
+        document.head.appendChild(scriptEl);
+      }
+      scriptEl.textContent = JSON.stringify(buildProductSchema(ratingInfo));
+    }
+    setProductSchema(null);
 
     // ---- Reviews ---------------------------------------------
     Reviews.init(product.id, {
@@ -301,8 +507,15 @@
       summaryStars: document.getElementById("review-avg-stars"),
       summaryCount: document.getElementById("review-count-note"),
       list: document.getElementById("review-list"),
-      toast: document.getElementById("review-toast")
+      toast: document.getElementById("review-toast"),
+      onSummary: setProductSchema
     });
+
+    // ---- Related / recommended products -----------------------
+    window.ProductLoader.mountRelatedProducts(
+      document.getElementById("related-products-grid"),
+      { excludeId: product.id, category: product.category }
+    );
   });
 </script>
 </body>

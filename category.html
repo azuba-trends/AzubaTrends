@@ -32,9 +32,11 @@
 <div id="footer-mount"></div>
 
 <script src="js/site-config.js"></script>
+<script src="js/tracking.js"></script>
 <script src="js/security.js"></script>
 <script src="js/layout.js"></script>
     <script src="js/cart.js"></script>
+    <script src="js/cart-button-ui.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
 <script src="js/product-loader.js"></script>
 <script src="js/search.js"></script>
@@ -43,8 +45,10 @@
 
   document.addEventListener("DOMContentLoaded", async () => {
 
-    const products = await ProductLoader.loadAllProducts();
     const grid = document.getElementById("product-grid");
+    ProductLoader.renderSkeletonGrid(grid, 8);
+
+    const products = await ProductLoader.loadAllProducts();
     const chips = document.getElementById("category-chips");
     const titleEl = document.getElementById("category-title");
     const subtitleEl = document.getElementById("category-subtitle");

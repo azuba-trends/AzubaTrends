@@ -33,13 +33,20 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
     Categories
   </a>
-  <a href="#" id="bottom-nav-search" data-page="search">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    Search
-  </a>
   <!-- FIXED: Link to cart.html -->
-  <a href="cart.html" data-page="cart.html">
+  <a href="cart.html" data-page="cart.html" style="position:relative;">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
     Cart
+    <span class="bottom-nav__badge" data-cart-count id="bottom-nav-cart-badge">0</span>
+  </a>
+  <a href="#" id="bottom-nav-account" data-page="account">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    Account
   </a>
 </nav>
+<div id="account-dev-modal" class="account-dev-modal" hidden>
+  <div class="account-dev-modal__card">
+    <p>Accounts are currently in development — you can order without one.</p>
+    <button type="button" id="account-dev-modal-close" class="btn btn-primary">Got it</button>
+  </div>
+</div>

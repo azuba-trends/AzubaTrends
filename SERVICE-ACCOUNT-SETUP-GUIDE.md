@@ -76,7 +76,7 @@ While you're there, add these two as well (both are just secrets you make up
 yourself — any random string works):
 
 - **Key**: `TELEGRAM_NOTIFY_API_KEY`
-  **Value**: any random string you make up, e.g. `azuba-tg-8f3a91c2x7` — this
+  **Value**: any random string you make up, e.g. `azuba-tg-8f3a91c2` — this
   is a lightweight abuse-throttle for the notify endpoint (so random
   strangers on the internet can't spam your Telegram group through it), not
   a high-security secret. Generate one however you like.

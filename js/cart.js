@@ -108,6 +108,29 @@
       });
     }
     notify();
+
+    // Tracking (GA4 add_to_cart + Meta AddToCart). Fires even when the
+    // item already existed in the cart (quantity was just bumped) — that's
+    // still a genuine "added to cart" action from the shopper's point of
+    // view. Non-fatal by design: window.Tracking may not have loaded yet
+    // on a very fast click, in which case this just silently no-ops.
+    if (window.Tracking) {
+      const value = (Number(product.price) || 0) * qtyToAdd;
+      window.Tracking.trackEvent({
+        ga4: {
+          name: "add_to_cart",
+          params: {
+            currency: "INR",
+            value,
+            items: [{ item_id: String(product.productId), item_name: String(product.title || ""), price: Number(product.price) || 0, quantity: qtyToAdd }]
+          }
+        },
+        meta: {
+          name: "AddToCart",
+          params: { content_ids: [String(product.productId)], content_name: String(product.title || ""), content_type: "product", currency: "INR", value }
+        }
+      });
+    }
   }
 
   function removeItem(productId) {
@@ -177,15 +200,9 @@
     const productId = btn.getAttribute('data-product-id');
     if (!productId) return;
 
-    // On the product detail page there's a quantity input next to the
-    // button; product-card buttons in listings don't have one, so we
-    // default to 1.
-    let quantity = 1;
-    const qtyInput = document.querySelector('[data-qty-input]');
-    if (qtyInput && document.getElementById('add-to-cart-btn') === btn) {
-      quantity = Math.max(1, Math.floor(Number(qtyInput.value) || 1));
-    }
-
+    // Always adds 1 — further quantity changes happen via the
+    // −/qty/+ stepper this button morphs into (see js/cart-button-ui.js),
+    // not a separate quantity input (removed).
     addItem(
       {
         productId: productId,
@@ -193,7 +210,7 @@
         price: Number(btn.getAttribute('data-product-price')) || 0,
         image: btn.getAttribute('data-product-image') || ''
       },
-      quantity
+      1
     );
 
     // Quick visual confirmation without needing a toast library.
@@ -218,21 +235,22 @@
     const productId = btn.getAttribute('data-product-id');
     if (!productId) return;
 
-    let quantity = 1;
-    const qtyInput = document.querySelector('[data-qty-input]');
-    if (qtyInput) {
-      quantity = Math.max(1, Math.floor(Number(qtyInput.value) || 1));
+    // The standalone quantity input is gone — quantity now lives entirely
+    // in the "Add to Cart" stepper (js/cart-button-ui.js). If this product
+    // is already in the cart (shopper bumped it up with the stepper first),
+    // keep that quantity as-is; otherwise add 1 before jumping to checkout.
+    const existing = items.find((i) => i.productId === String(productId));
+    if (!existing) {
+      addItem(
+        {
+          productId: productId,
+          title: btn.getAttribute('data-product-title') || '',
+          price: Number(btn.getAttribute('data-product-price')) || 0,
+          image: btn.getAttribute('data-product-image') || ''
+        },
+        1
+      );
     }
-
-    addItem(
-      {
-        productId: productId,
-        title: btn.getAttribute('data-product-title') || '',
-        price: Number(btn.getAttribute('data-product-price')) || 0,
-        image: btn.getAttribute('data-product-image') || ''
-      },
-      quantity
-    );
 
     window.location.href = 'checkout.html';
   });

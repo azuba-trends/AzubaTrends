@@ -10,6 +10,21 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/main.css">
 <link rel="stylesheet" href="css/components.css">
+
+<!--
+  SEARCH ENGINE VERIFICATION TAG(S) GO HERE
+  ------------------------------------------
+  Google Search Console (and Bing Webmaster Tools, if you use it) verify
+  site ownership with a <meta> tag that must be present in this page's raw
+  HTML source. It can't be added dynamically via JavaScript the way the
+  GA4/Meta Pixel IDs are (Search Console's verifier only reads the raw
+  HTML response, it doesn't run JS) — so this has to be a manual one-time
+  edit right here. See SEO-AND-MARKETING-GUIDE.md, Part 1, Step 2.
+
+  Example (yours will have a different content value):
+  <meta name="google-site-verification" content="abcXYZ123..." />
+-->
+
 </head>
 <body>
 
@@ -27,15 +42,22 @@
     <div class="product-grid" id="product-grid" aria-live="polite">
       <!-- ProductLoader.renderGrid() fills this in -->
     </div>
+
+    <section aria-labelledby="recommended-heading" style="margin-top: var(--space-8);" id="recommended-section" hidden>
+      <h2 id="recommended-heading">Recommended for you</h2>
+      <div class="product-grid" id="recommended-grid"></div>
+    </section>
   </div>
 </main>
 
 <div id="footer-mount"></div>
 
 <script src="js/site-config.js"></script>
+<script src="js/tracking.js"></script>
 <script src="js/security.js"></script>
 <script src="js/layout.js"></script>
     <script src="js/cart.js"></script>
+    <script src="js/cart-button-ui.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
 <script src="js/product-loader.js"></script>
 <script src="js/search.js"></script>
@@ -45,8 +67,10 @@
   document.addEventListener("DOMContentLoaded", async () => {
     if (SITE_CONFIG.tagline) Security.setTextSafely(document.getElementById("home-tagline"), SITE_CONFIG.tagline);
 
-    const products = await ProductLoader.loadAllProducts();
     const grid = document.getElementById("product-grid");
+    ProductLoader.renderSkeletonGrid(grid, 8);
+
+    const products = await ProductLoader.loadAllProducts();
     const chips = document.getElementById("category-chips");
     let activeCategory = "All";
 
@@ -69,6 +93,17 @@
 
     renderChips();
     applyFilter();
+
+    // "Recommended for you" — only worth showing once the shopper has an
+    // actual browsing signal (interest cookie from viewing a product
+    // before); with zero signal it would just be a duplicate of the "All"
+    // grid above, so it stays hidden until there's something real to
+    // personalize with.
+    if (window.ProductLoader.trackCategoryInterest && document.cookie.includes("interest_categories=")) {
+      const recSection = document.getElementById("recommended-section");
+      recSection.hidden = false;
+      ProductLoader.mountRelatedProducts(document.getElementById("recommended-grid"), {});
+    }
   });
 </script>
 </body>

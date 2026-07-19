@@ -26,6 +26,9 @@
   let appliedCoupon = null; // { code, discount } - re-validated, not trusted blindly
   let productsById = {};    // productId -> product doc, loaded once for delivery-fee lookup
   const currentOrderId = `ORD-${Date.now().toString().slice(-6)}`;
+  let orderJustPlaced = false; // guards against the empty-cart view flashing over the confirmation screen
+  let uploadedScreenshotUrl = null; // set once the mandatory UPI payment screenshot finishes uploading to ImgBB
+  let screenshotUploading = false;
 
   function $(id) { return document.getElementById(id); }
 
@@ -50,6 +53,11 @@
   // Boot: show empty-cart message or the real content, never both/neither.
   // ------------------------------------------------------------------
   function renderPageVisibility() {
+    // Once an order is placed, Cart.clear() fires cart:updated with an
+    // empty cart — without this guard, that made the page fall through to
+    // the "Your cart is empty" view and bury the confirmation section that
+    // had literally just been shown a moment earlier.
+    if (orderJustPlaced) return;
     const items = window.Cart ? window.Cart.getItems() : [];
     const empty = $('empty-cart-message');
     const content = $('checkout-content');
@@ -349,6 +357,7 @@
   }
 
   let upiCountdownTimer = null;
+  let orderAutoPlacing = false; // guards against the auto-place timer and a manual click firing at the same instant
 
   function startUPIFlow() {
     const total = renderSummary();
@@ -363,54 +372,123 @@
         orderId: currentOrderId
       });
       window.QRGenerator.renderQR($('upi-qr-canvas'), link, 240);
-      $('upi-pay-link').href = link;
-      show('upi-pay-link');
     }
 
-    // "Timing" countdown — purely a UX nudge (there's still no backend to
-    // auto-verify a UPI payment), reminding the shopper to confirm once
-    // they've actually paid instead of leaving the QR up with no feedback.
+    // 3-minute countdown. If the shopper neither confirms ("I have paid")
+    // nor navigates away before this hits 0, the order is auto-placed as
+    // Pending (no screenshot required in that case) so it isn't lost —
+    // admin can verify manually or delete it from the Admin Panel.
     if (upiCountdownTimer) clearInterval(upiCountdownTimer);
-    let secondsLeft = window.SITE_CONFIG.upiAutoConfirmSeconds || 60;
+    let secondsLeft = window.SITE_CONFIG.upiAutoConfirmSeconds || 180;
     const countdownEl = $('upi-countdown-text');
     const tick = () => {
       if (secondsLeft <= 0) {
-        Security.setTextSafely(countdownEl, "Paid? Tap \"I have paid, Place Order\" below to confirm.");
         clearInterval(upiCountdownTimer);
+        Security.setTextSafely(countdownEl, 'Time is up — placing your order as pending...');
+        finalizeOrder('UPI', { auto: true });
         return;
       }
-      Security.setTextSafely(countdownEl, `Scan & pay within ${secondsLeft}s, then tap "I have paid" below.`);
+      const mins = Math.floor(secondsLeft / 60);
+      const secs = String(secondsLeft % 60).padStart(2, '0');
+      Security.setTextSafely(countdownEl, `Scan & pay within ${mins}:${secs}, then tap "I have paid" below.`);
       secondsLeft -= 1;
     };
     tick();
     upiCountdownTimer = setInterval(tick, 1000);
   }
 
-  async function finalizeOrder(method) {
-    if (!Security.canSubmit('checkout-place-order', 3000)) return;
+  // ------------------------------------------------------------------
+  // Mandatory payment-screenshot upload (replaces the old manual
+  // last-6-digit UTR box). Uses the same ImgBB upload pattern already
+  // used for review photos (js/reviews.js) — same key, same model.
+  // ------------------------------------------------------------------
+  function wireScreenshotUpload() {
+    const input = $('upi-screenshot-input');
+    const doneBtn = $('upi-done-btn');
+    const statusEl = $('upi-screenshot-status');
+    const previewWrap = $('upi-screenshot-preview-wrap');
+    const previewImg = $('upi-screenshot-preview');
+    if (!input) return;
 
-    // For UPI, require the shopper to enter at least the last few digits
-    // of their UTR/Transaction ID before we accept "I have paid" — this is
-    // what lets admin match the order to a real bank-statement entry during
-    // manual verification. Digits only, 4-12 chars (full UTRs are 12 digits,
-    // but we deliberately don't force the whole thing since re-typing all
-    // 12 correctly on a phone is exactly the friction we're avoiding).
-    let upiTxnRef = null;
-    if (method === 'UPI') {
-      const raw = ($('upi-txn-ref')?.value || '').trim();
-      const digitsOnly = raw.replace(/\D/g, '');
-      showFieldError('error-upi-txn-ref', '');
-      if (digitsOnly.length < 4) {
-        showFieldError('error-upi-txn-ref', 'Please enter at least the last 4-6 digits of your UTR/Transaction ID.');
+    input.addEventListener('change', async () => {
+      const file = input.files && input.files[0];
+      showFieldError('error-upi-screenshot', '');
+      uploadedScreenshotUrl = null;
+      if (doneBtn) doneBtn.disabled = true;
+      if (!file) return;
+
+      if (file.size > 2 * 1024 * 1024) {
+        showFieldError('error-upi-screenshot', 'Image is too large — please keep it under 2MB.');
+        input.value = '';
         return;
       }
-      upiTxnRef = digitsOnly;
+
+      if (previewWrap && previewImg) {
+        previewImg.src = URL.createObjectURL(file);
+        previewWrap.style.display = 'block';
+      }
+
+      screenshotUploading = true;
+      Security.setTextSafely(statusEl, 'Uploading screenshot...');
+      try {
+        const key = window.SITE_CONFIG && window.SITE_CONFIG.imgbbKey;
+        if (!key) throw new Error("Image uploads aren't set up yet — the store hasn't added an ImgBB key.");
+        const formData = new FormData();
+        formData.append('image', file);
+        const res = await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(key)}`, {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if (!data || !data.data || !data.data.url) throw new Error('Upload failed. Please try again.');
+        uploadedScreenshotUrl = data.data.url;
+        Security.setTextSafely(statusEl, '✓ Screenshot uploaded — you can now place your order.');
+        if (statusEl) statusEl.style.color = 'var(--color-success, green)';
+        if (doneBtn) doneBtn.disabled = false;
+      } catch (err) {
+        console.error('Payment screenshot upload failed:', err);
+        Security.setTextSafely(statusEl, '');
+        showFieldError('error-upi-screenshot', err.message || 'Upload failed. Please try again.');
+      } finally {
+        screenshotUploading = false;
+      }
+    });
+  }
+
+  async function finalizeOrder(method, opts = {}) {
+    const isAuto = !!opts.auto;
+
+    // Guard against the 3-minute auto-place timer and a manual click firing
+    // at (or near) the same instant, and against the order already having
+    // been placed by whichever path got there first.
+    if (orderJustPlaced || orderAutoPlacing) return;
+    if (!isAuto && !Security.canSubmit('checkout-place-order', 3000)) return;
+    if (isAuto) orderAutoPlacing = true;
+    if (upiCountdownTimer) clearInterval(upiCountdownTimer);
+
+    // Payment screenshot replaces the old manual last-6-digit UTR box —
+    // it's the real verification proof now. Not required on the 3-minute
+    // auto-place path, since the shopper never got a chance to confirm.
+    if (method === 'UPI' && !isAuto) {
+      showFieldError('error-upi-screenshot', '');
+      if (screenshotUploading) {
+        showFieldError('error-upi-screenshot', 'Please wait for the screenshot to finish uploading.');
+        orderAutoPlacing = false;
+        return;
+      }
+      if (!uploadedScreenshotUrl) {
+        showFieldError('error-upi-screenshot', 'Please upload a screenshot of your payment before placing the order.');
+        orderAutoPlacing = false;
+        return;
+      }
     }
 
     const btnId = method === 'COD' ? 'place-order-cod-btn' : 'upi-done-btn';
     const btn = $(btnId);
-    btn.disabled = true;
-    btn.textContent = 'Processing...';
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = isAuto ? 'Placing order...' : 'Processing...';
+    }
 
     await reValidateCoupon();
     const items = window.Cart.getItems();
@@ -437,7 +515,8 @@
       codCharge: codCharge,
       finalTotal: finalTotal,
       paymentMethod: method,
-      upiTxnRef: upiTxnRef, // last 4-12 digits of UTR/Ref No, entered by shopper — for admin's manual bank-statement match
+      paymentScreenshotUrl: method === 'UPI' ? uploadedScreenshotUrl : null,
+      autoPlaced: isAuto,
       status: 'Pending',
       createdAt: new Date().toISOString()
     };
@@ -464,7 +543,8 @@
           deliveryDetails,
           paymentMethod: method,
           couponCode: appliedCoupon ? appliedCoupon.code : null,
-          upiTxnRef
+          paymentScreenshotUrl: method === 'UPI' ? uploadedScreenshotUrl : null,
+          autoPlaced: isAuto
         })
       });
 
@@ -485,8 +565,11 @@
         // to an unverified write.
         console.error('Server-verified order placement failed:', err);
         alert(err.message || 'Something went wrong while placing your order. Please try again.');
-        btn.disabled = false;
-        btn.textContent = method === 'COD' ? 'Place Order (COD)' : 'I have paid, Place Order';
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = method === 'COD' ? 'Place Order (COD)' : 'I have paid, Place Order';
+        }
+        orderAutoPlacing = false;
         return;
       }
       console.warn('api/place-order not available on this host — falling back to direct client write (no server-side price re-check).');
@@ -497,18 +580,47 @@
         await setDoc(doc(db, 'orders', currentOrderId), orderPayload);
       }
 
+      orderJustPlaced = true;
       window.Cart.clear();
       sessionStorage.removeItem('applied_coupon');
+
+      if (window.Tracking) {
+        window.Tracking.trackEvent({
+          ga4: {
+            name: "purchase",
+            params: {
+              transaction_id: orderPayload.orderId,
+              currency: "INR",
+              value: orderPayload.finalTotal,
+              shipping: orderPayload.deliveryFee || 0,
+              coupon: orderPayload.couponCode || undefined,
+              items: (orderPayload.items || []).map((i) => ({ item_id: i.productId, item_name: i.title, price: i.price, quantity: i.quantity }))
+            }
+          },
+          meta: {
+            name: "Purchase",
+            params: {
+              content_ids: (orderPayload.items || []).map((i) => i.productId),
+              content_type: "product",
+              currency: "INR",
+              value: orderPayload.finalTotal
+            }
+          }
+        });
+      }
 
       $('payment-section').hidden = true;
       $('confirmation-section').hidden = false;
       Security.setTextSafely($('confirmation-order-id'), currentOrderId);
-      Security.setTextSafely(
-        $('confirmation-payment-note'),
-        method === 'COD'
-          ? 'Payment to be collected on delivery.'
-          : `UPI payment for Order ${currentOrderId} is pending manual verification. We'll confirm once we receive it.`
-      );
+      let paymentNote;
+      if (method === 'COD') {
+        paymentNote = 'Payment to be collected on delivery.';
+      } else if (isAuto) {
+        paymentNote = `We didn't hear back from you in time, so Order ${currentOrderId} has been placed as Pending. If you already paid, no action needed — we'll verify and confirm it shortly.`;
+      } else {
+        paymentNote = `UPI payment for Order ${currentOrderId} is pending manual verification. We'll confirm once we receive it.`;
+      }
+      Security.setTextSafely($('confirmation-payment-note'), paymentNote);
 
       if (window.OrderEmail) {
         window.OrderEmail.send(orderPayload)
@@ -528,8 +640,11 @@
     } catch (err) {
       console.error(err);
       alert('Something went wrong while placing your order. Please try again.');
-      btn.disabled = false;
-      btn.textContent = method === 'COD' ? 'Place Order (COD)' : 'I have paid, Place Order';
+      orderAutoPlacing = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = method === 'COD' ? 'Place Order (COD)' : 'I have paid, Place Order';
+      }
     }
   }
 
@@ -562,10 +677,30 @@
     initUI(geoConfig);
     wireDeliveryForm(geoConfig);
     wirePaymentSelection();
+    wireScreenshotUpload();
     $('place-order-cod-btn')?.addEventListener('click', () => finalizeOrder('COD'));
     $('upi-done-btn')?.addEventListener('click', () => finalizeOrder('UPI'));
 
     renderCartList();
     renderSummary();
+
+    if (window.Tracking) {
+      const items = window.Cart.getItems();
+      const value = getCartTotal();
+      window.Tracking.trackEvent({
+        ga4: {
+          name: "begin_checkout",
+          params: {
+            currency: "INR",
+            value,
+            items: items.map((i) => ({ item_id: i.productId, item_name: i.title, price: i.price, quantity: i.quantity }))
+          }
+        },
+        meta: {
+          name: "InitiateCheckout",
+          params: { content_ids: items.map((i) => i.productId), currency: "INR", value, num_items: items.reduce((s, i) => s + i.quantity, 0) }
+        }
+      });
+    }
   });
 })();

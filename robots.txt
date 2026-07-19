@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /admin.html
+Disallow: /cart.html
+Disallow: /checkout.html
+Disallow: /share-preview-tester.html
+Disallow: /product-import-tester.html
+Disallow: /api/
+
+Sitemap: https://azuba-trends.vercel.app/sitemap.xml

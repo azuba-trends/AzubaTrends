@@ -51,22 +51,23 @@
       loadPartial("partials/footer.html", "footer-mount")
     ]);
 
-    // The mobile bottom-nav "Search" tab has no dedicated page — it
-    // just focuses the header search input, since search is a live
-    // autosuggest dropdown rather than a separate results page. Pages
-    // without a search bar (checkout.html) fall back to Home instead
-    // of doing nothing.
-    const searchTab = document.getElementById("bottom-nav-search");
-    if (searchTab) {
-      searchTab.addEventListener("click", (e) => {
+    // Bottom-nav "Account" tab — accounts aren't built yet, so this just
+    // shows a small notice instead of a dead link. Ordering without an
+    // account still works fully (checkout never required one).
+    const accountTab = document.getElementById("bottom-nav-account");
+    const accountModal = document.getElementById("account-dev-modal");
+    const accountModalClose = document.getElementById("account-dev-modal-close");
+    if (accountTab && accountModal) {
+      accountTab.addEventListener("click", (e) => {
         e.preventDefault();
-        const searchInput = document.querySelector(".search-input");
-        if (searchInput) {
-          searchInput.focus();
-        } else {
-          window.location.href = "index.html";
-        }
+        accountModal.hidden = false;
       });
+      accountModal.addEventListener("click", (e) => {
+        if (e.target === accountModal) accountModal.hidden = true;
+      });
+    }
+    if (accountModalClose && accountModal) {
+      accountModalClose.addEventListener("click", () => { accountModal.hidden = true; });
     }
 
     window.dispatchEvent(new CustomEvent("layout:ready"));

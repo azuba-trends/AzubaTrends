@@ -148,12 +148,14 @@ main { flex: 1; }
 
 .site-header__bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-4);
-  height: var(--header-height);
+  min-height: var(--header-height);
   max-width: var(--max-width);
   margin-inline: auto;
   padding-inline: var(--space-4);
+  padding-block: var(--space-2);
 }
 
 .site-logo {
@@ -270,6 +272,50 @@ main { flex: 1; }
   stroke: var(--color-primary);
 }
 
+.bottom-nav__badge {
+  position: absolute;
+  top: 2px;
+  right: calc(50% - 22px);
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--color-clay);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* ---------- Account "in development" modal (mobile bottom nav) ---------- */
+.account-dev-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(15, 23, 32, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.account-dev-modal__card {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-6) var(--space-5);
+  max-width: 320px;
+  text-align: center;
+}
+
+.account-dev-modal__card p {
+  margin-bottom: var(--space-4);
+  color: var(--color-ink);
+}
+
 /* ---------- Footer ---------- */
 .site-footer {
   background: var(--color-primary-dark);
@@ -369,6 +415,20 @@ main { flex: 1; }
 /* ==========================================================================
    Responsive breakpoints
    ========================================================================== */
+
+/* Mobile: 2-row header — row 1 is brand name only, row 2 is a full-width
+   search bar. The header cart icon is hidden here because the bottom nav
+   (mobile only) already has a Cart tab with its own live badge — showing
+   the count in two places at once on a small screen was redundant. */
+@media (max-width: 767px) {
+  .header-cart { display: none; }
+  .search-wrap {
+    order: 3;
+    flex-basis: 100%;
+    max-width: none;
+    margin-top: 2px;
+  }
+}
 
 /* Tablet and up: reveal desktop nav, hide bottom nav */
 @media (min-width: 768px) {

@@ -9,15 +9,22 @@
 <style>
   .cart-page-grid { display: grid; grid-template-columns: 1fr 350px; gap: 30px; margin-top: 20px; align-items: start; }
   .cart-item { display: flex; gap: 20px; padding: 20px; background: white; border: 1px solid var(--color-border); border-radius: 8px; margin-bottom: 15px; }
-  .cart-item img { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; }
-  .cart-item-details { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
-  .qty-controls { display: flex; align-items: center; gap: 15px; margin-top: 10px; }
+  .cart-item img { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+  .cart-item-details { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
+  .cart-item-details h3 { overflow-wrap: break-word; }
+  .cart-item-total { flex-shrink: 0; font-weight: bold; font-size: 1.2rem; text-align: right; }
+  .qty-controls { display: flex; align-items: center; gap: 15px; margin-top: 10px; flex-wrap: wrap; }
   .qty-btn { background: #eee; border: none; padding: 5px 12px; font-size: 1.2rem; cursor: pointer; border-radius: 4px; }
   .remove-btn { color: red; background: none; border: none; cursor: pointer; font-size: 0.9rem; text-decoration: underline; margin-top: 10px; }
   .summary-card { background: white; padding: 25px; border: 1px solid var(--color-border); border-radius: 8px; position: sticky; top: 90px; }
   .summary-row { display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 1.1rem; }
   .coupon-section { display: flex; gap: 10px; margin: 20px 0; border-top: 1px dashed #ccc; border-bottom: 1px dashed #ccc; padding: 20px 0; }
   @media (max-width: 768px) { .cart-page-grid { grid-template-columns: 1fr; } .summary-card { position: static; top: auto; } }
+  @media (max-width: 480px) {
+    .cart-item { flex-wrap: wrap; }
+    .cart-item-details { flex-basis: calc(100% - 120px); }
+    .cart-item-total { flex-basis: 100%; text-align: left; margin-top: 8px; }
+  }
 </style>
 </head>
 <body>
@@ -69,6 +76,7 @@
 <div id="footer-mount"></div>
 
 <script src="js/site-config.js"></script>
+<script src="js/tracking.js"></script>
 <script src="js/security.js"></script>
 <script src="js/layout.js"></script>
 <script src="js/cart.js"></script>
@@ -115,7 +123,7 @@
                 <button class="remove-btn" onclick="removeItem('${item.productId}')">Remove</button>
               </div>
             </div>
-            <div style="font-weight: bold; font-size: 1.2rem;">₹${item.price * item.quantity}</div>
+            <div class="cart-item-total">₹${item.price * item.quantity}</div>
           </div>
         `;
       });

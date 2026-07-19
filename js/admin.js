@@ -863,9 +863,11 @@ setTimeout(() => {
       ["Name", o.customerName], ["Phone", o.customerPhone], ["Email", o.customerEmail],
       ["Address", `${o.customerAddress || ""}, ${o.customerCity || ""}, ${o.customerState || ""} - ${o.customerPincode || ""}`],
       ["Payment Method", o.paymentMethod],
-      ["UPI Txn Ref (last digits)", o.paymentMethod === "UPI" ? (o.upiTxnRef || "— not entered") : "— (COD order)"],
       ["Order Email", o.emailStatus === "sent" ? "✓ Sent" : o.emailStatus === "failed" ? `✗ Failed — ${o.emailError || "unknown error"}` : "— (not attempted / still sending)"]
     ];
+    if (o.autoPlaced) {
+      lines.splice(4, 0, ["Placed via", "⏱ Auto-placed after the 3-minute checkout timer — customer never tapped \"I have paid\". Verify carefully."]);
+    }
     lines.forEach(([label, val]) => {
       const p = document.createElement("div");
       const b = document.createElement("b"); b.textContent = label + ": ";
@@ -873,6 +875,31 @@ setTimeout(() => {
       p.appendChild(b); p.appendChild(span);
       custDetails.appendChild(p);
     });
+
+    // Payment screenshot — this is the real verification proof now (the
+    // old manual last-6-digit UTR box is gone). Clicking it opens the
+    // full-size image in a new tab so admin can zoom in and check it
+    // against their bank/UPI app.
+    if (o.paymentMethod === "UPI") {
+      const p = document.createElement("div");
+      const b = document.createElement("b"); b.textContent = "Payment Screenshot: ";
+      p.appendChild(b);
+      if (o.paymentScreenshotUrl) {
+        const a = document.createElement("a");
+        a.href = o.paymentScreenshotUrl;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = "🔍 View Screenshot";
+        a.style.cssText = "color: var(--color-primary); font-weight: 600;";
+        p.appendChild(a);
+      } else {
+        const span = document.createElement("span");
+        span.textContent = o.autoPlaced ? "— (order auto-placed, no screenshot was uploaded)" : "— not uploaded";
+        span.style.color = "var(--color-danger)";
+        p.appendChild(span);
+      }
+      custDetails.appendChild(p);
+    }
 
     const subtotal = o.subtotal ?? o.finalTotal;
     const discount = o.discount || 0;
@@ -1157,6 +1184,11 @@ setTimeout(() => {
     document.getElementById("set-email-tpl").value = SETTINGS.emailjs_templateId || "";
     document.getElementById("set-email-status-tpl").value = SETTINGS.emailjs_statusTemplateId || "";
     document.getElementById("set-telegram-api-key").value = SETTINGS.telegramApiKey || "";
+    document.getElementById("set-ga4-id").value = SETTINGS.ga4MeasurementId || "";
+    document.getElementById("set-meta-pixel-id").value = SETTINGS.metaPixelId || "";
+    document.getElementById("feed-sitemap-url").textContent = `${window.location.origin}/sitemap.xml`;
+    document.getElementById("feed-robots-url").textContent = `${window.location.origin}/robots.txt`;
+    document.getElementById("feed-product-url").textContent = `${window.location.origin}/product-feed.csv`;
     document.getElementById("set-upi-id").value = SETTINGS.upiId || "";
     document.getElementById("set-cod-charge").value = SETTINGS.codExtraCharge ?? 30;
     document.getElementById("set-support-email").value = SETTINGS.supportEmail || "";
@@ -1192,6 +1224,14 @@ setTimeout(() => {
       emailjs_statusTemplateId: document.getElementById("set-email-status-tpl").value,
       telegramApiKey: document.getElementById("set-telegram-api-key").value,
     }, document.getElementById("save-account-settings-btn"));
+  });
+
+  document.getElementById("marketing-settings-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    saveSettingsPatch({
+      ga4MeasurementId: document.getElementById("set-ga4-id").value.trim(),
+      metaPixelId: document.getElementById("set-meta-pixel-id").value.trim(),
+    }, document.getElementById("save-marketing-settings-btn"));
   });
 
   document.getElementById("payment-settings-form").addEventListener("submit", (e) => {
@@ -1345,7 +1385,7 @@ setTimeout(() => {
       const res = await fetch("/api/telegram-test", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-API-Key": SETTINGS.telegramApiKey },
-        body: JSON.stringify({ action, token, chatId })
+        body: JSON.stringify({ action, token, chatId, storeName: SETTINGS.storeName || "your store" })
       });
       if (res.status === 404) {
         statusEl.style.color = "var(--color-danger)";

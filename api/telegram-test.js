@@ -25,7 +25,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Invalid or missing API key." });
   }
 
-  const { action, token, chatId } = req.body || {};
+  const { action, token, chatId, storeName } = req.body || {};
   if (!token) return res.status(400).json({ error: "Missing bot token." });
 
   try {
@@ -55,7 +55,7 @@ export default async function handler(req, res) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chat_id: chatId,
-          text: "✅ Test message from AzubaTrends.\n\nIf you can see this, your bot + chat ID are connected correctly.",
+          text: `✅ Test message from ${storeName || "your store"}.\n\nIf you can see this, your bot + chat ID are connected correctly.`,
           parse_mode: "HTML"
         })
       });
