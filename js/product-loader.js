@@ -257,6 +257,13 @@ const ProductLoader = (function () {
       document.title = document.title.replace("AzubaTrends", siteName);
     }
 
+    // Keep the "Add to Home Screen" name (iOS) in sync with the real
+    // store name too, same reasoning as the <title> patch above.
+    const appTitleMeta = document.getElementById("apple-app-title-meta");
+    if (appTitleMeta && siteName !== "AzubaTrends") {
+      appTitleMeta.setAttribute("content", siteName);
+    }
+
     const setBadge = (count) => {
       document.querySelectorAll("[data-cart-count]").forEach(b => b.textContent = count);
     };

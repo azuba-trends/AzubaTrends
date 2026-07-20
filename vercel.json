@@ -13,6 +13,10 @@
     {
       "source": "/product-feed.csv",
       "destination": "/api/product-feed"
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "destination": "/api/manifest"
     }
   ],
   "crons": [
