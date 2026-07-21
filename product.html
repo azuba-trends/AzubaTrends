@@ -14,6 +14,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title id="page-title">Product — AzubaTrends</title>
 <meta id="page-description" name="description" content="Shop handmade home goods at AzubaTrends.">
+<link id="page-canonical" rel="canonical" href="https://azuba-trends.vercel.app/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -193,9 +194,27 @@
       });
     }
 
+    // New clean URLs look like /products/terracotta-diya-set (path-based).
+    // Old links look like /product.html?id=abc123 or /product?id=abc123 —
+    // people may already have these saved/shared/bookmarked, so instead of
+    // breaking them we look the product up by id, then swap the browser to
+    // the new slug URL. This keeps old WhatsApp/Google links working while
+    // steering everyone (and search engines) onto the canonical slug URL.
+    const pathParts = window.location.pathname.split("/").filter(Boolean);
+    const slugFromPath = pathParts[0] === "products" ? pathParts[1] : null;
     const params = new URLSearchParams(window.location.search);
-    const productId = params.get("id");
-    const product = productId ? await ProductLoader.getProductById(productId) : null;
+    const legacyId = params.get("id");
+
+    let product = null;
+    if (slugFromPath) {
+      product = await ProductLoader.getProductBySlug(slugFromPath);
+    } else if (legacyId) {
+      product = await ProductLoader.getProductById(legacyId);
+      if (product && product.slug) {
+        window.location.replace(`/products/${product.slug}`);
+        return;
+      }
+    }
 
     if (!product) {
       document.getElementById("product-not-found").hidden = false;
@@ -216,8 +235,9 @@
     // crawler does execute JS and will see this. Fixing this fully
     // would need server-side rendering or a prerendering step, which
     // is out of scope for a plain static multi-page site like this one.
-    document.title = `${product.title} — ${SITE_CONFIG.siteName}`;
-    document.getElementById("page-description").setAttribute("content", product.shortDescription || product.title);
+    document.title = product.seoTitle || `${product.title} — ${SITE_CONFIG.siteName}`;
+    document.getElementById("page-description").setAttribute("content", product.seoDesc || product.shortDescription || product.title);
+    document.getElementById("page-canonical").setAttribute("href", `https://azuba-trends.vercel.app/products/${product.slug}`);
 
     if (window.Tracking) {
       window.Tracking.trackEvent({

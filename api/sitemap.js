@@ -26,8 +26,11 @@ export default async function handler(req, res) {
     { loc: "/", priority: "1.0", changefreq: "daily" },
     { loc: "/category.html", priority: "0.7", changefreq: "weekly" },
     { loc: "/about.html", priority: "0.4", changefreq: "monthly" },
-    { loc: "/terms.html", priority: "0.3", changefreq: "monthly" }
+    { loc: "/terms.html", priority: "0.3", changefreq: "monthly" },
+    { loc: "/blog", priority: "0.6", changefreq: "weekly" }
   ];
+
+  let blogUrls = [];
 
   let productUrls = [];
   let categoryUrls = [];
@@ -40,7 +43,7 @@ export default async function handler(req, res) {
       const p = doc.data();
       if (p.status !== "active") return; // paused/deleted products shouldn't be indexed
       productUrls.push({
-        loc: `/product.html?id=${encodeURIComponent(doc.id)}`,
+        loc: p.slug ? `/products/${encodeURIComponent(p.slug)}` : `/product.html?id=${encodeURIComponent(doc.id)}`,
         priority: "0.8",
         changefreq: "weekly",
         lastmod: p.updatedAt || p.createdAt || undefined
@@ -56,6 +59,18 @@ export default async function handler(req, res) {
         changefreq: "weekly"
       });
     });
+
+    const blogSnap = await db.collection("blogPosts").where("status", "==", "published").get();
+    blogSnap.forEach((doc) => {
+      const p = doc.data();
+      if (!p.slug) return; // shouldn't happen (admin always sets one), but skip rather than emit a broken URL
+      blogUrls.push({
+        loc: `/blog/${encodeURIComponent(p.slug)}`,
+        priority: "0.5",
+        changefreq: "monthly",
+        lastmod: p.updatedAt || p.createdAt || undefined
+      });
+    });
   } catch (err) {
     // If Firestore/service-account isn't reachable, still return a valid
     // (if smaller) sitemap with just the static pages, rather than a
@@ -64,7 +79,7 @@ export default async function handler(req, res) {
     console.error("sitemap: could not load products/categories:", err.message);
   }
 
-  const allUrls = [...staticUrls, ...categoryUrls, ...productUrls];
+  const allUrls = [...staticUrls, ...categoryUrls, ...productUrls, ...blogUrls];
 
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

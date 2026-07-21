@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/images/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/images/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="/images/icons/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1F3A5F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="AzubaTrends" id="apple-app-title-meta">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title id="page-title">Blog — AzubaTrends</title>
+<meta id="page-description" name="description" content="Stories, guides and updates from AzubaTrends.">
+<link id="page-canonical" rel="canonical" href="https://azuba-trends.vercel.app/blog">
+<meta id="og-title" property="og:title" content="Blog — AzubaTrends">
+<meta id="og-description" property="og:description" content="Stories, guides and updates from AzubaTrends.">
+<meta id="og-image" property="og:image" content="">
+<meta property="og:type" content="article">
+<meta id="og-url" property="og:url" content="https://azuba-trends.vercel.app/blog">
+<meta property="og:site_name" content="AzubaTrends">
+<meta name="twitter:card" content="summary_large_image">
+<meta id="twitter-title" name="twitter:title" content="Blog — AzubaTrends">
+<meta id="twitter-description" name="twitter:description" content="Stories, guides and updates from AzubaTrends.">
+<meta id="twitter-image" name="twitter:image" content="">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+
+<div id="header-mount"></div>
+
+<main>
+  <div class="container">
+    <section class="page-header">
+      <div class="breadcrumb"><a href="index.html">Home</a> / <a href="/blog">Blog</a> / <span id="crumb-title"></span></div>
+      <h1 id="post-title">Loading…</h1>
+      <p class="blog-post__meta" id="post-meta"></p>
+    </section>
+
+    <article class="prose" id="post-content"></article>
+
+    <div id="post-not-found" hidden>
+      <p>This post couldn't be found — it may have been unpublished or the link is out of date.</p>
+      <p><a href="/blog">Back to Blog</a></p>
+    </div>
+  </div>
+</main>
+
+<div id="footer-mount"></div>
+
+<script src="js/site-config.js"></script>
+<script src="js/tracking.js"></script>
+<script src="js/security.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/cart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
+<script src="js/product-loader.js"></script>
+<script src="js/search.js"></script>
+<script src="js/blog-loader.js"></script>
+<script>
+  window.addEventListener("layout:ready", () => ProductLoader.initHeader());
+
+  document.addEventListener("DOMContentLoaded", async () => {
+    // Clean URL is /blog/some-slug (see vercel.json rewrite -> this file).
+    // window.location.pathname reflects the ORIGINAL browser URL even
+    // though a rewrite served this file, so we can read the slug straight
+    // off it — same technique used in product.html.
+    const pathParts = window.location.pathname.split("/").filter(Boolean);
+    const slug = pathParts[0] === "blog" ? pathParts[1] : null;
+
+    const post = slug ? await BlogLoader.getPostBySlug(slug) : null;
+
+    if (!post) {
+      document.getElementById("post-title").textContent = "Post not found";
+      document.getElementById("post-not-found").hidden = false;
+      return;
+    }
+
+    const title = post.seoTitle || post.title;
+    const description = post.seoDesc || BlogLoader.getExcerpt(post, 160) || `Read "${post.title}" on the AzubaTrends blog.`;
+
+    document.title = `${title} — AzubaTrends Blog`;
+    document.getElementById("page-description").setAttribute("content", description);
+    document.getElementById("page-canonical").setAttribute("href", `https://azuba-trends.vercel.app/blog/${post.slug}`);
+    document.getElementById("og-title").setAttribute("content", title);
+    document.getElementById("og-description").setAttribute("content", description);
+    document.getElementById("og-url").setAttribute("content", `https://azuba-trends.vercel.app/blog/${post.slug}`);
+    document.getElementById("twitter-title").setAttribute("content", title);
+    document.getElementById("twitter-description").setAttribute("content", description);
+    if (post.coverImage) {
+      document.getElementById("og-image").setAttribute("content", post.coverImage);
+      document.getElementById("twitter-image").setAttribute("content", post.coverImage);
+    }
+
+    Security.setTextSafely(document.getElementById("post-title"), post.title);
+    Security.setTextSafely(document.getElementById("crumb-title"), post.title);
+    Security.setTextSafely(document.getElementById("post-meta"), BlogLoader.formatDate(post.createdAt));
+
+    document.getElementById("post-content").innerHTML = BlogLoader.renderPostHTML(post);
+  });
+</script>
+</body>
+</html>

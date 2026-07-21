@@ -67,7 +67,7 @@ export default async function handler(req, res) {
         doc.id,
         p.title,
         (p.description || p.shortDescription || p.title || "").slice(0, 5000),
-        `${baseUrl}/product.html?id=${encodeURIComponent(doc.id)}`,
+        p.slug ? `${baseUrl}/products/${encodeURIComponent(p.slug)}` : `${baseUrl}/product.html?id=${encodeURIComponent(doc.id)}`,
         image,
         availability,
         `${Number(p.sellingPrice).toFixed(2)} INR`,

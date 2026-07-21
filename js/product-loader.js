@@ -53,6 +53,11 @@ const ProductLoader = (function () {
     return products.find((p) => p.id === id) || null;
   }
 
+  async function getProductBySlug(slug) {
+    const products = await loadAllProducts();
+    return products.find((p) => p.slug === slug) || null;
+  }
+
   function calcDiscount(product) {
     if (!product || !product.mrp || product.sellingPrice >= product.mrp) return 0;
     return Math.round(((product.mrp - product.sellingPrice) / product.mrp) * 100);
@@ -89,7 +94,7 @@ const ProductLoader = (function () {
     const safeImage = window.Security ? window.Security.escapeHTML(image) : image;
 
     card.innerHTML = `
-      <a href="product.html?id=${encodeURIComponent(product.id)}" class="product-card__link">
+      <a href="${product.slug ? `/products/${encodeURIComponent(product.slug)}` : `product.html?id=${encodeURIComponent(product.id)}`}" class="product-card__link">
         <div class="product-card__media">
           ${product.stock === 0 ? `<span class="price-tag price-tag--stock">Out of Stock</span>` : ''}
           <img src="${safeImage}" alt="${safeTitle}" loading="lazy">
@@ -271,7 +276,7 @@ const ProductLoader = (function () {
     window.addEventListener("cart:updated", (e) => setBadge(e.detail.count));
   }
 
-  const API = { loadAllProducts, getProductById, calcDiscount, formatPrice, sortByStock, getCategories, renderProductCard, renderGrid, renderSkeletonGrid, renderCategoryChips, initHeader, trackCategoryInterest, mountRelatedProducts };
+  const API = { loadAllProducts, getProductById, getProductBySlug, calcDiscount, formatPrice, sortByStock, getCategories, renderProductCard, renderGrid, renderSkeletonGrid, renderCategoryChips, initHeader, trackCategoryInterest, mountRelatedProducts };
   window.ProductLoader = API;
   return API;
 })();

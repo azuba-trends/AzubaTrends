@@ -3,8 +3,20 @@
   "trailingSlash": false,
   "rewrites": [
     {
+      "source": "/products/:slug",
+      "destination": "/product.html"
+    },
+    {
+      "source": "/blog/:slug",
+      "destination": "/blog-post.html"
+    },
+    {
       "source": "/share",
       "destination": "/api/product"
+    },
+    {
+      "source": "/share-blog",
+      "destination": "/api/blog-post"
     },
     {
       "source": "/sitemap.xml",

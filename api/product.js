@@ -16,31 +16,64 @@ function escapeForScript(str) {
 }
 
 export default async function handler(req, res) {
-  const { id } = req.query;
+  const { id, slug } = req.query;
 
-  // Agar id nahi hai, toh normal product page bhej do
-  if (!id) {
+  // Agar id/slug kuch bhi nahi hai, toh normal product page bhej do
+  if (!id && !slug) {
     return res.redirect(301, '/product.html');
   }
 
   try {
-    // 1. Firebase REST API se data fetch karna
-    // Note: Project ID 'azubatrends-32349' aapki firebaseConfig se li gayi hai
-    const firebaseUrl = `https://firestore.googleapis.com/v1/projects/azubatrends-32349/databases/(default)/documents/products/${encodeURIComponent(id)}`;
+    const projectUrl = "https://firestore.googleapis.com/v1/projects/azubatrends-32349/databases/(default)/documents";
+    let product;
+    let resolvedSlug = slug;
 
-    const response = await fetch(firebaseUrl);
-    const data = await response.json();
+    if (slug) {
+      // Slug se lookup karne ke liye Firestore ka structured query (runQuery)
+      // use karna padta hai, kyunki slug document-id nahi hai — ye ek field hai.
+      const queryBody = {
+        structuredQuery: {
+          from: [{ collectionId: "products" }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: "slug" },
+              op: "EQUAL",
+              value: { stringValue: slug }
+            }
+          },
+          limit: 1
+        }
+      };
+      const qResp = await fetch(`${projectUrl}:runQuery`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(queryBody)
+      });
+      const qData = await qResp.json();
+      const match = Array.isArray(qData) ? qData.find((r) => r.document) : null;
+      product = match?.document?.fields;
+    } else {
+      // Purane /share?id=X links abhi bhi kaam karte rahein, isliye id-based
+      // lookup fallback ke roop me rakha hai.
+      const response = await fetch(`${projectUrl}/products/${encodeURIComponent(id)}`);
+      const data = await response.json();
+      product = data.fields;
+      resolvedSlug = product?.slug?.stringValue || null;
+    }
 
-    // 2. Data extract karna (Firestore REST API ka format thoda alag hota hai)
-    const product = data.fields;
-    const rawTitle = product?.title?.stringValue || "AzubaTrends Product";
-    const rawDescription = product?.shortDescription?.stringValue || "Buy amazing products on AzubaTrends.";
+    const rawTitle = product?.seoTitle?.stringValue || product?.title?.stringValue || "AzubaTrends Product";
+    const rawDescription = product?.seoDesc?.stringValue || product?.shortDescription?.stringValue || "Buy amazing products on AzubaTrends.";
     const rawImageUrl = product?.images?.arrayValue?.values?.[0]?.stringValue || "https://yourwebsite.com/images/logo-placeholder.png";
 
     const title = escapeHtml(rawTitle);
     const description = escapeHtml(rawDescription);
     const imageUrl = escapeHtml(rawImageUrl);
-    const safeIdForScript = escapeForScript(id);
+    // Prefer the clean slug URL for the real-user redirect; fall back to the
+    // old ?id= link only if this product somehow has no slug yet.
+    const redirectPath = resolvedSlug
+      ? `/products/${encodeURIComponent(resolvedSlug)}`
+      : `/product.html?id=${encodeURIComponent(id || "")}`;
+    const safeRedirectForScript = escapeForScript(redirectPath);
 
     // 3. Custom HTML banakar (Meta Tags ke sath) bhejna
     const html = `
@@ -70,7 +103,7 @@ export default async function handler(req, res) {
         <script>
           // Jab normal user (chrome/safari) ise open karega,
           // toh wo original product page par chala jayega jahan cart/UI load hoga.
-          window.location.replace("/product.html?id=${safeIdForScript}");
+          window.location.replace("${safeRedirectForScript}");
         </script>
       </head>
       <body>
@@ -87,6 +120,6 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error(error);
-    res.redirect(301, '/product.html?id=' + encodeURIComponent(id));
+    res.redirect(301, slug ? `/products/${encodeURIComponent(slug)}` : '/product.html?id=' + encodeURIComponent(id || ""));
   }
 }

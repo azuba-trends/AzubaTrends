@@ -6,6 +6,7 @@
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin Panel - AzubaTrends</title>
+<meta name="robots" content="noindex, nofollow">
 <link rel="stylesheet" href="css/main.css">
 <link rel="stylesheet" href="css/components.css">
 <style>
@@ -190,6 +191,10 @@
       <button class="nav-btn" data-target="store-add-coupon" data-fresh-form="coupon">Add Coupon</button>
       <button class="nav-btn" data-target="store-orders">All Orders</button>
 
+      <div class="nav-group-title">Blog</div>
+      <button class="nav-btn" data-target="blog-posts">All Posts</button>
+      <button class="nav-btn" data-target="blog-add-post" data-fresh-form="blogpost">Add Post</button>
+
       <div class="nav-group-title">Settings</div>
       <button class="nav-btn" data-target="settings">Account, Payment &amp; Support</button>
     </div>
@@ -279,8 +284,24 @@
             <input type="text" id="prod-name" required>
           </div>
           <div class="form-field">
-            <label>Slug (auto-generated, editable)</label>
+            <label>Slug (auto-generated, editable) <span class="field-hint" style="display:inline;">(used in product URL)</span></label>
             <input type="text" id="prod-slug">
+          </div>
+
+          <div class="form-field" style="grid-column: 1 / -1;">
+            <label>Focus Keyphrase <span class="field-hint" style="display:inline;">(the search term you want this product to rank for — not sent to Google, just a writing guide)</span></label>
+            <input type="text" id="prod-keyphrase" placeholder="e.g. terracotta diya set">
+          </div>
+          <div class="form-field">
+            <label>SEO Title <span class="field-hint" style="display:inline;">(shown in Google results — falls back to Product Name if empty)</span></label>
+            <input type="text" id="prod-seo-title" maxlength="70">
+          </div>
+          <div class="form-field">
+            <label>SEO Description <span class="field-hint" style="display:inline;">(falls back to Short Description if empty)</span></label>
+            <input type="text" id="prod-seo-desc" maxlength="165">
+          </div>
+          <div class="form-field" style="grid-column: 1 / -1;">
+            <ul id="prod-seo-checklist" style="list-style:none; padding:0; margin:4px 0; font-size:13px; display:flex; gap:16px; flex-wrap:wrap;"></ul>
           </div>
 
           <div class="form-field">
@@ -623,6 +644,88 @@
         <p id="modal-price-breakdown" style="font-size:0.9rem; line-height:1.6;"></p>
         <h4 style="margin-top: 20px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Items Ordered</h4>
         <ul id="modal-order-items" style="list-style: none; padding: 0; font-size: 0.9rem;"></ul>
+      </div>
+    </div>
+
+    <!-- ============ BLOG: ALL POSTS ============ -->
+    <div id="blog-posts" class="section">
+      <div class="section-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>All Blog Posts</h2>
+        <div style="display:flex; gap:8px;">
+          <button id="bulk-delete-blogposts-btn" class="btn btn-outline" style="color:var(--color-danger); border-color:var(--color-danger); display:none;">Delete Selected</button>
+          <button class="btn btn-primary nav-btn" data-target="blog-add-post" data-fresh-form="blogpost">+ Add Post</button>
+        </div>
+      </div>
+      <div class="card">
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="select-all-blogposts"></th>
+                <th>Cover</th><th>Title</th><th>Date</th><th>Status</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="blogposts-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ BLOG: ADD / EDIT POST ============ -->
+    <div id="blog-add-post" class="section">
+      <h2 id="blogpost-form-title">Add New Post</h2>
+      <div class="card">
+        <div class="form-grid">
+          <input type="hidden" id="bp-id">
+          <input type="hidden" id="bp-existing-cover">
+
+          <div class="form-field">
+            <label>Post Title <span class="required-star">*</span></label>
+            <input type="text" id="bp-title" required>
+          </div>
+          <div class="form-field">
+            <label>Slug (auto-generated, editable) <span class="field-hint" style="display:inline;">(used in post URL)</span></label>
+            <input type="text" id="bp-slug">
+          </div>
+
+          <div class="form-field" style="grid-column: 1 / -1;">
+            <label>Focus Keyphrase <span class="field-hint" style="display:inline;">(the search term you want this post to rank for — not sent to Google, just a writing guide)</span></label>
+            <input type="text" id="bp-keyphrase" placeholder="e.g. kantha embroidery guide">
+          </div>
+          <div class="form-field">
+            <label>SEO Title <span class="field-hint" style="display:inline;">(shown in Google results — falls back to Post Title if empty)</span></label>
+            <input type="text" id="bp-seo-title" maxlength="70">
+          </div>
+          <div class="form-field">
+            <label>SEO Description</label>
+            <input type="text" id="bp-seo-desc" maxlength="165">
+          </div>
+          <div class="form-field" style="grid-column: 1 / -1;">
+            <ul id="bp-seo-checklist" style="list-style:none; padding:0; margin:4px 0; font-size:13px; display:flex; gap:16px; flex-wrap:wrap;"></ul>
+          </div>
+
+          <div class="form-field" style="grid-column: 1 / -1;">
+            <label>Cover Image <span class="field-hint" style="display:inline;">(shown on the blog listing + link previews)</span></label>
+            <input type="file" id="bp-cover-img" accept="image/*">
+            <div class="img-preview-row" id="bp-cover-preview"></div>
+          </div>
+        </div>
+
+        <h3 style="margin-top:28px; border-top:1px solid #eee; padding-top:20px;">Content blocks</h3>
+        <p class="field-hint">Drag a block by its ⠿ handle to reorder, or use the arrow buttons. Add blocks with the buttons below.</p>
+        <div id="bp-blocks-editor"></div>
+        <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-outline" id="bp-add-heading">+ Heading block</button>
+          <button type="button" class="btn btn-outline" id="bp-add-paragraph">+ Paragraph block</button>
+          <button type="button" class="btn btn-outline" id="bp-add-image">+ Image block</button>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:28px; border-top:1px solid #eee; padding-top:20px;">
+          <button type="button" class="btn btn-primary" id="publish-blogpost-btn">Publish</button>
+          <button type="button" class="btn btn-outline" id="draft-blogpost-btn">Save as Draft</button>
+          <button type="button" class="btn btn-outline nav-btn" data-target="blog-posts">Cancel</button>
+        </div>
+        <p id="blogpost-save-status" style="margin-top:8px; font-size:0.9rem;"></p>
       </div>
     </div>
 

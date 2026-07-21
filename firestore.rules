@@ -46,6 +46,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Blog posts — anyone can read (that's how /blog and /blog/:slug work
+    // without a server), only the logged-in admin can write. Same pattern
+    // as products/categories/brands.
+    match /blogPosts/{postId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // Coupons — the storefront (cart/checkout) must be able to read these
     // without logging in to validate a code at checkout; only the admin
     // panel can create/edit/delete them.

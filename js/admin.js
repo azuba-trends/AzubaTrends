@@ -54,7 +54,7 @@ setTimeout(() => {
   // for instance) are never restored on reload — that would resurrect a
   // half-filled form as if it still applied, which is more confusing than
   // just landing on Overview.
-  const NON_RESTORABLE_SECTIONS = new Set(["store-add-product", "store-add-category", "store-add-brand", "store-add-coupon"]);
+  const NON_RESTORABLE_SECTIONS = new Set(["store-add-product", "store-add-category", "store-add-brand", "store-add-coupon", "blog-add-post"]);
 
   function goToSection(target, opts) {
     document.querySelectorAll(".sidebar .nav-btn").forEach((b) => b.classList.remove("active"));
@@ -106,6 +106,7 @@ setTimeout(() => {
       if (fresh === "category") resetCategoryForm();
       if (fresh === "brand") resetBrandForm();
       if (fresh === "coupon") resetCouponForm();
+      if (fresh === "blogpost") resetBlogPostForm();
     });
   });
 
@@ -667,6 +668,36 @@ setTimeout(() => {
 
   document.getElementById("prod-name").addEventListener("input", (e) => {
     document.getElementById("prod-slug").value = generateSlug(e.target.value);
+    renderSeoChecklist();
+  });
+
+  // Lightweight Yoast-style checklist: purely a writing aid for the admin —
+  // none of this is sent to Google. It just checks whether the focus
+  // keyphrase actually shows up where it matters (title/description/slug/short desc).
+  function renderSeoChecklist() {
+    const list = document.getElementById("prod-seo-checklist");
+    if (!list) return;
+    const kp = (document.getElementById("prod-keyphrase").value || "").trim().toLowerCase();
+    const seoTitle = (document.getElementById("prod-seo-title").value || document.getElementById("prod-name").value || "").toLowerCase();
+    const seoDesc = (document.getElementById("prod-seo-desc").value || document.getElementById("prod-short-desc")?.value || "").toLowerCase();
+    const slug = (document.getElementById("prod-slug").value || "").toLowerCase();
+
+    if (!kp) { list.innerHTML = '<li style="color:#888;">Add a focus keyphrase to see SEO checks.</li>'; return; }
+
+    const checks = [
+      { label: "In SEO Title", ok: seoTitle.includes(kp) },
+      { label: "In SEO Description", ok: seoDesc.includes(kp) },
+      { label: "In URL slug", ok: slug.includes(generateSlug(kp)) },
+      { label: `Title length ok (${seoTitle.length}/70)`, ok: seoTitle.length > 0 && seoTitle.length <= 70 },
+      { label: `Description length ok (${seoDesc.length}/165)`, ok: seoDesc.length >= 50 && seoDesc.length <= 165 },
+    ];
+    list.innerHTML = checks.map(c =>
+      `<li style="color:${c.ok ? 'var(--color-success, #1a7f37)' : 'var(--color-danger, #c0392b)'};">${c.ok ? '✓' : '✗'} ${c.label}</li>`
+    ).join("");
+  }
+  ["prod-keyphrase", "prod-seo-title", "prod-seo-desc", "prod-slug", "prod-short-desc"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("input", renderSeoChecklist);
   });
   document.getElementById("prod-feature-img").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("prod-feature-preview"), 1));
   document.getElementById("prod-gallery-imgs").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("prod-gallery-preview"), 5));
@@ -681,6 +712,7 @@ setTimeout(() => {
     document.getElementById("prod-gallery-preview").innerHTML = "";
     document.getElementById("prod-delivery-preview").innerHTML = "";
     document.getElementById("product-form-title").textContent = "Add New Product";
+    renderSeoChecklist();
   }
 
   let unsubProducts = null;
@@ -734,6 +766,9 @@ setTimeout(() => {
     document.getElementById("prod-id").value = id;
     document.getElementById("prod-name").value = p.title || "";
     document.getElementById("prod-slug").value = p.slug || "";
+    document.getElementById("prod-keyphrase").value = p.keyphrase || "";
+    document.getElementById("prod-seo-title").value = p.seoTitle || "";
+    document.getElementById("prod-seo-desc").value = p.seoDesc || "";
     document.getElementById("prod-mrp").value = p.mrp ?? "";
     document.getElementById("prod-price").value = p.sellingPrice ?? "";
     document.getElementById("prod-stock").value = p.stock ?? "";
@@ -755,7 +790,20 @@ setTimeout(() => {
     }, 100);
 
     document.getElementById("product-form-title").textContent = "Edit Product";
+    renderSeoChecklist();
     goToSection("store-add-product");
+  }
+
+  // Ensures no two products share a slug — if "terracotta-diya-set" is taken,
+  // tries "terracotta-diya-set-2", "-3", etc. `excludeId` lets an edit keep its own slug.
+  function ensureUniqueSlug(baseSlug, excludeId) {
+    const taken = new Set(
+      productsList.filter((p) => p.id !== excludeId).map((p) => p.slug).filter(Boolean)
+    );
+    if (!taken.has(baseSlug)) return baseSlug;
+    let n = 2;
+    while (taken.has(`${baseSlug}-${n}`)) n++;
+    return `${baseSlug}-${n}`;
   }
 
   async function toggleProductStatus(id, currentStatus) {
@@ -799,9 +847,19 @@ setTimeout(() => {
       const deliveryFile = document.getElementById("prod-delivery-img").files[0];
       if (deliveryFile) deliveryPartnerImage = await uploadToImgBB(deliveryFile);
 
+      const pId = document.getElementById("prod-id").value;
+      const rawSlug = document.getElementById("prod-slug").value.trim() || generateSlug(title);
+      const finalSlug = ensureUniqueSlug(generateSlug(rawSlug), pId || null);
+      if (finalSlug !== rawSlug) {
+        document.getElementById("prod-slug").value = finalSlug;
+      }
+
       const pData = {
         title,
-        slug: document.getElementById("prod-slug").value || generateSlug(title),
+        slug: finalSlug,
+        keyphrase: document.getElementById("prod-keyphrase").value.trim(),
+        seoTitle: document.getElementById("prod-seo-title").value.trim(),
+        seoDesc: document.getElementById("prod-seo-desc").value.trim(),
         category: document.getElementById("prod-category").value,
         brand: document.getElementById("prod-brand").value,
         mrp: Number(document.getElementById("prod-mrp").value) || 0,
@@ -820,7 +878,6 @@ setTimeout(() => {
         updatedAt: new Date().toISOString()
       };
 
-      const pId = document.getElementById("prod-id").value;
       if (pId) {
         await updateDoc(doc(db, "products", pId), pData);
       } else {
@@ -842,6 +899,319 @@ setTimeout(() => {
 
   wireBulkSelect("products-table-body", "select-all-products", "bulk-delete-products-btn", async (ids) => {
     for (const id of ids) await deleteDoc(doc(db, "products", id));
+  });
+
+  // ================================================================
+  // BLOG POSTS
+  // ================================================================
+  // Step 1: data + list/delete only. The Add/Edit form (block editor) is
+  // built in step 2 — resetBlogPostForm() is a placeholder until then so
+  // nav.js's fresh-form wiring doesn't error out when "+ Add Post" is clicked.
+  let blogPostsList = [];
+  let bpBlocks = []; // [{ id, type: "heading"|"paragraph"|"image", text, imageUrl, caption }]
+  let bpDragBlockId = null;
+
+  function newBlockId() {
+    return "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  document.getElementById("bp-add-heading").addEventListener("click", () => {
+    bpBlocks.push({ id: newBlockId(), type: "heading", text: "" });
+    renderBlocksEditor();
+  });
+  document.getElementById("bp-add-paragraph").addEventListener("click", () => {
+    bpBlocks.push({ id: newBlockId(), type: "paragraph", text: "" });
+    renderBlocksEditor();
+  });
+  document.getElementById("bp-add-image").addEventListener("click", () => {
+    bpBlocks.push({ id: newBlockId(), type: "image", imageUrl: "", caption: "" });
+    renderBlocksEditor();
+  });
+
+  function moveBlock(id, dir) {
+    const i = bpBlocks.findIndex((b) => b.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= bpBlocks.length) return;
+    [bpBlocks[i], bpBlocks[j]] = [bpBlocks[j], bpBlocks[i]];
+    renderBlocksEditor();
+  }
+
+  function removeBlock(id) {
+    bpBlocks = bpBlocks.filter((b) => b.id !== id);
+    renderBlocksEditor();
+  }
+
+  // Renders the block list. Re-rendering after every change is simple and
+  // fast enough here (posts realistically have a handful to a few dozen
+  // blocks) — no need for fine-grained DOM patching.
+  function renderBlocksEditor() {
+    const wrap = document.getElementById("bp-blocks-editor");
+    wrap.innerHTML = "";
+    bpBlocks.forEach((block, idx) => {
+      const div = document.createElement("div");
+      div.className = "block-item";
+      div.draggable = true;
+      div.dataset.id = block.id;
+
+      const typeLabel = block.type === "heading" ? "Heading" : block.type === "paragraph" ? "Paragraph" : "Image";
+      let bodyHtml = "";
+      if (block.type === "heading") {
+        bodyHtml = `<input type="text" class="block-field-text" placeholder="Heading text" value="${esc(block.text || "")}">`;
+      } else if (block.type === "paragraph") {
+        bodyHtml = `<textarea class="block-field-text" rows="3" placeholder="Paragraph text">${esc(block.text || "")}</textarea>`;
+      } else {
+        bodyHtml = `
+          <input type="file" class="block-field-img" accept="image/*">
+          ${block.imageUrl ? `<div class="img-preview-row"><img src="${esc(block.imageUrl)}"></div>` : ""}
+          <input type="text" class="block-field-caption" placeholder="Caption (optional)" value="${esc(block.caption || "")}" style="margin-top:6px;">
+        `;
+      }
+
+      div.innerHTML = `
+        <div class="block-item__header">
+          <span class="block-item__handle" title="Drag to reorder">⠿</span>
+          <span class="block-item__type">${typeLabel}</span>
+          <div class="block-item__actions">
+            <button type="button" class="btn btn-outline block-up-btn" ${idx === 0 ? "disabled" : ""}>↑</button>
+            <button type="button" class="btn btn-outline block-down-btn" ${idx === bpBlocks.length - 1 ? "disabled" : ""}>↓</button>
+            <button type="button" class="btn btn-outline block-del-btn" style="color:var(--color-danger);">Remove</button>
+          </div>
+        </div>
+        ${bodyHtml}
+      `;
+
+      // Text/textarea content just updates in-memory state on input — no
+      // full re-render needed (that would steal focus mid-typing).
+      const textField = div.querySelector(".block-field-text");
+      if (textField) textField.addEventListener("input", (e) => { block.text = e.target.value; });
+
+      const captionField = div.querySelector(".block-field-caption");
+      if (captionField) captionField.addEventListener("input", (e) => { block.caption = e.target.value; });
+
+      const imgField = div.querySelector(".block-field-img");
+      if (imgField) {
+        imgField.addEventListener("change", async (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          try {
+            block.imageUrl = await uploadToImgBB(file);
+            renderBlocksEditor();
+          } catch (err) {
+            alert("Image upload failed: " + err.message);
+          }
+        });
+      }
+
+      div.querySelector(".block-up-btn").addEventListener("click", () => moveBlock(block.id, -1));
+      div.querySelector(".block-down-btn").addEventListener("click", () => moveBlock(block.id, 1));
+      div.querySelector(".block-del-btn").addEventListener("click", () => removeBlock(block.id));
+
+      // Native HTML5 drag-and-drop reorder. Falls back gracefully to the
+      // up/down buttons on touch devices where drag doesn't fire.
+      div.addEventListener("dragstart", () => {
+        bpDragBlockId = block.id;
+        div.classList.add("dragging");
+      });
+      div.addEventListener("dragend", () => {
+        div.classList.remove("dragging");
+        wrap.querySelectorAll(".block-item").forEach((el) => el.classList.remove("drag-over"));
+      });
+      div.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        if (block.id !== bpDragBlockId) div.classList.add("drag-over");
+      });
+      div.addEventListener("dragleave", () => div.classList.remove("drag-over"));
+      div.addEventListener("drop", (e) => {
+        e.preventDefault();
+        div.classList.remove("drag-over");
+        if (!bpDragBlockId || bpDragBlockId === block.id) return;
+        const fromIdx = bpBlocks.findIndex((b) => b.id === bpDragBlockId);
+        const toIdx = bpBlocks.findIndex((b) => b.id === block.id);
+        if (fromIdx < 0 || toIdx < 0) return;
+        const [moved] = bpBlocks.splice(fromIdx, 1);
+        bpBlocks.splice(toIdx, 0, moved);
+        bpDragBlockId = null;
+        renderBlocksEditor();
+      });
+
+      wrap.appendChild(div);
+    });
+  }
+
+  // Same lightweight writing-checklist pattern as the product form.
+  function renderBlogSeoChecklist() {
+    const list = document.getElementById("bp-seo-checklist");
+    if (!list) return;
+    const kp = (document.getElementById("bp-keyphrase").value || "").trim().toLowerCase();
+    const seoTitle = (document.getElementById("bp-seo-title").value || document.getElementById("bp-title").value || "").toLowerCase();
+    const seoDesc = (document.getElementById("bp-seo-desc").value || "").toLowerCase();
+    const slug = (document.getElementById("bp-slug").value || "").toLowerCase();
+
+    if (!kp) { list.innerHTML = '<li style="color:#888;">Add a focus keyphrase to see SEO checks.</li>'; return; }
+
+    const checks = [
+      { label: "In SEO Title", ok: seoTitle.includes(kp) },
+      { label: "In SEO Description", ok: seoDesc.includes(kp) },
+      { label: "In URL slug", ok: slug.includes(generateSlug(kp)) },
+      { label: `Title length ok (${seoTitle.length}/70)`, ok: seoTitle.length > 0 && seoTitle.length <= 70 },
+      { label: `Description length ok (${seoDesc.length}/165)`, ok: seoDesc.length >= 50 && seoDesc.length <= 165 },
+    ];
+    list.innerHTML = checks.map(c =>
+      `<li style="color:${c.ok ? 'var(--color-success, #1a7f37)' : 'var(--color-danger, #c0392b)'};">${c.ok ? '✓' : '✗'} ${c.label}</li>`
+    ).join("");
+  }
+  ["bp-keyphrase", "bp-seo-title", "bp-seo-desc", "bp-slug"].forEach((id) => {
+    document.getElementById(id).addEventListener("input", renderBlogSeoChecklist);
+  });
+  document.getElementById("bp-title").addEventListener("input", (e) => {
+    document.getElementById("bp-slug").value = generateSlug(e.target.value);
+    renderBlogSeoChecklist();
+  });
+
+  document.getElementById("bp-cover-img").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("bp-cover-preview"), 1));
+
+  function ensureUniqueBlogSlug(baseSlug, excludeId) {
+    const taken = new Set(blogPostsList.filter((p) => p.id !== excludeId).map((p) => p.slug).filter(Boolean));
+    if (!taken.has(baseSlug)) return baseSlug;
+    let n = 2;
+    while (taken.has(`${baseSlug}-${n}`)) n++;
+    return `${baseSlug}-${n}`;
+  }
+
+  function resetBlogPostForm() {
+    document.getElementById("bp-id").value = "";
+    document.getElementById("bp-existing-cover").value = "";
+    document.getElementById("bp-title").value = "";
+    document.getElementById("bp-slug").value = "";
+    document.getElementById("bp-keyphrase").value = "";
+    document.getElementById("bp-seo-title").value = "";
+    document.getElementById("bp-seo-desc").value = "";
+    document.getElementById("bp-cover-img").value = "";
+    document.getElementById("bp-cover-preview").innerHTML = "";
+    document.getElementById("blogpost-form-title").textContent = "Add New Post";
+    bpBlocks = [];
+    renderBlocksEditor();
+    renderBlogSeoChecklist();
+  }
+
+  function editBlogPost(id) {
+    const p = blogPostsList.find((x) => x.id === id);
+    if (!p) return;
+    document.getElementById("bp-id").value = id;
+    document.getElementById("bp-title").value = p.title || "";
+    document.getElementById("bp-slug").value = p.slug || "";
+    document.getElementById("bp-keyphrase").value = p.keyphrase || "";
+    document.getElementById("bp-seo-title").value = p.seoTitle || "";
+    document.getElementById("bp-seo-desc").value = p.seoDesc || "";
+    document.getElementById("bp-existing-cover").value = p.coverImage || "";
+    document.getElementById("bp-cover-preview").innerHTML = "";
+    previewExistingImages(document.getElementById("bp-cover-preview"), p.coverImage ? [p.coverImage] : []);
+    bpBlocks = (p.blocks || []).map((b) => ({ ...b }));
+    renderBlocksEditor();
+    renderBlogSeoChecklist();
+    document.getElementById("blogpost-form-title").textContent = "Edit Post";
+    goToSection("blog-add-post");
+  }
+  window.editBlogPost = editBlogPost;
+
+  async function handleBlogPostSave(status) {
+    const title = document.getElementById("bp-title").value.trim();
+    if (!title) return alert("Post title is required");
+
+    const saveBtn = status === "published" ? document.getElementById("publish-blogpost-btn") : document.getElementById("draft-blogpost-btn");
+    const originalText = saveBtn.textContent;
+    saveBtn.textContent = "Saving..."; saveBtn.disabled = true;
+    document.getElementById("blogpost-save-status").textContent = "";
+
+    try {
+      let coverImage = document.getElementById("bp-existing-cover").value || "";
+      const coverFile = document.getElementById("bp-cover-img").files[0];
+      if (coverFile) coverImage = await uploadToImgBB(coverFile);
+
+      const pId = document.getElementById("bp-id").value;
+      const rawSlug = document.getElementById("bp-slug").value.trim() || generateSlug(title);
+      const finalSlug = ensureUniqueBlogSlug(generateSlug(rawSlug), pId || null);
+      if (finalSlug !== rawSlug) document.getElementById("bp-slug").value = finalSlug;
+
+      // Blocks currently being edited (text field) already write straight
+      // into bpBlocks on input, so it's ready to save as-is.
+      const pData = {
+        title,
+        slug: finalSlug,
+        keyphrase: document.getElementById("bp-keyphrase").value.trim(),
+        seoTitle: document.getElementById("bp-seo-title").value.trim(),
+        seoDesc: document.getElementById("bp-seo-desc").value.trim(),
+        coverImage,
+        blocks: bpBlocks,
+        status,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (pId) {
+        await updateDoc(doc(db, "blogPosts", pId), pData);
+      } else {
+        pData.createdAt = new Date().toISOString();
+        await addDoc(collection(db, "blogPosts"), pData);
+      }
+      resetBlogPostForm();
+      goToSection("blog-posts");
+    } catch (err) {
+      document.getElementById("blogpost-save-status").textContent = "Error: " + err.message;
+      document.getElementById("blogpost-save-status").style.color = "var(--color-danger)";
+    } finally {
+      saveBtn.textContent = originalText; saveBtn.disabled = false;
+    }
+  }
+
+  document.getElementById("publish-blogpost-btn").addEventListener("click", () => handleBlogPostSave("published"));
+  document.getElementById("draft-blogpost-btn").addEventListener("click", () => handleBlogPostSave("draft"));
+
+  let unsubBlogPosts = null;
+  function listenBlogPosts() {
+    if (unsubBlogPosts) return;
+    unsubBlogPosts = onSnapshot(collection(db, "blogPosts"), (snap) => {
+      blogPostsList = [];
+      snap.forEach((d) => blogPostsList.push({ id: d.id, ...d.data() }));
+      renderBlogPostsTable();
+    }, (err) => console.error("blogPosts listener error", err));
+  }
+
+  function renderBlogPostsTable() {
+    const tbody = document.getElementById("blogposts-table-body");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    // Newest first — createdAt is an ISO string, so plain string comparison
+    // sorts correctly the same way it does for orders elsewhere in this file.
+    const sorted = [...blogPostsList].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+    sorted.forEach((p) => {
+      const sColor = p.status === "published" ? "var(--color-success)" : "var(--color-accent-dark)";
+      const img = p.coverImage || "images/logo-placeholder.svg";
+      const dateStr = p.createdAt ? new Date(p.createdAt).toLocaleDateString("en-IN") : "—";
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><input type="checkbox" class="row-select" data-id="${p.id}"></td>
+        <td><img src="${esc(img)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" alt=""></td>
+        <td>${esc(p.title || "(untitled)")}</td>
+        <td>${dateStr}</td>
+        <td style="color:${sColor}; font-weight:bold;">${esc((p.status || "draft").toUpperCase())}</td>
+        <td>
+          <button class="btn btn-outline edit-blogpost-btn" data-id="${p.id}" style="padding:4px 8px; font-size:0.8rem;">Edit</button>
+          <button class="btn btn-outline del-blogpost-btn" data-id="${p.id}" style="color:var(--color-danger); padding:4px 8px; font-size:0.8rem;">Delete</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll(".edit-blogpost-btn").forEach((b) => b.addEventListener("click", () => editBlogPost(b.dataset.id)));
+    tbody.querySelectorAll(".del-blogpost-btn").forEach((b) => b.addEventListener("click", () => deleteBlogPost(b.dataset.id)));
+  }
+
+  async function deleteBlogPost(id) {
+    if (!confirm("Delete this blog post permanently?")) return;
+    await deleteDoc(doc(db, "blogPosts", id));
+  }
+
+  wireBulkSelect("blogposts-table-body", "select-all-blogposts", "bulk-delete-blogposts-btn", async (ids) => {
+    for (const id of ids) await deleteDoc(doc(db, "blogPosts", id));
   });
 
   // ================================================================
@@ -1495,6 +1865,7 @@ setTimeout(() => {
     listenProducts();
     listenOrders();
     listenTelegramBots();
+    listenBlogPosts();
 
     // Reopen whichever section the admin was last looking at (Overview by
     // default) instead of always resetting to the first sidebar item on a
@@ -1508,10 +1879,10 @@ setTimeout(() => {
   }
 
   function stopRealtimeSync() {
-    [unsubCategories, unsubBrands, unsubCoupons, unsubProducts, unsubOrders, unsubTelegramBots].forEach((unsub) => {
+    [unsubCategories, unsubBrands, unsubCoupons, unsubProducts, unsubOrders, unsubTelegramBots, unsubBlogPosts].forEach((unsub) => {
       if (typeof unsub === "function") unsub();
     });
-    unsubCategories = unsubBrands = unsubCoupons = unsubProducts = unsubOrders = unsubTelegramBots = null;
+    unsubCategories = unsubBrands = unsubCoupons = unsubProducts = unsubOrders = unsubTelegramBots = unsubBlogPosts = null;
     syncStarted = false;
   }
 

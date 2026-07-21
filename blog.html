@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/images/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/images/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="/images/icons/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1F3A5F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="AzubaTrends" id="apple-app-title-meta">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blog — AzubaTrends</title>
+<meta name="description" content="Stories, guides and updates from AzubaTrends — handmade home decor, textiles and more from West Bengal.">
+<link rel="canonical" href="https://azuba-trends.vercel.app/blog">
+
+<!-- OPEN GRAPH (Facebook, WhatsApp) -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://azuba-trends.vercel.app/blog">
+<meta property="og:title" content="Blog — AzubaTrends">
+<meta property="og:description" content="Stories, guides and updates from AzubaTrends — handmade home decor, textiles and more from West Bengal.">
+<meta property="og:image" content="https://azuba-trends.vercel.app/images/icons/icon-512.png">
+<meta property="og:site_name" content="AzubaTrends">
+
+<!-- TWITTER -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Blog — AzubaTrends">
+<meta name="twitter:description" content="Stories, guides and updates from AzubaTrends — handmade home decor, textiles and more from West Bengal.">
+<meta name="twitter:image" content="https://azuba-trends.vercel.app/images/icons/icon-512.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+
+<div id="header-mount"></div>
+
+<main>
+  <div class="container">
+    <section class="page-header">
+      <div class="breadcrumb"><a href="index.html">Home</a> / Blog</div>
+      <h1>Blog</h1>
+    </section>
+
+    <div class="blog-grid" id="blog-grid" aria-live="polite"></div>
+  </div>
+</main>
+
+<div id="footer-mount"></div>
+
+<script src="js/site-config.js"></script>
+<script src="js/tracking.js"></script>
+<script src="js/security.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/cart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
+<script src="js/product-loader.js"></script>
+<script src="js/search.js"></script>
+<script src="js/blog-loader.js"></script>
+<script>
+  window.addEventListener("layout:ready", () => ProductLoader.initHeader());
+
+  document.addEventListener("DOMContentLoaded", async () => {
+    const grid = document.getElementById("blog-grid");
+    grid.innerHTML = '<p class="blog-empty">Loading posts…</p>';
+    const posts = await BlogLoader.loadPublishedPosts();
+    BlogLoader.renderGrid(grid, posts, "No posts yet — check back soon.");
+  });
+</script>
+</body>
+</html>

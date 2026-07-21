@@ -72,7 +72,7 @@
 
   function buildSuggestionRow(product, rawQuery) {
     const row = document.createElement("a");
-    row.href = `product.html?id=${encodeURIComponent(product.id)}`;
+    row.href = product.slug ? `/products/${encodeURIComponent(product.slug)}` : `product.html?id=${encodeURIComponent(product.id)}`;
     row.className = "search-suggestion" + (product.stock === 0 ? " is-out-of-stock" : "");
     row.setAttribute("role", "option");
 
