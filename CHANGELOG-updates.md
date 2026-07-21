@@ -1,5 +1,34 @@
 # AzubaTrends — Update Changelog
 
+## 2026-07-22 (later same day) — Fixed deploy failure: 13 serverless functions on Hobby plan
+
+**What broke:** After pushing the previous update, Vercel deploys started
+failing with: `No more than 12 Serverless Functions can be added to a
+Deployment on the Hobby plan.` The `/api` folder had grown to 13 files —
+Vercel's free plan hard-caps a deployment at 12, regardless of file size.
+
+**Fix:** Merged `api/telegram-notify.js` and `api/telegram-test.js` (both
+small, both already used the same `TELEGRAM_NOTIFY_API_KEY` auth check)
+into a single new file, `api/telegram.js`. It dispatches internally based
+on the request body: `{ event, ... }` → old notify behavior, `{ action,
+... }` → old fetchChatId/test behavior. No feature was removed or changed
+— only the file layout. Back down to 12 functions, deploy should succeed.
+
+**Files changed:**
+| File | What changed |
+|---|---|
+| `api/telegram.js` | **New** — merged replacement for the two files below. |
+| `api/telegram-notify.js`, `api/telegram-test.js` | **Deleted** — logic moved into `api/telegram.js`. |
+| `js/admin.js` | Both `fetch("/api/telegram-notify", ...)` and `fetch("/api/telegram-test", ...)` calls now point at `fetch("/api/telegram", ...)`; updated the 404 error-message text to match. |
+| `js/site-config.js`, `SERVICE-ACCOUNT-SETUP-GUIDE.md` | Fixed a comment/doc reference to the old `api/telegram-notify.js` filename. |
+| `README.md` | Updated the `api/` directory listing, and added a new Known Limitations item explaining the 12-function Hobby-plan cap so this doesn't silently break again if another `/api` file is ever added. |
+
+**If you add another `/api` file in the future:** you must merge it into
+an existing file (same pattern as above) or the next deploy will fail the
+same way. See the new Known Limitations item in `README.md`.
+
+---
+
 ## 2026-07-22 — SEO fixes, real-time geo verification, new favicon/icons
 
 | File | What changed |

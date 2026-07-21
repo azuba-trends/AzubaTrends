@@ -9,7 +9,7 @@ data, so it has to be set up outside the app once.
 
 Telegram bot tokens are stored in Firestore's `telegram_bots` collection,
 which is locked to admin-only access (see firestore.rules). Your serverless
-functions (`api/place-order.js`, `api/telegram-notify.js`,
+functions (`api/place-order.js`, `api/telegram.js`,
 `api/cron-daily-digest.js`) run on Vercel with nobody logged in — they need a
 way to read that admin-only collection anyway. A **service account** is
 Firebase's way of giving a specific piece of server code full trusted access,

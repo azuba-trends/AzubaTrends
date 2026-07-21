@@ -96,7 +96,7 @@ AzubaTrends/
 │   ├── products.js, blog-posts.js, product-feed.js, sitemap.js, manifest.js
 │   ├── import-product.js     One-time product-prefill helper from a third-party URL
 │   ├── submit-review.js      Rate-limited, profanity-filtered public review submission
-│   ├── telegram-notify.js, telegram-test.js, cron-daily-digest.js   Telegram alerts
+│   ├── telegram.js, cron-daily-digest.js   Telegram alerts (merged into one function — see below)
 │
 ├── firestore.rules           Paste into Firebase Console -> Firestore -> Rules
 ├── vercel.json                Security headers + clean URLs (Vercel only)
@@ -260,6 +260,18 @@ dashboard at that instead. Not needed to start.
    homepage, category, blog listing, about, and terms pages don't have this
    limitation — their Open Graph/Twitter tags are static HTML, so they work
    identically on any host, Vercel or GitHub Pages.
+6. **Vercel's Hobby (free) plan caps a deployment at 12 serverless
+   functions total** — every file in `/api` counts as one, regardless of
+   size. This repo is currently exactly at that limit (`api/telegram.js`
+   merges what used to be two separate files, `telegram-notify.js` and
+   `telegram-test.js`, specifically to stay under it — see
+   `CHANGELOG-updates.md`). **If you ever add a new file to `/api`, you
+   must first merge it into an existing file or remove/merge another one**,
+   or the deploy will fail with "No more than 12 Serverless Functions can
+   be added to a Deployment on the Hobby plan." The only other ways around
+   this are upgrading to Vercel Pro ($20/mo, no function-count cap) or
+   consolidating further (e.g. merging `blog-post.js`/`blog-posts.js`, or
+   `products.js`/`product-feed.js`, the same way telegram was merged).
 
 ## Deployment (Vercel — recommended)
 1. Push this repo to GitHub.

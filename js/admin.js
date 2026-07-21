@@ -1444,7 +1444,7 @@ setTimeout(() => {
     if (newStatus === "Cancelled" && order && SETTINGS.telegramApiKey) {
       // Fire-and-forget — a Telegram hiccup should never block the status
       // update itself, which already succeeded above.
-      fetch("/api/telegram-notify", {
+      fetch("/api/telegram", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-API-Key": SETTINGS.telegramApiKey },
         body: JSON.stringify({
@@ -1812,14 +1812,14 @@ setTimeout(() => {
     statusEl.textContent = action === "test" ? "Sending test message..." : "Fetching chat ID...";
 
     try {
-      const res = await fetch("/api/telegram-test", {
+      const res = await fetch("/api/telegram", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-API-Key": SETTINGS.telegramApiKey },
         body: JSON.stringify({ action, token, chatId, storeName: SETTINGS.storeName || "your store" })
       });
       if (res.status === 404) {
         statusEl.style.color = "var(--color-danger)";
-        statusEl.textContent = "api/telegram-test not found — make sure you're on the Vercel deployment, not GitHub Pages or a local file.";
+        statusEl.textContent = "api/telegram not found — make sure you're on the Vercel deployment, not GitHub Pages or a local file.";
         return;
       }
       const data = await res.json();
