@@ -1,5 +1,26 @@
 # AzubaTrends — Update Changelog
 
+## 2026-07-22 — SEO fixes, real-time geo verification, new favicon/icons
+
+| File | What changed |
+|---|---|
+| `index.html`, `category.html`, `blog.html`, `about.html`, `terms.html` | Added `og:title`, `og:description`, `og:image`, `og:url`, `og:site_name`, and Twitter Card tags, plus a `canonical` link. These pages previously had none — sharing their links on WhatsApp/Instagram showed a blank/generic preview card. |
+| `blog-post.html` | Existing dynamic OG block only set `og:title`/`og:description`/`og:image`; added `og:url`, `og:type`, `og:site_name`, and full Twitter Card tags, now filled in by the same inline script that already runs per-post. |
+| `admin.html` | Added `<meta name="robots" content="noindex, nofollow">` — defense-in-depth on top of the existing `robots.txt` disallow. |
+| `js/geo-restriction.js` | **New function** `verifyPincodeRealtime()` — calls India Post's free public API (`api.postalpincode.in`, no key needed) to confirm a typed PIN code is real and actually registered in West Bengal, instead of only checking it falls inside a numeric range. Returns the real district name too. Fails gracefully (falls back to the existing static range check) if the API is unreachable. |
+| `js/checkout.js` | Wired `verifyPincodeRealtime()` into both the live-typing pincode feedback and the final delivery-form submit check. Falls back to the old static `GeoRestriction.validate()` check if the real-time API doesn't respond, so checkout is never blocked by a third-party outage. The submit handler is now `async` to support this. |
+| `favicon.ico`, `images/favicon.svg`, `images/icons/*.png` | Regenerated from a new logo (orange/white shopping-bag "A", replacing the old navy/gold design) — `favicon-16.png`, `favicon-32.png`, `apple-touch-icon.png` (180×180, solid cream background), `icon-192.png`, `icon-512.png`, and `icon-512-maskable.png` (icon scaled to ~62% with cream-fill safe-zone padding so Android's mask crop never cuts it off). No HTML/manifest changes needed — every page and `api/manifest.js` already reference these same file paths. |
+
+**Verified, no code change needed (already correct):**
+- `api/place-order.js` re-verifies price/stock/coupon/COD-charge server-side from Firestore before writing an order — confirmed this already works as intended, browser total is never trusted.
+- `js/reviews.js` is already Firestore-backed (`reviews` collection), not localStorage — confirmed reviews are shared across visitors correctly.
+
+**Explicitly decided against:** browser Geolocation (GPS) permission prompt for delivery-address verification. Real fulfillment for this store goes through Meesho, which does its own address verification — GPS would only confirm where the shopper's phone is at checkout time, not the delivery address itself, and adds checkout friction for no real fraud protection here.
+
+**Still pending / discussed but not yet done:** cleaning up the deprecated `products/*.json`, `config/coupons.json`, and `assets/` folder — see the "Housekeeping" note in `README.md`'s Directory Structure section for the exact list of what's safe to delete.
+
+---
+
 This zip contains ONLY the files that changed (plus this changelog + one new
 tester page). Copy these over the same paths in your existing project — do
 not need to touch anything else.

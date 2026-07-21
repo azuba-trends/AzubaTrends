@@ -122,7 +122,10 @@
   function wireLivePincode(geoConfig) {
     const pinInput = $('field-pincode');
     if (!pinInput) return;
-    pinInput.addEventListener('input', (e) => {
+    // Bumped on every keystroke so a slow, older API response can never
+    // overwrite the feedback for whatever the user has typed since.
+    let requestToken = 0;
+    pinInput.addEventListener('input', async (e) => {
       const pin = e.target.value.replace(/\D/g, '');
       const errEl = $('error-pincode');
       if (!errEl) return;
@@ -131,6 +134,26 @@
         errEl.style.color = '';
         return;
       }
+      const myToken = ++requestToken;
+      errEl.textContent = 'Checking pincode…';
+      errEl.style.color = '';
+
+      const liveResult = await window.GeoRestriction.verifyPincodeRealtime(pin);
+      if (myToken !== requestToken) return; // user kept typing, this result is stale
+
+      if (liveResult.checked) {
+        // Real-time India Post lookup succeeded — trust it over the static list.
+        if (liveResult.valid) {
+          errEl.textContent = `✓ Deliverable — verified (${liveResult.district || 'West Bengal'})`;
+          errEl.style.color = 'var(--color-success, green)';
+        } else {
+          errEl.textContent = '❌ ' + liveResult.reason;
+          errEl.style.color = 'var(--color-danger, red)';
+        }
+        return;
+      }
+
+      // Real-time check unreachable — fall back to the static config check.
       const check = window.GeoRestriction.validate(geoConfig, { state: 'West Bengal', pincode: pin, city: '' });
       if (check.details.pincodeAllowed) {
         errEl.textContent = '✓ Deliverable pincode';
@@ -281,7 +304,7 @@
   // Delivery form submit — full per-field validation, mandatory fields.
   // ------------------------------------------------------------------
   function wireDeliveryForm(geoConfig) {
-    $('delivery-form')?.addEventListener('submit', (e) => {
+    $('delivery-form')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       clearAllFieldErrors();
 
@@ -310,13 +333,26 @@
       if (!address) { showFieldError('error-address', 'Please enter your full address.'); hasError = true; }
       if (!city) { showFieldError('error-city', 'Please select or enter your city/town.'); hasError = true; }
 
-      const pinCheck = window.GeoRestriction.validate(geoConfig, { state: 'West Bengal', pincode: pin, city });
       if (!pin || pin.length !== 6) {
         showFieldError('error-pincode', 'PIN code must be exactly 6 digits.');
         hasError = true;
-      } else if (!pinCheck.details.pincodeAllowed) {
-        showFieldError('error-pincode', pinCheck.details.pincodeReason || 'We do not deliver to this PIN code.');
-        hasError = true;
+      } else {
+        // Real-time check (India Post) first; if it's unreachable, fall
+        // back to the static pincodeRanges check rather than blocking
+        // the order over a third-party outage.
+        const liveResult = await window.GeoRestriction.verifyPincodeRealtime(pin);
+        if (liveResult.checked) {
+          if (!liveResult.valid) {
+            showFieldError('error-pincode', liveResult.reason || 'We do not deliver to this PIN code.');
+            hasError = true;
+          }
+        } else {
+          const pinCheck = window.GeoRestriction.validate(geoConfig, { state: 'West Bengal', pincode: pin, city });
+          if (!pinCheck.details.pincodeAllowed) {
+            showFieldError('error-pincode', pinCheck.details.pincodeReason || 'We do not deliver to this PIN code.');
+            hasError = true;
+          }
+        }
       }
 
       if (hasError) return;

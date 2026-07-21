@@ -47,10 +47,14 @@ notifications.
 AzubaTrends/
 ├── index.html, product.html, category.html   Storefront pages
 ├── cart.html, checkout.html                  Cart + guest checkout
+├── blog.html, blog-post.html                 Blog listing + single post
 ├── admin.html                                Admin panel (Firebase Auth login)
 ├── about.html, terms.html, 404.html
 │
-├── images/logo-placeholder.svg               Fallback image when a product has none
+├── images/
+│   ├── favicon.svg, icons/                   Favicon + Add-to-Home-Screen icons
+│   ├── logo-placeholder.svg                  Fallback image when a product has none
+│   └── products/                             Product images referenced from Firestore
 │
 ├── css/
 │   ├── main.css                              Global styles, design tokens
@@ -60,35 +64,59 @@ AzubaTrends/
 │   ├── site-config.js       Public-page Firebase init + reads /settings/store_config
 │   ├── firebase-config.js   Admin-page Firebase init (adds Auth)
 │   ├── security.js          XSS escaping, honeypot, rate limiting, validators
-│   ├── geo-restriction.js   West Bengal delivery validation (uses config/geo-config.json)
+│   ├── geo-restriction.js   West Bengal delivery validation (static config/geo-config.json
+│   │                        check + real-time India Post pincode verification)
 │   ├── emailjs-integration.js  Sends order details via EmailJS (optional)
 │   ├── product-loader.js    Reads /products from Firestore, renders cards
+│   ├── blog-loader.js       Reads /blog-posts from Firestore, renders blog listing/post
+│   ├── tracking.js          GA4 + Meta Pixel event firing (site-wide, once IDs are set)
 │   ├── search.js            Fuzzy search, autosuggest, out-of-stock ranking
-│   ├── cart.js               Cart state (add/remove/update qty), localStorage
+│   ├── cart.js, cart-button-ui.js  Cart state (add/remove/update qty), localStorage
 │   ├── coupon.js             Validates coupons against Firestore's `coupons` collection
 │   ├── checkout.js           Guest checkout: validation, geo-check, order write, payment
 │   ├── qr-generator.js       Generates UPI QR code client-side
-│   ├── reviews.js            Product reviews (localStorage only — see limitations)
+│   ├── reviews.js            Product reviews — Firestore-backed (`reviews` collection)
 │   ├── layout.js             Loads partials/header.html + footer.html
 │   └── admin.js              Full admin panel logic (see below)
+│
+├── lib/                      Server-only helpers, used by api/*.js (never sent to the browser)
+│   ├── firebase-admin.js     Service-account-based Admin SDK initializer
+│   ├── telegram.js           Builds + sends Telegram notification messages
+│   ├── submit-review-guard.js  Rate-limit + shape checks for public review submissions
+│   └── profanity-list.js     Word list used by the review-submission guard
 │
 ├── partials/header.html, footer.html
 ├── config/
 │   ├── geo-config.json      Admin-editable allowed state/cities/pincodes
-│   └── coupons.json         Deprecated — kept only as a historical reference;
-│                              coupons are now managed from Admin > All Coupons
+│   └── firebase-config.json Firebase project config (not a secret — rules secure the data)
 │
-├── api/product.js            Vercel serverless function: per-product OG tags for link
-│                              previews on WhatsApp/social (Vercel-only — see below)
+├── api/                      Vercel serverless functions (Vercel-only, see limitation #5)
+│   ├── place-order.js        Server-side price/stock/coupon re-verification + order write
+│   ├── product.js, blog-post.js   Per-item OG tags for WhatsApp/social link previews
+│   ├── products.js, blog-posts.js, product-feed.js, sitemap.js, manifest.js
+│   ├── import-product.js     One-time product-prefill helper from a third-party URL
+│   ├── submit-review.js      Rate-limited, profanity-filtered public review submission
+│   ├── telegram-notify.js, telegram-test.js, cron-daily-digest.js   Telegram alerts
+│
 ├── firestore.rules           Paste into Firebase Console -> Firestore -> Rules
 ├── vercel.json                Security headers + clean URLs (Vercel only)
 └── README.md
 ```
 
-> **Note:** earlier drafts of this project stored products as individual
-> `products/*.json` files with a `products/index.json` manifest. That
-> approach has been fully replaced by Firestore and those files have been
-> removed from the repo — everything now goes through the admin panel.
+> **Housekeeping — safe to delete, not read by the live site anymore:**
+> - `products/` (whole folder — `index.json`, `product-001.json`...`product-008.json`,
+>   and the STOP_DO_NOT_EDIT notice inside it) — old leftover demo data. Products
+>   now live entirely in Firestore, managed from Admin → Store → All Products.
+> - `config/coupons.json` and its STOP_DO_NOT_EDIT notice — coupons now live
+>   in Firestore's `coupons` collection, managed from Admin → Store → All Coupons.
+> - `assets/` (just one `README.txt` pointing at the old `products/*.json`
+>   image convention — no longer relevant).
+> - `share-preview-tester.html`, `product-import-tester.html` — internal
+>   dev-only tools, already blocked in `robots.txt`. Keep them if you still
+>   want to test those two features after future changes; delete if not.
+>
+> Deleting all of the above changes nothing on the live site — everything
+> real goes through Firestore and the files above.
 
 ## Admin Panel
 
@@ -201,27 +229,37 @@ dashboard at that instead. Not needed to start.
 
 ## Known Limitations (please read)
 
-1. **Order price isn't re-verified server-side.** Since there's no backend,
-   a technically-inclined visitor could alter a price in DevTools before
-   checkout completes. Low risk for a small store, but if this becomes a
-   real concern, a Cloud Function that recalculates the order total from the
-   product prices in Firestore before accepting the order is the fix.
-2. **Reviews are localStorage-only** — visible only in the browser that
-   posted them, not shared across visitors. Moving them into a Firestore
-   `reviews` collection (same pattern as products) is a natural next step
-   since Firestore is already in place.
+1. ~~Order price isn't re-verified server-side.~~ **Fixed.** `api/place-order.js`
+   now re-fetches real prices/stock/coupon rules/settings from Firestore and
+   computes the order total server-side — the browser's own total is never
+   trusted or stored. DevTools price tampering no longer works.
+2. ~~Reviews are localStorage-only.~~ **Fixed.** `js/reviews.js` is now
+   Firestore-backed (`reviews` collection) — a review posted by one visitor
+   is visible to every other visitor, not just the browser that posted it.
 3. **EmailJS/ImgBB keys are visible in the browser** no matter where they're
    stored (this is inherent to any client-only integration) — the real
    protections are EmailJS's "Allowed origins" setting and rotating the
    ImgBB key if it's ever abused, not hiding it in code.
-4. **Geo-restriction validates form input, not GPS location** — it stops
-   honest mistakes and casual out-of-zone orders, not deliberate spoofing.
-5. **`api/product.js`** (per-product social-share preview tags) is a Vercel
-   serverless function — it **only works when deployed to Vercel**, not on
-   GitHub Pages, which has no serverless functions at all. If you deploy to
-   GitHub Pages, product links shared on WhatsApp/social will show generic
-   preview tags instead of per-product ones; that's a GitHub Pages
-   limitation, not a bug.
+4. **Geo-restriction now cross-checks pincodes against India Post's real
+   records in real time** (`GeoRestriction.verifyPincodeRealtime()` in
+   `js/geo-restriction.js`, using the free `api.postalpincode.in` API) —
+   this catches a fake-but-in-range PIN code that isn't actually assigned,
+   and falls back to the old static range check if that API is ever
+   unreachable. It still isn't GPS/location-based, so it can't confirm the
+   shopper is physically at that address — only that the PIN code itself is
+   real and in West Bengal. True physical verification would need the
+   browser's Geolocation permission prompt, which this store deliberately
+   does not use (real fulfillment/delivery goes through Meesho, which
+   handles its own address verification).
+5. **`api/product.js` and `api/blog-post.js`** (per-product and per-post
+   social-share preview tags) are Vercel serverless functions — they **only
+   work when deployed to Vercel**, not on GitHub Pages, which has no
+   serverless functions at all. If you deploy to GitHub Pages, product/blog
+   links shared on WhatsApp/social will show generic preview tags instead of
+   per-item ones; that's a GitHub Pages limitation, not a bug. The
+   homepage, category, blog listing, about, and terms pages don't have this
+   limitation — their Open Graph/Twitter tags are static HTML, so they work
+   identically on any host, Vercel or GitHub Pages.
 
 ## Deployment (Vercel — recommended)
 1. Push this repo to GitHub.

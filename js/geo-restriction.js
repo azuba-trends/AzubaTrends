@@ -143,7 +143,68 @@ const GeoRestriction = (function () {
     };
   }
 
-  return { loadConfig, validate, isCityAllowed };
+  // ------------------------------------------------------------------
+  // REAL-TIME VERIFICATION (added later, per owner request)
+  // ------------------------------------------------------------------
+  // Uses India Post's free, public Pincode API — no signup, no API key:
+  //   https://api.postalpincode.in/pincode/{pincode}
+  // This returns the REAL district/state/post-office names registered
+  // for that PIN code, so a fake-but-in-range PIN (e.g. typing a random
+  // 700xxx number that isn't actually assigned) gets caught. It is still
+  // not GPS/location-based — it verifies the PIN CODE is real and in
+  // West Bengal, not that the shopper is physically there. That level of
+  // certainty would need the browser Geolocation API (user permission
+  // prompt) or a courier-side address-verification service, neither of
+  // which this free API provides.
+  //
+  // This call can fail (offline, India Post API down, CORS hiccup) —
+  // in that case we fail back to the static config check rather than
+  // blocking checkout, since a third-party API with no SLA shouldn't be
+  // able to take the whole store down.
+  const PINCODE_API = "https://api.postalpincode.in/pincode/";
+
+  async function verifyPincodeRealtime(pincodeInput) {
+    const digitsOnly = String(pincodeInput || "").replace(/\D/g, "");
+    if (digitsOnly.length !== 6) {
+      return { checked: false, valid: false, reason: "PIN code must be exactly 6 digits." };
+    }
+
+    let data;
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const resp = await fetch(PINCODE_API + digitsOnly, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const json = await resp.json();
+      data = Array.isArray(json) ? json[0] : json;
+    } catch (err) {
+      // API unreachable/timed out — let the caller fall back to the
+      // static pincodeRanges check instead of hard-failing.
+      return { checked: false, valid: null, reason: "Could not reach verification service.", error: String(err) };
+    }
+
+    if (!data || data.Status !== "Success" || !Array.isArray(data.PostOffice) || data.PostOffice.length === 0) {
+      return { checked: true, valid: false, reason: "This PIN code does not exist in India Post's records." };
+    }
+
+    const offices = data.PostOffice;
+    const isWestBengal = offices.some((po) => normalize(po.State) === "west bengal");
+    const district = offices[0].District || null;
+    const officeNames = offices.map((po) => po.Name);
+
+    return {
+      checked: true,
+      valid: isWestBengal,
+      reason: isWestBengal
+        ? "Verified: real PIN code in West Bengal."
+        : `This PIN code is actually registered in ${offices[0].State}, not West Bengal.`,
+      district,
+      officeNames
+    };
+  }
+
+  return { loadConfig, validate, isCityAllowed, verifyPincodeRealtime };
 })();
 
 // Expose for non-module <script> usage across pages

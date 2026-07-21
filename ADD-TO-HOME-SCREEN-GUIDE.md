@@ -7,9 +7,12 @@ site already had set up correctly.
 
 **New files:**
 - `images/icons/icon-192.png`, `icon-512.png`, `icon-512-maskable.png`,
-  `apple-touch-icon.png`, `favicon-32.png` — generated from your existing
-  `images/favicon.svg` design (same navy background + gold "A"), so
-  everything matches your current branding automatically.
+  `apple-touch-icon.png`, `favicon-32.png` — generated from your current
+  logo (orange/white shopping-bag "A"), so everything matches your current
+  branding automatically. **Update (2026-07-22):** these were regenerated
+  again from a newly uploaded `favicon.ico`, replacing an earlier
+  navy-background/gold-"A" version — see `CHANGELOG-updates.md` for that
+  entry. If you rebrand again, the same process applies (see below).
 - `api/manifest.js` — generates `manifest.webmanifest` **live** from your
   real store name (Settings → Account → Store Name) instead of a static
   file, so if you ever rename the store, the home-screen app name updates
@@ -28,11 +31,14 @@ site already had set up correctly.
   already used for the page `<title>`).
 
 ## How to change the icon later
-Just replace `images/favicon.svg` with your new logo (square, e.g.
-512×512) and re-generate the PNG sizes the same way — or send me the new
-logo and I'll regenerate all the sizes for you. You do NOT need to touch
-`api/manifest.js` or any HTML file again; they all reference the same
-icon files, so replacing the files is enough.
+Just send me the new logo file (`.ico`, `.png`, or `.svg`, ideally square,
+e.g. 512×512) and I'll regenerate all the icon sizes for you. You do NOT
+need to touch `api/manifest.js` or any HTML file again; they all reference
+the same icon files, so replacing the files is enough. (Note:
+`images/favicon.svg` right now is a raster image wrapped in an SVG
+container, not a true hand-drawn vector — that's because the source file
+was a `.ico`. If you ever get a real vector logo, a proper SVG can replace
+it directly.)
 
 ## How to test "Add to Home Screen"
 
