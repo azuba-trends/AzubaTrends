@@ -7,6 +7,14 @@
       "destination": "/product"
     },
     {
+      "source": "/category/:slug",
+      "destination": "/category"
+    },
+    {
+      "source": "/blog/category/:slug",
+      "destination": "/blog"
+    },
+    {
       "source": "/blog/:slug",
       "destination": "/blog-post"
     },

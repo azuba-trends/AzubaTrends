@@ -105,6 +105,35 @@
     document.getElementById("post-taxonomy").innerHTML = BlogLoader.renderTaxonomyHTML(post);
 
     document.getElementById("post-content").innerHTML = BlogLoader.renderPostHTML(post);
+
+    // ---- SEO: Structured Data (Schema.org Article) --------------------
+    // Same idea as product.html's Product schema — helps Google understand
+    // this is an article (author, dates, image) and improves rich-result
+    // eligibility in search.
+    const articleSchema = {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      headline: post.title,
+      description: description,
+      image: post.coverImage ? [post.coverImage] : undefined,
+      datePublished: post.createdAt || undefined,
+      dateModified: post.updatedAt || post.createdAt || undefined,
+      author: { "@type": "Organization", name: "AzubaTrends" },
+      publisher: {
+        "@type": "Organization",
+        name: "AzubaTrends",
+        logo: { "@type": "ImageObject", url: "https://azuba-trends.vercel.app/images/icons/icon-512.png" }
+      },
+      mainEntityOfPage: {
+        "@type": "WebPage",
+        "@id": `https://azuba-trends.vercel.app/blog/${post.slug}`
+      }
+    };
+    const schemaScript = document.createElement("script");
+    schemaScript.type = "application/ld+json";
+    schemaScript.id = "article-schema";
+    schemaScript.textContent = JSON.stringify(articleSchema);
+    document.head.appendChild(schemaScript);
   });
 </script>
 </body>

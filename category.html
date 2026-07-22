@@ -12,22 +12,22 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="AzubaTrends" id="apple-app-title-meta">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Categories — AzubaTrends</title>
-<meta name="description" content="Browse AzubaTrends's home goods by category — decor, lighting, kitchen, textiles, and storage.">
-<link rel="canonical" href="https://azuba-trends.vercel.app/category.html">
+<title id="page-title">Categories — AzubaTrends</title>
+<meta id="page-description" name="description" content="Browse AzubaTrends's home goods by category — decor, lighting, kitchen, textiles, and storage.">
+<link id="page-canonical" rel="canonical" href="https://azuba-trends.vercel.app/category">
 
 <!-- OPEN GRAPH (Facebook, WhatsApp) -->
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://azuba-trends.vercel.app/category.html">
-<meta property="og:title" content="Categories — AzubaTrends">
-<meta property="og:description" content="Browse AzubaTrends's home goods by category — decor, lighting, kitchen, textiles, and storage.">
+<meta id="og-url" property="og:url" content="https://azuba-trends.vercel.app/category">
+<meta id="og-title" property="og:title" content="Categories — AzubaTrends">
+<meta id="og-description" property="og:description" content="Browse AzubaTrends's home goods by category — decor, lighting, kitchen, textiles, and storage.">
 <meta property="og:image" content="https://azuba-trends.vercel.app/images/icons/icon-512.png">
 <meta property="og:site_name" content="AzubaTrends">
 
 <!-- TWITTER -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Categories — AzubaTrends">
-<meta name="twitter:description" content="Browse AzubaTrends's home goods by category — decor, lighting, kitchen, textiles, and storage.">
+<meta id="twitter-title" name="twitter:title" content="Categories — AzubaTrends">
+<meta id="twitter-description" name="twitter:description" content="Browse AzubaTrends's home goods by category — decor, lighting, kitchen, textiles, and storage.">
 <meta name="twitter:image" content="https://azuba-trends.vercel.app/images/icons/icon-512.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -78,9 +78,15 @@
     const titleEl = document.getElementById("category-title");
     const subtitleEl = document.getElementById("category-subtitle");
 
+    // Clean URL is /category/some-slug (see vercel.json rewrite -> this
+    // file), same technique product.html and blog-post.html use. Old
+    // ?category= links (e.g. from the sitemap cache or bookmarks) still
+    // work as a fallback so nothing breaks.
+    const pathParts = window.location.pathname.split("/").filter(Boolean);
+    const pathSlug = pathParts[0] === "category" ? pathParts[1] : null;
     const params = new URLSearchParams(window.location.search);
-    let activeCategory = params.get("category") || "All";
-    // Guard against a stale/typo'd ?category= value in the URL.
+    let activeCategory = pathSlug || params.get("category") || "All";
+    // Guard against a stale/typo'd category value in the URL.
     const knownCategories = ["All", ...ProductLoader.getCategories(products)];
     if (!knownCategories.includes(activeCategory)) activeCategory = "All";
 
@@ -96,14 +102,32 @@
           : `${filtered.length} product${filtered.length === 1 ? "" : "s"} in ${activeCategory}.`
       );
       ProductLoader.renderGrid(grid, filtered, "No products in this category yet — try another one.");
+
+      // SEO: each category gets its own canonical URL, title and meta
+      // description so Google can index it as a distinct page instead of
+      // every ?category= value collapsing onto one canonical.
+      const pageTitle = activeCategory === "All" ? "Categories — AzubaTrends" : `${activeCategory} — AzubaTrends`;
+      const pageDesc = activeCategory === "All"
+        ? "Browse AzubaTrends's home goods by category — decor, lighting, kitchen, textiles, and storage."
+        : `Shop ${activeCategory} at AzubaTrends — browse our full ${activeCategory.toLowerCase()} collection.`;
+      const canonicalUrl = activeCategory === "All"
+        ? "https://azuba-trends.vercel.app/category"
+        : `https://azuba-trends.vercel.app/category/${encodeURIComponent(activeCategory)}`;
+
+      document.getElementById("page-title").textContent = pageTitle;
+      document.getElementById("page-description").setAttribute("content", pageDesc);
+      document.getElementById("page-canonical").setAttribute("href", canonicalUrl);
+      document.getElementById("og-title").setAttribute("content", pageTitle);
+      document.getElementById("og-description").setAttribute("content", pageDesc);
+      document.getElementById("og-url").setAttribute("content", canonicalUrl);
+      document.getElementById("twitter-title").setAttribute("content", pageTitle);
+      document.getElementById("twitter-description").setAttribute("content", pageDesc);
     }
 
     function selectCategory(cat) {
       activeCategory = cat;
-      const url = new URL(window.location.href);
-      if (cat === "All") url.searchParams.delete("category");
-      else url.searchParams.set("category", cat);
-      history.replaceState(null, "", url);
+      const path = cat === "All" ? "/category" : `/category/${encodeURIComponent(cat)}`;
+      history.replaceState(null, "", path);
       renderChips();
       applyFilter();
     }

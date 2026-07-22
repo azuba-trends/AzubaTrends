@@ -259,7 +259,7 @@
     // ---- Breadcrumb ---------------------------------------------
     const catLink = document.getElementById("breadcrumb-category");
     Security.setTextSafely(catLink, product.category || "Category");
-    catLink.href = `category.html?category=${encodeURIComponent(product.category || "")}`;
+    catLink.href = product.category ? `/category/${encodeURIComponent(product.category)}` : "/category";
 
     // ---- Gallery ---------------------------------------------
     const images = (product.images && product.images.length > 0) ? product.images : [""];

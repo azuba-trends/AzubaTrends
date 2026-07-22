@@ -54,6 +54,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Blog categories — same public-read/admin-write pattern as
+    // /categories above, just for the blog's (flat, no parent/child) taxonomy.
+    match /blogCategories/{blogCategoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // Coupons — the storefront (cart/checkout) must be able to read these
     // without logging in to validate a code at checkout; only the admin
     // panel can create/edit/delete them.

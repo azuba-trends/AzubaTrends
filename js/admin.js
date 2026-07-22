@@ -54,7 +54,7 @@ setTimeout(() => {
   // for instance) are never restored on reload — that would resurrect a
   // half-filled form as if it still applied, which is more confusing than
   // just landing on Overview.
-  const NON_RESTORABLE_SECTIONS = new Set(["store-add-product", "store-add-category", "store-add-brand", "store-add-coupon", "blog-add-post"]);
+  const NON_RESTORABLE_SECTIONS = new Set(["store-add-product", "store-add-category", "store-add-brand", "store-add-coupon", "blog-add-post", "blog-add-category"]);
 
   function goToSection(target, opts) {
     document.querySelectorAll(".sidebar .nav-btn").forEach((b) => b.classList.remove("active"));
@@ -110,6 +110,7 @@ setTimeout(() => {
       if (fresh === "brand") resetBrandForm();
       if (fresh === "coupon") resetCouponForm();
       if (fresh === "blogpost") resetBlogPostForm();
+      if (fresh === "blogcategory") resetBlogCategoryForm();
     });
   });
 
@@ -382,6 +383,146 @@ setTimeout(() => {
   wireBulkSelect("categories-table-body", "select-all-categories", "bulk-delete-categories-btn", async (ids) => {
     for (const id of ids) await deleteDoc(doc(db, "categories", id));
   });
+
+  // ================================================================
+  // BLOG CATEGORIES (flat — no parent/child, unlike store categories)
+  // ================================================================
+  let blogCategoriesList = [];
+
+  document.getElementById("bcat-name").addEventListener("input", (e) => {
+    document.getElementById("bcat-slug").value = generateSlug(e.target.value);
+  });
+  document.getElementById("bcat-image").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("bcat-image-preview"), 1));
+
+  function resetBlogCategoryForm() {
+    document.getElementById("blogcategory-form").reset();
+    document.getElementById("bcat-id").value = "";
+    document.getElementById("bcat-image-preview").innerHTML = "";
+    document.getElementById("blogcategory-form-title").textContent = "Add New Blog Category";
+  }
+
+  let unsubBlogCategories = null;
+  function listenBlogCategories() {
+    if (unsubBlogCategories) return;
+    unsubBlogCategories = onSnapshot(collection(db, "blogCategories"), (snap) => {
+      blogCategoriesList = [];
+      snap.forEach((d) => blogCategoriesList.push({ id: d.id, ...d.data() }));
+      renderBlogCategoriesTable();
+      renderBlogCategoriesChecklist();
+    }, (err) => console.error("blogCategories listener error", err));
+  }
+
+  function renderBlogCategoriesTable() {
+    const tbody = document.getElementById("blogcategories-table-body");
+    tbody.innerHTML = "";
+
+    blogCategoriesList.forEach((cat) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><input type="checkbox" class="row-select" data-id="${cat.id}"></td>
+        <td>${esc(cat.name)}</td>
+        <td>/${esc(cat.slug)}</td>
+        <td>
+          <button class="btn btn-outline edit-blogcat-btn" data-id="${cat.id}" style="padding:4px 8px; font-size:0.8rem;">Edit</button>
+          <button class="btn btn-outline del-blogcat-btn" data-id="${cat.id}" style="color:var(--color-danger); padding:4px 8px; font-size:0.8rem;">Delete</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll(".edit-blogcat-btn").forEach((b) => b.addEventListener("click", () => editBlogCategory(b.dataset.id)));
+    tbody.querySelectorAll(".del-blogcat-btn").forEach((b) => b.addEventListener("click", () => deleteBlogCategory(b.dataset.id)));
+  }
+
+  function editBlogCategory(id) {
+    const cat = blogCategoriesList.find((c) => c.id === id);
+    if (!cat) return;
+    document.getElementById("bcat-id").value = cat.id;
+    document.getElementById("bcat-name").value = cat.name || "";
+    document.getElementById("bcat-slug").value = cat.slug || "";
+    document.getElementById("bcat-desc").value = cat.description || "";
+    document.getElementById("bcat-meta-title").value = cat.metaTitle || "";
+    document.getElementById("bcat-meta-desc").value = cat.metaDesc || "";
+    previewExistingImages(document.getElementById("bcat-image-preview"), cat.image ? [cat.image] : []);
+    document.getElementById("blogcategory-form-title").textContent = "Edit Blog Category";
+    goToSection("blog-add-category");
+  }
+
+  async function deleteBlogCategory(id) {
+    if (!confirm("Delete this blog category?")) return;
+    await deleteDoc(doc(db, "blogCategories", id));
+  }
+
+  document.getElementById("blogcategory-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById("save-blogcat-btn");
+    btn.textContent = "Saving..."; btn.disabled = true;
+    try {
+      let image = blogCategoriesList.find((c) => c.id === document.getElementById("bcat-id").value)?.image || "";
+      const file = document.getElementById("bcat-image").files[0];
+      if (file) image = await uploadToImgBB(file);
+
+      const data = {
+        name: document.getElementById("bcat-name").value,
+        slug: document.getElementById("bcat-slug").value,
+        description: document.getElementById("bcat-desc").value,
+        metaTitle: document.getElementById("bcat-meta-title").value,
+        metaDesc: document.getElementById("bcat-meta-desc").value,
+        image: image,
+        updatedAt: new Date().toISOString()
+      };
+
+      const id = document.getElementById("bcat-id").value;
+      if (id) {
+        await updateDoc(doc(db, "blogCategories", id), data);
+      } else {
+        data.createdAt = new Date().toISOString();
+        await addDoc(collection(db, "blogCategories"), data);
+      }
+      resetBlogCategoryForm();
+      goToSection("blog-categories");
+    } catch (err) {
+      alert("Error saving blog category: " + err.message);
+    } finally {
+      btn.textContent = "Save Category"; btn.disabled = false;
+    }
+  });
+
+  wireBulkSelect("blogcategories-table-body", "select-all-blogcategories", "bulk-delete-blogcategories-btn", async (ids) => {
+    for (const id of ids) await deleteDoc(doc(db, "blogCategories", id));
+  });
+
+  // --- Live checkbox list used by the Add/Edit Post "Categories" field ---
+  // Keeps a hidden #bp-categories input (comma-joined names) in sync so the
+  // existing Preview + Save logic — which reads #bp-categories.value.split(",")
+  // — keeps working untouched, while the visible UI is a checkbox list
+  // instead of free text. `post.categories` is still saved as an array of
+  // category NAMES, exactly as before.
+  let selectedBlogCatNames = new Set();
+
+  function syncBlogCategoriesHiddenField() {
+    document.getElementById("bp-categories").value = Array.from(selectedBlogCatNames).join(", ");
+  }
+
+  function renderBlogCategoriesChecklist() {
+    const box = document.getElementById("bp-categories-checklist");
+    if (!box) return;
+    if (blogCategoriesList.length === 0) {
+      box.innerHTML = '<span class="field-hint">No blog categories yet — add one under Blog &gt; Add Blog Category.</span>';
+      return;
+    }
+    box.innerHTML = blogCategoriesList.map((cat) => `
+      <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
+        <input type="checkbox" class="bp-cat-checkbox" value="${esc(cat.name)}" ${selectedBlogCatNames.has(cat.name) ? "checked" : ""}>
+        ${esc(cat.name)}
+      </label>`).join("");
+    box.querySelectorAll(".bp-cat-checkbox").forEach((cb) => {
+      cb.addEventListener("change", (e) => {
+        if (e.target.checked) selectedBlogCatNames.add(e.target.value);
+        else selectedBlogCatNames.delete(e.target.value);
+        syncBlogCategoriesHiddenField();
+      });
+    });
+  }
 
   // ================================================================
   // BRANDS
@@ -1131,8 +1272,9 @@ setTimeout(() => {
         "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>" + esc(title) + " — Preview</title>" +
         "<link rel=\"stylesheet\" href=\"" + location.origin + "/css/main.css\">" +
         "<link rel=\"stylesheet\" href=\"" + location.origin + "/css/components.css\">" +
-        "<style>body{max-width:760px;margin:40px auto;padding:0 20px 60px;font-family:sans-serif;}" +
+        "<style>body{max-width:760px;margin:40px auto;padding:0 20px 60px;font-family:sans-serif;overflow-wrap:break-word;word-break:break-word;}" +
         ".wp-preview-badge{display:inline-block;background:#e8a33d;color:#fff;font-size:0.75rem;font-weight:bold;letter-spacing:.03em;padding:4px 12px;border-radius:999px;margin-bottom:18px;}" +
+        "h1{overflow-wrap:break-word;word-break:break-word;}" +
         ".wp-preview-cover{width:100%;max-height:420px;object-fit:cover;border-radius:8px;margin-bottom:24px;}</style>" +
         "</head><body><span class=\"wp-preview-badge\">PREVIEW — not yet saved</span><h1>" + esc(title) + "</h1>" +
         pillsHTML +
@@ -1207,7 +1349,9 @@ setTimeout(() => {
     document.getElementById("bp-keyphrase").value = "";
     document.getElementById("bp-seo-title").value = "";
     document.getElementById("bp-seo-desc").value = "";
-    document.getElementById("bp-categories").value = "";
+    selectedBlogCatNames = new Set();
+    renderBlogCategoriesChecklist();
+    syncBlogCategoriesHiddenField();
     document.getElementById("bp-tags").value = "";
     document.getElementById("bp-cover-img").value = "";
     document.getElementById("bp-cover-preview").innerHTML = "";
@@ -1230,7 +1374,9 @@ setTimeout(() => {
     document.getElementById("bp-keyphrase").value = p.keyphrase || "";
     document.getElementById("bp-seo-title").value = p.seoTitle || "";
     document.getElementById("bp-seo-desc").value = p.seoDesc || "";
-    document.getElementById("bp-categories").value = (p.categories || []).join(", ");
+    selectedBlogCatNames = new Set(p.categories || []);
+    renderBlogCategoriesChecklist();
+    syncBlogCategoriesHiddenField();
     document.getElementById("bp-tags").value = (p.tags || []).join(", ");
     document.getElementById("bp-existing-cover").value = p.coverImage || "";
     document.getElementById("bp-cover-preview").innerHTML = "";
@@ -2002,6 +2148,7 @@ setTimeout(() => {
     listenOrders();
     listenTelegramBots();
     listenBlogPosts();
+    listenBlogCategories();
 
     // Reopen whichever section the admin was last looking at (Overview by
     // default) instead of always resetting to the first sidebar item on a
@@ -2015,10 +2162,10 @@ setTimeout(() => {
   }
 
   function stopRealtimeSync() {
-    [unsubCategories, unsubBrands, unsubCoupons, unsubProducts, unsubOrders, unsubTelegramBots, unsubBlogPosts].forEach((unsub) => {
+    [unsubCategories, unsubBrands, unsubCoupons, unsubProducts, unsubOrders, unsubTelegramBots, unsubBlogPosts, unsubBlogCategories].forEach((unsub) => {
       if (typeof unsub === "function") unsub();
     });
-    unsubCategories = unsubBrands = unsubCoupons = unsubProducts = unsubOrders = unsubTelegramBots = unsubBlogPosts = null;
+    unsubCategories = unsubBrands = unsubCoupons = unsubProducts = unsubOrders = unsubTelegramBots = unsubBlogPosts = unsubBlogCategories = null;
     syncStarted = false;
   }
 

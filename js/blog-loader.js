@@ -53,6 +53,43 @@ const BlogLoader = (function () {
     return posts.find((p) => p.slug === slug) || null;
   }
 
+  // blogCategories has no cached API endpoint (yet), so this reads straight
+  // from Firestore — same technique as the loadPublishedPosts() fallback
+  // above (wait for window.FirebaseApp, dynamic-import the firestore SDK,
+  // collection()/getDocs()). Managed entirely elsewhere (admin side); this
+  // is a read-only helper.
+  let cachedCategories = null;
+  let inFlightCategoriesRequest = null;
+
+  async function loadBlogCategories() {
+    if (cachedCategories) return cachedCategories;
+    if (inFlightCategoriesRequest) return inFlightCategoriesRequest;
+
+    inFlightCategoriesRequest = (async () => {
+      try {
+        while (!window.FirebaseApp) { await new Promise((r) => setTimeout(r, 100)); }
+        const { collection, getDocs } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js");
+        const db = window.FirebaseApp.db;
+        const snapshot = await getDocs(collection(db, "blogCategories"));
+        cachedCategories = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        return cachedCategories;
+      } catch (err) {
+        console.error("BlogLoader Error (categories):", err);
+        return [];
+      }
+    })();
+    return inFlightCategoriesRequest;
+  }
+
+  // Filters the already-loaded published posts by category name. Posts
+  // store their taxonomy as a `categories` array (see renderTaxonomyHTML
+  // below), so this checks membership rather than equality.
+  async function getPostsByCategory(categoryName) {
+    const posts = await loadPublishedPosts();
+    if (!categoryName || categoryName === "All") return posts;
+    return posts.filter((p) => Array.isArray(p.categories) && p.categories.includes(categoryName));
+  }
+
   function sortByNewest(posts) {
     return [...posts].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
   }
@@ -166,7 +203,7 @@ const BlogLoader = (function () {
     container.innerHTML = sortByNewest(posts).map(renderBlogCard).join("");
   }
 
-  const API = { loadPublishedPosts, getPostBySlug, sortByNewest, getExcerpt, formatDate, renderPostHTML, renderBlockHTML, renderBlogCard, renderGrid, renderTaxonomyHTML };
+  const API = { loadPublishedPosts, getPostBySlug, loadBlogCategories, getPostsByCategory, sortByNewest, getExcerpt, formatDate, renderPostHTML, renderBlockHTML, renderBlogCard, renderGrid, renderTaxonomyHTML };
   window.BlogLoader = API;
   return API;
 })();

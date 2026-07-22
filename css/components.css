@@ -880,15 +880,16 @@
   outline: none;
 }
 .rte-editor:empty::before { content: attr(data-placeholder); color: #999; }
-.rte-editor h1 { font-size: 1.75rem; margin: 24px 0 10px; }
-.rte-editor h2 { font-size: 1.4rem; margin: 20px 0 8px; }
-.rte-editor h3 { font-size: 1.15rem; margin: 16px 0 8px; }
+.rte-editor h1 { font-size: clamp(1.9rem, 1.5rem + 2vw, 2.75rem); margin: 24px 0 10px; }
+.rte-editor h2 { font-size: clamp(1.5rem, 1.3rem + 1vw, 2rem); margin: 20px 0 8px; }
+.rte-editor h3 { font-size: 1.25rem; margin: 16px 0 8px; }
 .rte-editor h4 { font-size: 1.05rem; margin: 14px 0 6px; }
 .rte-editor h5 { font-size: 0.95rem; margin: 12px 0 6px; font-weight: 600; }
 .rte-editor h6 { font-size: 0.85rem; margin: 10px 0 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
 .rte-editor p { margin: 0 0 12px; }
 .rte-editor blockquote { margin: 12px 0; padding: 6px 16px; border-left: 3px solid var(--color-accent, #e8a33d); color: #555; font-style: italic; }
-.rte-editor ul, .rte-editor ol { padding-left: 1.4em; margin: 0 0 12px; }
+.rte-editor ul, .rte-editor ol { padding-left: 1.4em; margin: 0 0 12px; list-style: disc; }
+.rte-editor ol { list-style: decimal; }
 .rte-editor a { color: var(--color-accent-dark, #c97f1e); text-decoration: underline; }
 .rte-editor img { max-width: 100%; cursor: pointer; border: 2px solid transparent; }
 .rte-editor img.rte-img--selected { border-color: var(--color-accent, #e8a33d); }

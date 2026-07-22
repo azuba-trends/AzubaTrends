@@ -24,7 +24,7 @@ export default async function handler(req, res) {
 
   const staticUrls = [
     { loc: "/", priority: "1.0", changefreq: "daily" },
-    { loc: "/category.html", priority: "0.7", changefreq: "weekly" },
+    { loc: "/category", priority: "0.7", changefreq: "weekly" },
     { loc: "/about.html", priority: "0.4", changefreq: "monthly" },
     { loc: "/terms.html", priority: "0.3", changefreq: "monthly" },
     { loc: "/blog", priority: "0.6", changefreq: "weekly" }
@@ -34,6 +34,7 @@ export default async function handler(req, res) {
 
   let productUrls = [];
   let categoryUrls = [];
+  let blogCategoryUrls = [];
 
   try {
     const db = getDb();
@@ -54,7 +55,7 @@ export default async function handler(req, res) {
     categoriesSnap.forEach((doc) => {
       const c = doc.data();
       categoryUrls.push({
-        loc: `/category.html?category=${encodeURIComponent(c.name || doc.id)}`,
+        loc: `/category/${encodeURIComponent(c.slug || doc.id)}`,
         priority: "0.6",
         changefreq: "weekly"
       });
@@ -71,15 +72,25 @@ export default async function handler(req, res) {
         lastmod: p.updatedAt || p.createdAt || undefined
       });
     });
+
+    const blogCategoriesSnap = await db.collection("blogCategories").get();
+    blogCategoriesSnap.forEach((doc) => {
+      const c = doc.data();
+      blogCategoryUrls.push({
+        loc: `/blog/category/${encodeURIComponent(c.slug || doc.id)}`,
+        priority: "0.5",
+        changefreq: "weekly"
+      });
+    });
   } catch (err) {
     // If Firestore/service-account isn't reachable, still return a valid
     // (if smaller) sitemap with just the static pages, rather than a
     // broken response — Search Console handles a small sitemap fine, but
     // a malformed one gets the whole submission flagged.
-    console.error("sitemap: could not load products/categories:", err.message);
+    console.error("sitemap: could not load products/categories/blogCategories:", err.message);
   }
 
-  const allUrls = [...staticUrls, ...categoryUrls, ...productUrls, ...blogUrls];
+  const allUrls = [...staticUrls, ...categoryUrls, ...productUrls, ...blogUrls, ...blogCategoryUrls];
 
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

@@ -12,22 +12,22 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="AzubaTrends" id="apple-app-title-meta">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Blog — AzubaTrends</title>
-<meta name="description" content="Stories, guides and updates from AzubaTrends — handmade home decor, textiles and more from West Bengal.">
-<link rel="canonical" href="https://azuba-trends.vercel.app/blog">
+<title id="page-title">Blog — AzubaTrends</title>
+<meta id="page-description" name="description" content="Stories, guides and updates from AzubaTrends — handmade home decor, textiles and more from West Bengal.">
+<link id="page-canonical" rel="canonical" href="https://azuba-trends.vercel.app/blog">
 
 <!-- OPEN GRAPH (Facebook, WhatsApp) -->
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://azuba-trends.vercel.app/blog">
-<meta property="og:title" content="Blog — AzubaTrends">
-<meta property="og:description" content="Stories, guides and updates from AzubaTrends — handmade home decor, textiles and more from West Bengal.">
+<meta id="og-url" property="og:url" content="https://azuba-trends.vercel.app/blog">
+<meta id="og-title" property="og:title" content="Blog — AzubaTrends">
+<meta id="og-description" property="og:description" content="Stories, guides and updates from AzubaTrends — handmade home decor, textiles and more from West Bengal.">
 <meta property="og:image" content="https://azuba-trends.vercel.app/images/icons/icon-512.png">
 <meta property="og:site_name" content="AzubaTrends">
 
 <!-- TWITTER -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Blog — AzubaTrends">
-<meta name="twitter:description" content="Stories, guides and updates from AzubaTrends — handmade home decor, textiles and more from West Bengal.">
+<meta id="twitter-title" name="twitter:title" content="Blog — AzubaTrends">
+<meta id="twitter-description" name="twitter:description" content="Stories, guides and updates from AzubaTrends — handmade home decor, textiles and more from West Bengal.">
 <meta name="twitter:image" content="https://azuba-trends.vercel.app/images/icons/icon-512.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -44,8 +44,11 @@
   <div class="container">
     <section class="page-header">
       <div class="breadcrumb"><a href="/index.html">Home</a> / Blog</div>
-      <h1>Blog</h1>
+      <h1 id="blog-title">Blog</h1>
+      <p id="blog-subtitle">Stories, guides and updates from AzubaTrends.</p>
     </section>
+
+    <div class="chip-row" id="blog-category-chips" aria-label="Filter by category"></div>
 
     <div class="blog-grid" id="blog-grid" aria-live="polite"></div>
   </div>
@@ -67,9 +70,95 @@
 
   document.addEventListener("DOMContentLoaded", async () => {
     const grid = document.getElementById("blog-grid");
+    const chips = document.getElementById("blog-category-chips");
+    const titleEl = document.getElementById("blog-title");
+    const subtitleEl = document.getElementById("blog-subtitle");
     grid.innerHTML = '<p class="blog-empty">Loading posts…</p>';
-    const posts = await BlogLoader.loadPublishedPosts();
-    BlogLoader.renderGrid(grid, posts, "No posts yet — check back soon.");
+
+    const [posts, categories] = await Promise.all([
+      BlogLoader.loadPublishedPosts(),
+      BlogLoader.loadBlogCategories()
+    ]);
+
+    // Clean URL is /blog/category/:slug (see vercel.json rewrite -> this
+    // file), same technique category.html uses for products. Old
+    // ?category= links still work as a fallback so nothing breaks.
+    const pathParts = window.location.pathname.split("/").filter(Boolean);
+    const pathSlug = (pathParts[0] === "blog" && pathParts[1] === "category") ? pathParts[2] : null;
+    const params = new URLSearchParams(window.location.search);
+    const slugParam = pathSlug || params.get("category");
+
+    function findCategoryBySlug(slug) {
+      return categories.find((c) => c.slug === slug) || null;
+    }
+
+    // Guard against a stale/typo'd slug in the URL — falls back to "All"
+    // (represented as activeCategory === null) same as category.html does
+    // for an unknown category value.
+    let activeCategory = slugParam ? findCategoryBySlug(slugParam) : null;
+
+    async function applyFilter() {
+      const filtered = activeCategory ? await BlogLoader.getPostsByCategory(activeCategory.name) : posts;
+
+      Security.setTextSafely(titleEl, activeCategory ? activeCategory.name : "Blog");
+      Security.setTextSafely(
+        subtitleEl,
+        activeCategory
+          ? (activeCategory.description || `${filtered.length} post${filtered.length === 1 ? "" : "s"} in ${activeCategory.name}.`)
+          : "Stories, guides and updates from AzubaTrends — handmade home decor, textiles and more from West Bengal."
+      );
+      BlogLoader.renderGrid(grid, filtered, "No posts in this category yet — check back soon.");
+
+      // SEO: each blog category gets its own canonical URL, title and meta
+      // description so Google can index it as a distinct page instead of
+      // every ?category= value collapsing onto one canonical.
+      const pageTitle = activeCategory
+        ? (activeCategory.seoTitle || `${activeCategory.name} — AzubaTrends Blog`)
+        : "Blog — AzubaTrends";
+      const pageDesc = activeCategory
+        ? (activeCategory.seoDesc || activeCategory.description || `Read our latest posts about ${activeCategory.name.toLowerCase()} at AzubaTrends.`)
+        : "Stories, guides and updates from AzubaTrends — handmade home decor, textiles and more from West Bengal.";
+      const canonicalUrl = activeCategory
+        ? `https://azuba-trends.vercel.app/blog/category/${encodeURIComponent(activeCategory.slug)}`
+        : "https://azuba-trends.vercel.app/blog";
+
+      document.getElementById("page-title").textContent = pageTitle;
+      document.getElementById("page-description").setAttribute("content", pageDesc);
+      document.getElementById("page-canonical").setAttribute("href", canonicalUrl);
+      document.getElementById("og-title").setAttribute("content", pageTitle);
+      document.getElementById("og-description").setAttribute("content", pageDesc);
+      document.getElementById("og-url").setAttribute("content", canonicalUrl);
+      document.getElementById("twitter-title").setAttribute("content", pageTitle);
+      document.getElementById("twitter-description").setAttribute("content", pageDesc);
+    }
+
+    function selectCategory(cat) {
+      activeCategory = cat; // a blogCategories object, or null for "All"
+      const path = cat ? `/blog/category/${encodeURIComponent(cat.slug)}` : "/blog";
+      history.replaceState(null, "", path);
+      renderChips();
+      applyFilter();
+    }
+
+    function renderChips() {
+      chips.innerHTML = "";
+      const allChip = document.createElement("button");
+      allChip.className = "chip" + (!activeCategory ? " is-active" : "");
+      allChip.textContent = "All";
+      allChip.addEventListener("click", () => selectCategory(null));
+      chips.appendChild(allChip);
+
+      categories.forEach((cat) => {
+        const chip = document.createElement("button");
+        chip.className = "chip" + (activeCategory && activeCategory.slug === cat.slug ? " is-active" : "");
+        chip.textContent = cat.name;
+        chip.addEventListener("click", () => selectCategory(cat));
+        chips.appendChild(chip);
+      });
+    }
+
+    renderChips();
+    await applyFilter();
   });
 </script>
 </body>
