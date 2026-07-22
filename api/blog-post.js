@@ -39,8 +39,14 @@ export default async function handler(req, res) {
 
     const post = snap.docs[0].data();
     const title = escapeHtml(post.seoTitle || post.title || "AzubaTrends Blog");
-    const firstTextBlock = (post.blocks || []).find((b) => (b.type === "paragraph" || b.type === "heading") && b.text?.trim());
-    const rawDescription = post.seoDesc || firstTextBlock?.text || "Read this post on the AzubaTrends blog.";
+    let fallbackText = "";
+    if (post.content) {
+      fallbackText = String(post.content).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    } else {
+      const firstTextBlock = (post.blocks || []).find((b) => (b.type === "paragraph" || b.type === "heading") && b.text?.trim());
+      fallbackText = firstTextBlock?.text || "";
+    }
+    const rawDescription = post.seoDesc || fallbackText || "Read this post on the AzubaTrends blog.";
     const description = escapeHtml(rawDescription.length > 160 ? rawDescription.slice(0, 160).trim() + "…" : rawDescription);
     const imageUrl = escapeHtml(post.coverImage || "https://yourwebsite.com/images/logo-placeholder.png");
     const redirectPath = `/blog/${encodeURIComponent(slug)}`;

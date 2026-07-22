@@ -395,6 +395,13 @@ main { flex: 1; }
 .prose ul, .prose ol { list-style: disc; padding-left: 1.4em; margin-bottom: var(--space-3); }
 .prose ol { list-style: decimal; }
 .prose li { margin-bottom: var(--space-1); color: var(--color-ink-soft); }
+.prose::after { content: ""; display: table; clear: both; }
+.prose blockquote { margin: var(--space-4) 0; padding: var(--space-2) var(--space-4); border-left: 3px solid var(--color-accent); color: var(--color-ink-soft); font-style: italic; }
+.prose figure { margin: var(--space-4) 0; }
+.prose figure img { max-width: 100%; border-radius: var(--radius-md); display: block; }
+.prose figure figcaption { font-size: 0.85rem; color: var(--color-ink-soft); text-align: center; margin-top: var(--space-1); }
+.prose img { border-radius: var(--radius-md); }
+.prose a { color: var(--color-accent-dark); }
 
 /* ---------- Empty / error states ---------- */
 .empty-state {
