@@ -27,7 +27,7 @@ window.SITE_CONFIG_READY = (async function() {
   // Firebase project config lives in config/firebase-config.json now, not
   // hardcoded here — edit that one JSON file if you ever need to point
   // this site at a different Firebase project.
-  const res = await fetch("config/firebase-config.json");
+  const res = await fetch("/config/firebase-config.json");
   const firebaseConfig = await res.json();
   delete firebaseConfig._comment;
 

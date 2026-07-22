@@ -47,8 +47,8 @@
 
   async function init() {
     await Promise.all([
-      loadPartial("partials/header.html", "header-mount"),
-      loadPartial("partials/footer.html", "footer-mount")
+      loadPartial("/partials/header.html", "header-mount"),
+      loadPartial("/partials/footer.html", "footer-mount")
     ]);
 
     // Bottom-nav "Account" tab — accounts aren't built yet, so this just

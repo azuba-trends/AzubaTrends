@@ -10,7 +10,7 @@ import { getStorage } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-s
 // isn't a secret the way an ImgBB/EmailJS key is. Real access control is
 // firestore.rules.)
 async function loadFirebaseConfig() {
-  const res = await fetch("config/firebase-config.json");
+  const res = await fetch("/config/firebase-config.json");
   if (!res.ok) throw new Error("Could not load config/firebase-config.json (HTTP " + res.status + ")");
   const cfg = await res.json();
   delete cfg._comment;
