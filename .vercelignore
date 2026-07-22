@@ -1,0 +1,7 @@
+.git
+.gitignore
+.gitattributes
+node_modules
+.DS_Store
+*.log
+.vercel

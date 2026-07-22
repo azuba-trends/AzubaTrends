@@ -18,6 +18,16 @@
 // (some marketplace product pages do). Price extraction is deliberately
 // NOT attempted — every site formats price differently and guessing
 // wrong is worse than leaving it blank for the admin to type in.
+//
+// ADMIN-ONLY: this route makes the server fetch whatever URL it's given,
+// which is exactly the shape of an SSRF/open-proxy risk if left public —
+// anyone could use your deployment to fetch arbitrary pages/images
+// through your server's IP. So this requires the same Firebase ID token
+// admin.html already gets on login (see lib/firebase-admin.js ->
+// verifyAdminToken). product-import-tester.html sends it automatically
+// once you're signed in there.
+
+import { verifyAdminToken } from "../lib/firebase-admin.js";
 
 function extractMeta(html, prop) {
   // Matches <meta property="og:title" content="..."> in either attribute
@@ -45,6 +55,13 @@ function decodeHtmlEntities(str) {
 }
 
 export default async function handler(req, res) {
+  try {
+    await verifyAdminToken(req);
+  } catch (err) {
+    console.error("import-product: rejected unauthenticated request:", err.message);
+    return res.status(401).json({ error: "Please sign in as admin first." });
+  }
+
   const url = req.query.url;
   if (!url) return res.status(400).json({ error: "Missing ?url= parameter." });
 

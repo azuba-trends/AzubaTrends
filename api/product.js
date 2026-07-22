@@ -1,4 +1,19 @@
 // api/product.js
+//
+// Same reason api/blog-post.js exists: WhatsApp/Facebook/Twitter's preview
+// bots don't run JavaScript, so product.html's client-side title/meta tags
+// (set after ProductLoader loads the product) are invisible to them — they
+// only ever see the raw, pre-JS HTML. This route builds that HTML server-side.
+//
+// Uses the Firebase Admin SDK (lib/firebase-admin.js) like every other
+// server-side route in this project, rather than hand-building Firestore
+// REST URLs — that keeps the Firestore project id in exactly one place
+// (config/firebase-config.json, read indirectly via FIREBASE_SERVICE_ACCOUNT_KEY),
+// so pointing this project at a different Firebase project later never
+// requires hunting for a second hardcoded copy of the project id.
+
+import { getDb } from "../lib/firebase-admin.js";
+
 function escapeHtml(str) {
   return String(str ?? "")
     .replace(/&/g, "&amp;")
@@ -24,46 +39,26 @@ export default async function handler(req, res) {
   }
 
   try {
-    const projectUrl = "https://firestore.googleapis.com/v1/projects/azubatrends-32349/databases/(default)/documents";
+    const db = getDb();
     let product;
     let resolvedSlug = slug;
 
     if (slug) {
-      // Slug se lookup karne ke liye Firestore ka structured query (runQuery)
-      // use karna padta hai, kyunki slug document-id nahi hai — ye ek field hai.
-      const queryBody = {
-        structuredQuery: {
-          from: [{ collectionId: "products" }],
-          where: {
-            fieldFilter: {
-              field: { fieldPath: "slug" },
-              op: "EQUAL",
-              value: { stringValue: slug }
-            }
-          },
-          limit: 1
-        }
-      };
-      const qResp = await fetch(`${projectUrl}:runQuery`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(queryBody)
-      });
-      const qData = await qResp.json();
-      const match = Array.isArray(qData) ? qData.find((r) => r.document) : null;
-      product = match?.document?.fields;
+      // Slug se lookup karne ke liye field query use karna padta hai,
+      // kyunki slug document-id nahi hai — ye ek field hai.
+      const snap = await db.collection("products").where("slug", "==", slug).limit(1).get();
+      product = snap.empty ? null : snap.docs[0].data();
     } else {
       // Purane /share?id=X links abhi bhi kaam karte rahein, isliye id-based
       // lookup fallback ke roop me rakha hai.
-      const response = await fetch(`${projectUrl}/products/${encodeURIComponent(id)}`);
-      const data = await response.json();
-      product = data.fields;
-      resolvedSlug = product?.slug?.stringValue || null;
+      const docSnap = await db.collection("products").doc(id).get();
+      product = docSnap.exists ? docSnap.data() : null;
+      resolvedSlug = product?.slug || null;
     }
 
-    const rawTitle = product?.seoTitle?.stringValue || product?.title?.stringValue || "AzubaTrends Product";
-    const rawDescription = product?.seoDesc?.stringValue || product?.shortDescription?.stringValue || "Buy amazing products on AzubaTrends.";
-    const rawImageUrl = product?.images?.arrayValue?.values?.[0]?.stringValue || "https://yourwebsite.com/images/logo-placeholder.png";
+    const rawTitle = product?.seoTitle || product?.title || "AzubaTrends Product";
+    const rawDescription = product?.seoDesc || product?.shortDescription || "Buy amazing products on AzubaTrends.";
+    const rawImageUrl = (Array.isArray(product?.images) && product.images[0]) || "https://yourwebsite.com/images/logo-placeholder.png";
 
     const title = escapeHtml(rawTitle);
     const description = escapeHtml(rawDescription);

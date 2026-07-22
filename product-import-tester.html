@@ -47,24 +47,45 @@
     <br><br>
     <strong>Works on Vercel only</strong> — same as <code>api/product.js</code>. Deploy this file alongside your
     project and open it at <code>https://your-site.vercel.app/product-import-tester.html</code>.
+    <br><br>
+    <strong>Admin login required</strong> — this page makes your server fetch whatever URL it's given, so it's
+    gated behind the same admin login as admin.html (nobody else can use your deployment as a URL-fetching proxy).
   </p>
 
-  <form class="tester-form" id="tester-form">
-    <input type="url" id="tester-input" placeholder="https://example-store.com/product/xyz" required>
-    <button type="submit" class="btn btn-primary">Import</button>
-  </form>
+  <!-- LOGIN GATE — same account as admin.html, just Firebase sign-in, nothing new to set up. -->
+  <div id="tester-login" class="login-container" style="margin: 0 0 24px;">
+    <form id="tester-login-form">
+      <div class="form-field">
+        <label>Admin Email</label>
+        <input type="email" id="tester-email" required>
+      </div>
+      <div class="form-field" style="margin-top: 15px;">
+        <label>Password</label>
+        <input type="password" id="tester-password" required>
+      </div>
+      <p id="tester-login-error" class="error-msg">Invalid credentials, or this account isn't an admin.</p>
+      <button type="submit" class="btn btn-primary btn-block" style="margin-top: 20px;">Login</button>
+    </form>
+  </div>
 
-  <p id="tester-status"></p>
+  <div id="tester-tool" style="display:none;">
+    <form class="tester-form" id="tester-form">
+      <input type="url" id="tester-input" placeholder="https://example-store.com/product/xyz" required>
+      <button type="submit" class="btn btn-primary">Import</button>
+    </form>
 
-  <div class="result-card" id="result-card">
-    <img id="result-img" src="" alt="">
-    <div class="result-card__body">
-      <label>Title</label>
-      <p id="result-title"></p>
-      <label>Description</label>
-      <p id="result-desc"></p>
-      <label>Source Image URL</label>
-      <p id="result-source-url" style="word-break: break-all;"></p>
+    <p id="tester-status"></p>
+
+    <div class="result-card" id="result-card">
+      <img id="result-img" src="" alt="">
+      <div class="result-card__body">
+        <label>Title</label>
+        <p id="result-title"></p>
+        <label>Description</label>
+        <p id="result-desc"></p>
+        <label>Source Image URL</label>
+        <p id="result-source-url" style="word-break: break-all;"></p>
+      </div>
     </div>
   </div>
 </main>
@@ -72,9 +93,43 @@
 <div id="footer-mount"></div>
 
 <script src="js/site-config.js"></script>
+<script type="module" src="js/firebase-config.js"></script>
 <script src="js/layout.js"></script>
 
-<script>
+<script type="module">
+// Wait for js/firebase-config.js (a <script type="module">, runs async) to
+// set window.FirebaseApp before wiring up login — same pattern admin.js uses.
+async function waitForFirebaseApp() {
+  let waited = 0;
+  while (!window.FirebaseApp && waited < 8000) {
+    await new Promise((r) => setTimeout(r, 100));
+    waited += 100;
+  }
+  if (!window.FirebaseApp) throw new Error("Could not load Firebase.");
+  return window.FirebaseApp;
+}
+
+const { auth, signInWithEmailAndPassword, onAuthStateChanged } = await waitForFirebaseApp();
+
+const loginBox = document.getElementById("tester-login");
+const toolBox = document.getElementById("tester-tool");
+let currentUser = null;
+
+onAuthStateChanged(auth, (user) => {
+  currentUser = user;
+  loginBox.style.display = user ? "none" : "block";
+  toolBox.style.display = user ? "block" : "none";
+});
+
+document.getElementById("tester-login-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const email = document.getElementById("tester-email").value;
+  const pass = document.getElementById("tester-password").value;
+  signInWithEmailAndPassword(auth, email, pass).catch(() => {
+    document.getElementById("tester-login-error").style.display = "block";
+  });
+});
+
 document.getElementById("tester-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const status = document.getElementById("tester-status");
@@ -86,10 +141,23 @@ document.getElementById("tester-form").addEventListener("submit", async (e) => {
   const url = document.getElementById("tester-input").value.trim();
 
   try {
-    const res = await fetch(`/api/import-product?url=${encodeURIComponent(url)}`);
+    if (!currentUser) {
+      status.className = "error";
+      status.textContent = "Please log in first.";
+      return;
+    }
+    const idToken = await currentUser.getIdToken();
+    const res = await fetch(`/api/import-product?url=${encodeURIComponent(url)}`, {
+      headers: { "Authorization": `Bearer ${idToken}` }
+    });
     if (res.status === 404) {
       status.className = "error";
       status.textContent = "Got a 404 for /api/import-product — make sure you're viewing this on your Vercel deployment, not GitHub Pages or a local file.";
+      return;
+    }
+    if (res.status === 401) {
+      status.className = "error";
+      status.textContent = "Your session expired — please log in again.";
       return;
     }
     const data = await res.json();

@@ -42,7 +42,13 @@ window.SITE_CONFIG_READY = (async function() {
       const data = docSnap.data();
       window.SITE_CONFIG.siteName = data.storeName || window.SITE_CONFIG.siteName;
       window.SITE_CONFIG.upiId = data.upiId || "";
-      window.SITE_CONFIG.adminEmail = data.supportEmail || "azubatrends@gmail.com";
+      // If Settings > Account > Support Email hasn't been saved yet, keep
+      // whatever adminEmail is already set (the "admin@example.com"
+      // placeholder above) rather than falling back to any specific
+      // person's real inbox — this file gets reused across different
+      // stores/clients, so it must never silently route another
+      // deployment's emails to someone else's address.
+      window.SITE_CONFIG.adminEmail = data.supportEmail || window.SITE_CONFIG.adminEmail;
       window.SITE_CONFIG.supportPhone = data.supportPhone || "";
       window.SITE_CONFIG.codExtraCharge = (data.codExtraCharge !== undefined && data.codExtraCharge !== null)
         ? Number(data.codExtraCharge)
