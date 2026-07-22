@@ -60,6 +60,17 @@ setTimeout(() => {
     document.querySelectorAll(".sidebar .nav-btn").forEach((b) => b.classList.remove("active"));
     const sidebarMatch = document.querySelector(`.sidebar .nav-btn[data-target="${target}"]`);
     if (sidebarMatch) sidebarMatch.classList.add("active");
+    // If we're landing on a nested "Add X" page, expand its parent "All X"
+    // group so the highlighted sub-item is actually visible in the sidebar.
+    if (sidebarMatch && sidebarMatch.classList.contains("nav-subbtn")) {
+      const parentItem = sidebarMatch.closest(".nav-item");
+      if (parentItem) {
+        const submenu = parentItem.querySelector(".nav-submenu");
+        const caret = parentItem.querySelector(".nav-caret");
+        if (submenu) submenu.classList.add("open");
+        if (caret) { caret.classList.add("open"); caret.setAttribute("aria-expanded", "true"); }
+      }
+    }
     document.querySelectorAll(".section").forEach((s) => s.classList.remove("active"));
     const el = document.getElementById(target);
     if (!el) return;
@@ -97,6 +108,21 @@ setTimeout(() => {
     });
     sidebarBackdrop.addEventListener("click", closeMobileSidebar);
   }
+
+  // Expand/collapse the "All X" -> "Add X" sidebar groups. The caret is a
+  // separate button from the nav-btn so clicking it toggles the submenu
+  // without also navigating to that section.
+  document.querySelectorAll(".nav-caret").forEach((caret) => {
+    caret.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const item = caret.closest(".nav-item");
+      const submenu = item && item.querySelector(".nav-submenu");
+      if (!submenu) return;
+      const isOpen = submenu.classList.toggle("open");
+      caret.classList.toggle("open", isOpen);
+      caret.setAttribute("aria-expanded", String(isOpen));
+    });
+  });
 
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.addEventListener("click", (e) => {
