@@ -41,6 +41,7 @@
       <div class="breadcrumb"><a href="/index.html">Home</a> / <a href="/blog">Blog</a> / <span id="crumb-title"></span></div>
       <h1 id="post-title">Loading…</h1>
       <p class="blog-post__meta" id="post-meta"></p>
+      <div id="post-taxonomy"></div>
     </section>
 
     <article class="prose" id="post-content"></article>
@@ -101,6 +102,7 @@
     Security.setTextSafely(document.getElementById("post-title"), post.title);
     Security.setTextSafely(document.getElementById("crumb-title"), post.title);
     Security.setTextSafely(document.getElementById("post-meta"), BlogLoader.formatDate(post.createdAt));
+    document.getElementById("post-taxonomy").innerHTML = BlogLoader.renderTaxonomyHTML(post);
 
     document.getElementById("post-content").innerHTML = BlogLoader.renderPostHTML(post);
   });

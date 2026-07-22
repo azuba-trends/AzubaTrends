@@ -388,9 +388,13 @@ main { flex: 1; }
 .breadcrumb a:hover { text-decoration: underline; }
 
 /* ---------- Static content pages (About / Terms) ---------- */
-.prose { max-width: 68ch; }
+.prose { max-width: 68ch; overflow-wrap: break-word; word-break: break-word; }
+.prose h1 { margin-top: var(--space-6); margin-bottom: var(--space-2); }
 .prose h2 { margin-top: var(--space-6); margin-bottom: var(--space-2); }
-.prose h2:first-child { margin-top: 0; }
+.prose h2:first-child, .prose h1:first-child { margin-top: 0; }
+.prose h3 { margin-top: var(--space-5); margin-bottom: var(--space-2); }
+.prose h4, .prose h5, .prose h6 { margin-top: var(--space-4); margin-bottom: var(--space-2); }
+.prose h6 { text-transform: uppercase; letter-spacing: 0.03em; }
 .prose p { margin-bottom: var(--space-3); }
 .prose ul, .prose ol { list-style: disc; padding-left: 1.4em; margin-bottom: var(--space-3); }
 .prose ol { list-style: decimal; }

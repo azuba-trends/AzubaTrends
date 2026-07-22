@@ -85,6 +85,19 @@ const BlogLoader = (function () {
     }
   }
 
+  // Categories/tags -> safe pill HTML. Categories are highlighted (accent
+  // pill), tags render as plain "#tag" pills — same visual language on the
+  // single post page and (for the primary category) the blog listing cards.
+  function renderTaxonomyHTML(post) {
+    const esc = (s) => (window.Security ? window.Security.escapeHTML(s) : String(s ?? ""));
+    const categories = post.categories || [];
+    const tags = post.tags || [];
+    if (!categories.length && !tags.length) return "";
+    const catHTML = categories.map((c) => `<span class="taxonomy-pill taxonomy-pill--category">${esc(c)}</span>`).join("");
+    const tagHTML = tags.map((t) => `<span class="taxonomy-pill">#${esc(t)}</span>`).join("");
+    return `<div class="taxonomy-pills">${catHTML}${tagHTML}</div>`;
+  }
+
   // Turns one content block into safe HTML. Every piece of user-entered
   // text goes through Security.escapeHTML — same helper used everywhere
   // else on the site for user/admin-entered text (reviews, products, etc.).
@@ -130,10 +143,14 @@ const BlogLoader = (function () {
   function renderBlogCard(post) {
     const cover = post.coverImage || "images/logo-placeholder.svg";
     const esc = (s) => (window.Security ? window.Security.escapeHTML(s) : String(s ?? ""));
+    const primaryCategory = (post.categories && post.categories[0])
+      ? `<span class="taxonomy-pill taxonomy-pill--category">${esc(post.categories[0])}</span>`
+      : "";
     return `
       <a href="/blog/${encodeURIComponent(post.slug)}" class="blog-card">
         <img src="${esc(cover)}" alt="" class="blog-card__img" loading="lazy">
         <div class="blog-card__body">
+          ${primaryCategory}
           <h3 class="blog-card__title">${esc(post.title)}</h3>
           <p class="blog-card__excerpt">${esc(getExcerpt(post))}</p>
           <span class="blog-card__date">${esc(formatDate(post.createdAt))}</span>
@@ -149,7 +166,7 @@ const BlogLoader = (function () {
     container.innerHTML = sortByNewest(posts).map(renderBlogCard).join("");
   }
 
-  const API = { loadPublishedPosts, getPostBySlug, sortByNewest, getExcerpt, formatDate, renderPostHTML, renderBlockHTML, renderBlogCard, renderGrid };
+  const API = { loadPublishedPosts, getPostBySlug, sortByNewest, getExcerpt, formatDate, renderPostHTML, renderBlockHTML, renderBlogCard, renderGrid, renderTaxonomyHTML };
   window.BlogLoader = API;
   return API;
 })();

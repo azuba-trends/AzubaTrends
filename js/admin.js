@@ -970,12 +970,34 @@ setTimeout(() => {
       rteSyncCodeFromVisual();
     });
   });
-  document.querySelectorAll(".rte-btn[data-block]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      rteVisual.focus();
-      document.execCommand("formatBlock", false, btn.dataset.block);
-      rteSyncCodeFromVisual();
+  document.getElementById("rte-block-select").addEventListener("change", (e) => {
+    const val = e.target.value;
+    e.target.selectedIndex = 0; // acts as an action menu, not a state display
+    if (!val) return;
+    rteVisual.focus();
+    document.execCommand("formatBlock", false, val);
+    rteSyncCodeFromVisual();
+  });
+  // execCommand("fontSize") is the only reliable cross-browser way to wrap
+  // an arbitrary (possibly multi-node) selection in something we can style —
+  // it inserts legacy <font size="N"> tags, which we immediately swap for
+  // <span class="rte-fs-*"> so the size comes from our own CSS classes
+  // (shared with the live post page's .prose) instead of the browser's
+  // fixed 7-step HTML font sizes.
+  const RTE_FONT_SIZE_MAP = { "rte-fs-sm": "2", "rte-fs-normal": "3", "rte-fs-lg": "5", "rte-fs-xl": "7" };
+  document.getElementById("rte-fontsize-select").addEventListener("change", (e) => {
+    const cls = e.target.value;
+    e.target.selectedIndex = 0;
+    if (!cls) return;
+    rteVisual.focus();
+    document.execCommand("fontSize", false, RTE_FONT_SIZE_MAP[cls] || "3");
+    rteVisual.querySelectorAll("font[size]").forEach((f) => {
+      const span = document.createElement("span");
+      span.className = cls;
+      while (f.firstChild) span.appendChild(f.firstChild);
+      f.replaceWith(span);
     });
+    rteSyncCodeFromVisual();
   });
   document.getElementById("rte-link-btn").addEventListener("click", () => {
     const url = prompt("Link URL:", "https://");
@@ -1095,6 +1117,14 @@ setTimeout(() => {
       const coverImg = document.getElementById("bp-cover-preview").querySelector("img");
       const cover = (coverImg && coverImg.src) || document.getElementById("bp-existing-cover").value || "";
       const content = getBlogContentHTML();
+      const categories = document.getElementById("bp-categories").value.split(",").map((s) => s.trim()).filter(Boolean);
+      const tags = document.getElementById("bp-tags").value.split(",").map((s) => s.trim()).filter(Boolean);
+      const pillsHTML = (categories.length || tags.length)
+        ? "<div class=\"taxonomy-pills\">" +
+          categories.map((c) => "<span class=\"taxonomy-pill taxonomy-pill--category\">" + esc(c) + "</span>").join("") +
+          tags.map((t) => "<span class=\"taxonomy-pill\">#" + esc(t) + "</span>").join("") +
+          "</div>"
+        : "";
       const win = window.open("", "_blank");
       if (!win) { alert("Please allow pop-ups for this site to preview the post."); return; }
       win.document.write(
@@ -1105,8 +1135,9 @@ setTimeout(() => {
         ".wp-preview-badge{display:inline-block;background:#e8a33d;color:#fff;font-size:0.75rem;font-weight:bold;letter-spacing:.03em;padding:4px 12px;border-radius:999px;margin-bottom:18px;}" +
         ".wp-preview-cover{width:100%;max-height:420px;object-fit:cover;border-radius:8px;margin-bottom:24px;}</style>" +
         "</head><body><span class=\"wp-preview-badge\">PREVIEW — not yet saved</span><h1>" + esc(title) + "</h1>" +
+        pillsHTML +
         (cover ? "<img class=\"wp-preview-cover\" src=\"" + esc(cover) + "\" alt=\"\">" : "") +
-        "<div class=\"rte-editor\">" + content + "</div></body></html>"
+        "<div class=\"prose\">" + content + "</div></body></html>"
       );
       win.document.close();
     });
@@ -1176,6 +1207,8 @@ setTimeout(() => {
     document.getElementById("bp-keyphrase").value = "";
     document.getElementById("bp-seo-title").value = "";
     document.getElementById("bp-seo-desc").value = "";
+    document.getElementById("bp-categories").value = "";
+    document.getElementById("bp-tags").value = "";
     document.getElementById("bp-cover-img").value = "";
     document.getElementById("bp-cover-preview").innerHTML = "";
     document.getElementById("blogpost-form-title").textContent = "Add New Post";
@@ -1197,6 +1230,8 @@ setTimeout(() => {
     document.getElementById("bp-keyphrase").value = p.keyphrase || "";
     document.getElementById("bp-seo-title").value = p.seoTitle || "";
     document.getElementById("bp-seo-desc").value = p.seoDesc || "";
+    document.getElementById("bp-categories").value = (p.categories || []).join(", ");
+    document.getElementById("bp-tags").value = (p.tags || []).join(", ");
     document.getElementById("bp-existing-cover").value = p.coverImage || "";
     document.getElementById("bp-cover-preview").innerHTML = "";
     previewExistingImages(document.getElementById("bp-cover-preview"), p.coverImage ? [p.coverImage] : []);
@@ -1240,6 +1275,8 @@ setTimeout(() => {
         keyphrase: document.getElementById("bp-keyphrase").value.trim(),
         seoTitle: document.getElementById("bp-seo-title").value.trim(),
         seoDesc: document.getElementById("bp-seo-desc").value.trim(),
+        categories: document.getElementById("bp-categories").value.split(",").map((s) => s.trim()).filter(Boolean),
+        tags: document.getElementById("bp-tags").value.split(",").map((s) => s.trim()).filter(Boolean),
         coverImage,
         content: getBlogContentHTML(),
         status,

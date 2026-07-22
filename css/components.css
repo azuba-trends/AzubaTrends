@@ -872,14 +872,20 @@
   min-height: 320px;
   max-height: 640px;
   overflow-y: auto;
+  overflow-wrap: break-word;
+  word-break: break-word;
   padding: 16px 18px;
   font-size: 0.98rem;
   line-height: 1.6;
   outline: none;
 }
 .rte-editor:empty::before { content: attr(data-placeholder); color: #999; }
+.rte-editor h1 { font-size: 1.75rem; margin: 24px 0 10px; }
 .rte-editor h2 { font-size: 1.4rem; margin: 20px 0 8px; }
 .rte-editor h3 { font-size: 1.15rem; margin: 16px 0 8px; }
+.rte-editor h4 { font-size: 1.05rem; margin: 14px 0 6px; }
+.rte-editor h5 { font-size: 0.95rem; margin: 12px 0 6px; font-weight: 600; }
+.rte-editor h6 { font-size: 0.85rem; margin: 10px 0 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
 .rte-editor p { margin: 0 0 12px; }
 .rte-editor blockquote { margin: 12px 0; padding: 6px 16px; border-left: 3px solid var(--color-accent, #e8a33d); color: #555; font-style: italic; }
 .rte-editor ul, .rte-editor ol { padding-left: 1.4em; margin: 0 0 12px; }
@@ -889,6 +895,35 @@
 .rte-editor figure { margin: 12px 0; }
 .rte-editor figure figcaption { font-size: 0.8rem; color: #888; text-align: center; margin-top: 4px; }
 .rte-editor::after { content: ""; display: table; clear: both; }
+
+/* Text-size classes applied via the toolbar's "Size" dropdown — shared by
+   the admin editor (.rte-editor) and the live post body (.prose) so text
+   sized while writing renders the same size on the published page. */
+.rte-fs-sm { font-size: 0.82em; }
+.rte-fs-normal { font-size: 1em; }
+.rte-fs-lg { font-size: 1.3em; }
+.rte-fs-xl { font-size: 1.75em; }
+
+.rte-select {
+  height: 30px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 0.82rem;
+  color: var(--color-ink, #222);
+  cursor: pointer;
+  max-width: 108px;
+}
+.rte-select:hover { background: #fff; border-color: var(--color-border, #ddd); }
+
+/* Category / tag pills — used on the live post page and blog cards. */
+.taxonomy-pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.taxonomy-pill {
+  display: inline-block; padding: 3px 10px; border-radius: 999px;
+  font-size: 0.78rem; background: var(--color-surface-sunken, #f2eee5); color: var(--color-ink-soft, #666);
+}
+.taxonomy-pill--category { background: var(--color-accent, #e8a33d); color: #fff; font-weight: 600; }
 .rte-code {
   display: block;
   width: 100%;
