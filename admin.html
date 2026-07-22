@@ -27,16 +27,18 @@
   .sidebar-nav button:hover, .sidebar-nav button.active { background: var(--color-primary); color: white; }
   .sidebar-footer { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
 
-  /* Collapsible "All X" -> "Add X" nav groups */
-  .nav-item-row { display: flex; align-items: stretch; min-width: 0; }
-  .nav-item-row .nav-btn { flex: 1 1 auto; min-width: 0; padding-right: 6px; }
-  .nav-caret {
-    width: 30px; flex-shrink: 0; background: none; border: none; color: #94a3b8;
-    cursor: pointer; font-size: 0.7rem; display: flex; align-items: center; justify-content: center;
+  /* Collapsible "All X" -> "Add X" nav groups. The arrow is just an inline
+     indicator overlaid on the button itself — it has no separate clickable
+     width of its own. Clicking anywhere on the "All X" button both navigates
+     and expands/collapses its "Add X" submenu (accordion-style). */
+  .nav-parent-btn { position: relative; padding-right: 30px; }
+  .nav-arrow {
+    position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+    font-size: 0.7rem; color: #94a3b8; pointer-events: none;
     transition: transform 0.2s ease, color 0.15s ease;
   }
-  .nav-caret:hover { color: white; }
-  .nav-caret.open { transform: rotate(90deg); color: white; }
+  .nav-parent-btn:hover .nav-arrow, .nav-parent-btn.active .nav-arrow { color: white; }
+  .nav-arrow.open { transform: translateY(-50%) rotate(90deg); color: white; }
   .nav-submenu { max-height: 0; overflow: hidden; transition: max-height 0.2s ease; }
   .nav-submenu.open { max-height: 120px; }
   .nav-subbtn { padding-left: 40px !important; font-size: 0.87rem !important; }
@@ -262,37 +264,25 @@
 
       <div class="nav-group-title">Store</div>
       <div class="nav-item">
-        <div class="nav-item-row">
-          <button class="nav-btn" data-target="store-products">All Products</button>
-          <button class="nav-caret" type="button" aria-expanded="false" aria-label="Toggle Add Product">▸</button>
-        </div>
+        <button class="nav-btn nav-parent-btn" data-target="store-products">All Products<span class="nav-arrow">▸</span></button>
         <div class="nav-submenu">
           <button class="nav-btn nav-subbtn" data-target="store-add-product" data-fresh-form="product">Add Product</button>
         </div>
       </div>
       <div class="nav-item">
-        <div class="nav-item-row">
-          <button class="nav-btn" data-target="store-categories">All Categories</button>
-          <button class="nav-caret" type="button" aria-expanded="false" aria-label="Toggle Add Category">▸</button>
-        </div>
+        <button class="nav-btn nav-parent-btn" data-target="store-categories">All Categories<span class="nav-arrow">▸</span></button>
         <div class="nav-submenu">
           <button class="nav-btn nav-subbtn" data-target="store-add-category" data-fresh-form="category">Add Category</button>
         </div>
       </div>
       <div class="nav-item">
-        <div class="nav-item-row">
-          <button class="nav-btn" data-target="store-brands">All Brands</button>
-          <button class="nav-caret" type="button" aria-expanded="false" aria-label="Toggle Add Brand">▸</button>
-        </div>
+        <button class="nav-btn nav-parent-btn" data-target="store-brands">All Brands<span class="nav-arrow">▸</span></button>
         <div class="nav-submenu">
           <button class="nav-btn nav-subbtn" data-target="store-add-brand" data-fresh-form="brand">Add Brand</button>
         </div>
       </div>
       <div class="nav-item">
-        <div class="nav-item-row">
-          <button class="nav-btn" data-target="store-coupons">All Coupons</button>
-          <button class="nav-caret" type="button" aria-expanded="false" aria-label="Toggle Add Coupon">▸</button>
-        </div>
+        <button class="nav-btn nav-parent-btn" data-target="store-coupons">All Coupons<span class="nav-arrow">▸</span></button>
         <div class="nav-submenu">
           <button class="nav-btn nav-subbtn" data-target="store-add-coupon" data-fresh-form="coupon">Add Coupon</button>
         </div>
@@ -301,19 +291,13 @@
 
       <div class="nav-group-title">Blog</div>
       <div class="nav-item">
-        <div class="nav-item-row">
-          <button class="nav-btn" data-target="blog-posts">All Posts</button>
-          <button class="nav-caret" type="button" aria-expanded="false" aria-label="Toggle Add Post">▸</button>
-        </div>
+        <button class="nav-btn nav-parent-btn" data-target="blog-posts">All Posts<span class="nav-arrow">▸</span></button>
         <div class="nav-submenu">
           <button class="nav-btn nav-subbtn" data-target="blog-add-post" data-fresh-form="blogpost">Add Post</button>
         </div>
       </div>
       <div class="nav-item">
-        <div class="nav-item-row">
-          <button class="nav-btn" data-target="blog-categories">All Blog Categories</button>
-          <button class="nav-caret" type="button" aria-expanded="false" aria-label="Toggle Add Blog Category">▸</button>
-        </div>
+        <button class="nav-btn nav-parent-btn" data-target="blog-categories">All Blog Categories<span class="nav-arrow">▸</span></button>
         <div class="nav-submenu">
           <button class="nav-btn nav-subbtn" data-target="blog-add-category" data-fresh-form="blogcategory">Add Blog Category</button>
         </div>
