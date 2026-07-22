@@ -29,6 +29,70 @@
   .section { display: none; }
   .section.active { display: block; }
 
+  /* ===== WordPress-style full-screen Add/Edit Post editor ===== */
+  /* While the post editor section is open, hide the sidebar/topbar so the
+     editor takes the whole screen — same as post-new.php / post.php in
+     wp-admin — and let the editor manage its own scrolling. */
+  #admin-layout.editor-mode .sidebar { display: none; }
+  #admin-layout.editor-mode .mobile-topbar { display: none; }
+  #admin-layout.editor-mode .main-content { padding: 0; overflow: hidden; }
+
+  .wp-editor.active { display: flex !important; flex-direction: column; height: 100%; min-height: 100vh; background: #fff; }
+  .btn-sm { padding: 7px 14px; font-size: 0.85rem; }
+
+  .wp-editor-topbar {
+    display: flex; align-items: center; gap: 10px;
+    height: 56px; flex-shrink: 0; padding: 0 16px;
+    background: #fff; border-bottom: 1px solid var(--color-border, #ddd);
+  }
+  .wp-editor-back {
+    width: 34px; height: 34px; flex-shrink: 0; border-radius: 4px; border: none;
+    background: transparent; font-size: 1.2rem; line-height: 1; cursor: pointer;
+    color: var(--color-ink-soft, #555); display: flex; align-items: center; justify-content: center;
+  }
+  .wp-editor-back:hover { background: var(--color-surface-sunken, #f2eee5); }
+  .wp-editor-crumb { font-size: 0.9rem; color: var(--color-ink-soft, #777); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wp-editor-crumb strong { color: var(--color-ink, #222); }
+  .wp-editor-topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+  .wp-editor-save-status { font-size: 0.8rem; color: var(--color-ink-soft, #777); white-space: nowrap; }
+  .wp-icon-btn {
+    width: 34px; height: 34px; flex-shrink: 0; border-radius: 4px; border: 1px solid var(--color-border, #ddd);
+    background: #fff; cursor: pointer; font-size: 1rem; color: var(--color-ink-soft, #555);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .wp-icon-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+  .wp-icon-btn.active { background: var(--color-surface-sunken, #f2eee5); color: var(--color-primary); border-color: var(--color-primary); }
+
+  .wp-editor-body { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+  .wp-editor-main { flex: 1; overflow-y: auto; padding: 32px 24px 80px; }
+  .wp-editor-main-inner { max-width: 820px; margin: 0 auto; }
+  .wp-editor-title-input {
+    width: 100%; border: none; outline: none; background: transparent;
+    font-size: 1.9rem; font-weight: 700; padding: 6px 2px; margin-bottom: 18px;
+    color: var(--color-ink, #222); font-family: inherit;
+  }
+  .wp-editor-title-input::placeholder { color: #ccc; }
+
+  .wp-editor-panel {
+    width: 300px; flex-shrink: 0; overflow-y: auto; background: #fff;
+    border-left: 1px solid var(--color-border, #ddd);
+  }
+  .wp-editor-panel.panel-hidden { display: none; }
+  .wp-panel-section { padding: 16px 18px; border-bottom: 1px solid var(--color-border, #eee); }
+  .wp-panel-section h4 { margin: 0 0 12px; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-ink-soft, #888); }
+
+  @media (max-width: 960px) {
+    .wp-editor-panel { position: fixed; right: 0; top: 56px; bottom: 0; width: 86vw; max-width: 340px; box-shadow: -6px 0 16px rgba(0,0,0,0.15); z-index: 30; }
+    .wp-editor-main { padding: 20px 16px 60px; }
+    .wp-editor-crumb { display: none; }
+  }
+  @media (max-width: 640px) {
+    .wp-editor-topbar { height: auto; flex-wrap: wrap; padding: 10px 12px; gap: 8px; }
+    .wp-editor-topbar-actions { width: 100%; justify-content: flex-end; margin-left: 0; }
+    .wp-editor-save-status { width: 100%; order: -1; }
+    .wp-editor-panel { top: auto; }
+  }
+
   /* Tables & Forms */
   .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
   table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.9rem; }
@@ -671,107 +735,122 @@
       </div>
     </div>
 
-    <!-- ============ BLOG: ADD / EDIT POST ============ -->
-    <div id="blog-add-post" class="section">
-      <h2 id="blogpost-form-title">Add New Post</h2>
-      <div class="card">
-        <div class="form-grid">
-          <input type="hidden" id="bp-id">
-          <input type="hidden" id="bp-existing-cover">
+    <!-- ============ BLOG: ADD / EDIT POST (WordPress-style full-screen editor) ============ -->
+    <div id="blog-add-post" class="section wp-editor">
 
-          <div class="form-field">
-            <label>Post Title <span class="required-star">*</span></label>
-            <input type="text" id="bp-title" required>
-          </div>
-          <div class="form-field">
-            <label>Slug (auto-generated, editable) <span class="field-hint" style="display:inline;">(used in post URL)</span></label>
-            <input type="text" id="bp-slug">
-          </div>
+      <!-- Top toolbar: back, breadcrumb, preview / save draft / publish, panel toggle -->
+      <div class="wp-editor-topbar">
+        <button type="button" class="wp-editor-back nav-btn" data-target="blog-posts" title="Back to All Posts">←</button>
+        <div class="wp-editor-crumb">Post &nbsp;·&nbsp; <strong id="blogpost-form-title">Add New Post</strong></div>
+        <div class="wp-editor-topbar-actions">
+          <span id="blogpost-save-status" class="wp-editor-save-status"></span>
+          <button type="button" class="btn btn-outline btn-sm" id="preview-blogpost-btn">Preview</button>
+          <button type="button" class="btn btn-outline btn-sm" id="draft-blogpost-btn">Save Draft</button>
+          <button type="button" class="wp-icon-btn active" id="wp-toggle-panel-btn" title="Show/hide settings panel">⚙</button>
+          <button type="button" class="btn btn-primary btn-sm" id="publish-blogpost-btn">Publish</button>
+          <button type="button" class="btn btn-outline btn-sm nav-btn" data-target="blog-posts">Cancel</button>
+        </div>
+      </div>
 
-          <div class="form-field" style="grid-column: 1 / -1;">
-            <label>Focus Keyphrase <span class="field-hint" style="display:inline;">(the search term you want this post to rank for — not sent to Google, just a writing guide)</span></label>
-            <input type="text" id="bp-keyphrase" placeholder="e.g. kantha embroidery guide">
-          </div>
-          <div class="form-field">
-            <label>SEO Title <span class="field-hint" style="display:inline;">(shown in Google results — falls back to Post Title if empty)</span></label>
-            <input type="text" id="bp-seo-title" maxlength="70">
-          </div>
-          <div class="form-field">
-            <label>SEO Description</label>
-            <input type="text" id="bp-seo-desc" maxlength="165">
-          </div>
-          <div class="form-field" style="grid-column: 1 / -1;">
-            <ul id="bp-seo-checklist" style="list-style:none; padding:0; margin:4px 0; font-size:13px; display:flex; gap:16px; flex-wrap:wrap;"></ul>
-          </div>
+      <div class="wp-editor-body">
+        <!-- Main column: title + content editor -->
+        <div class="wp-editor-main">
+          <div class="wp-editor-main-inner">
+            <input type="hidden" id="bp-id">
+            <input type="hidden" id="bp-existing-cover">
 
-          <div class="form-field" style="grid-column: 1 / -1;">
-            <label>Cover Image <span class="field-hint" style="display:inline;">(shown on the blog listing + link previews)</span></label>
-            <input type="file" id="bp-cover-img" accept="image/*">
-            <div class="img-preview-row" id="bp-cover-preview"></div>
+            <input type="text" id="bp-title" class="wp-editor-title-input" placeholder="Add title" required>
+
+            <div class="rte-wrap">
+              <div class="rte-toolbar" id="rte-toolbar">
+                <button type="button" class="rte-btn" data-cmd="bold" title="Bold"><b>B</b></button>
+                <button type="button" class="rte-btn" data-cmd="italic" title="Italic"><i>I</i></button>
+                <button type="button" class="rte-btn" data-cmd="underline" title="Underline"><u>U</u></button>
+                <button type="button" class="rte-btn" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+                <span class="rte-sep"></span>
+                <button type="button" class="rte-btn" data-block="p" title="Paragraph">¶</button>
+                <button type="button" class="rte-btn" data-block="h2" title="Heading 2">H2</button>
+                <button type="button" class="rte-btn" data-block="h3" title="Heading 3">H3</button>
+                <button type="button" class="rte-btn" data-block="blockquote" title="Quote">”</button>
+                <span class="rte-sep"></span>
+                <button type="button" class="rte-btn" data-cmd="insertUnorderedList" title="Bullet list">• ≡</button>
+                <button type="button" class="rte-btn" data-cmd="insertOrderedList" title="Numbered list">1. ≡</button>
+                <span class="rte-sep"></span>
+                <button type="button" class="rte-btn" data-cmd="justifyLeft" title="Align left">⇤</button>
+                <button type="button" class="rte-btn" data-cmd="justifyCenter" title="Align center">↔</button>
+                <button type="button" class="rte-btn" data-cmd="justifyRight" title="Align right">⇥</button>
+                <span class="rte-sep"></span>
+                <button type="button" class="rte-btn" id="rte-link-btn" title="Insert link">🔗</button>
+                <button type="button" class="rte-btn" id="rte-image-btn" title="Insert image">🖼️</button>
+                <span class="rte-sep"></span>
+                <button type="button" class="rte-btn" data-cmd="undo" title="Undo">↺</button>
+                <button type="button" class="rte-btn" data-cmd="redo" title="Redo">↻</button>
+                <input type="file" id="rte-image-file" accept="image/*" style="display:none;">
+              </div>
+
+              <!-- Shown only when an image inside the editor is selected -->
+              <div class="rte-img-toolbar" id="rte-img-toolbar" hidden>
+                <span class="rte-img-toolbar__label">Image:</span>
+                <button type="button" class="rte-btn" data-imgsize="small">S</button>
+                <button type="button" class="rte-btn" data-imgsize="medium">M</button>
+                <button type="button" class="rte-btn" data-imgsize="large">L</button>
+                <button type="button" class="rte-btn" data-imgsize="full">Full</button>
+                <span class="rte-sep"></span>
+                <button type="button" class="rte-btn" data-imgalign="left">⇤</button>
+                <button type="button" class="rte-btn" data-imgalign="center">↔</button>
+                <button type="button" class="rte-btn" data-imgalign="right">⇥</button>
+                <span class="rte-sep"></span>
+                <input type="text" id="rte-img-caption" placeholder="Caption (optional)" class="rte-img-toolbar__caption">
+                <button type="button" class="rte-btn rte-btn--danger" id="rte-img-remove">Remove</button>
+              </div>
+
+              <div class="rte-tabs">
+                <button type="button" class="rte-tab-btn active" data-rte-tab="visual">Visual</button>
+                <button type="button" class="rte-tab-btn" data-rte-tab="code">Code</button>
+              </div>
+
+              <div id="bp-content-visual" class="rte-editor" contenteditable="true" data-placeholder="Start writing your post…"></div>
+              <textarea id="bp-content-code" class="rte-code" spellcheck="false" hidden></textarea>
+            </div>
           </div>
         </div>
 
-        <h3 style="margin-top:28px; border-top:1px solid #eee; padding-top:20px;">Post Content</h3>
-        <p class="field-hint">Type and format freely in <strong>Visual</strong>, or switch to <strong>Code</strong> to edit the raw HTML directly — both stay in sync.</p>
-
-        <div class="rte-wrap">
-          <div class="rte-toolbar" id="rte-toolbar">
-            <button type="button" class="rte-btn" data-cmd="bold" title="Bold"><b>B</b></button>
-            <button type="button" class="rte-btn" data-cmd="italic" title="Italic"><i>I</i></button>
-            <button type="button" class="rte-btn" data-cmd="underline" title="Underline"><u>U</u></button>
-            <button type="button" class="rte-btn" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
-            <span class="rte-sep"></span>
-            <button type="button" class="rte-btn" data-block="p" title="Paragraph">¶</button>
-            <button type="button" class="rte-btn" data-block="h2" title="Heading 2">H2</button>
-            <button type="button" class="rte-btn" data-block="h3" title="Heading 3">H3</button>
-            <button type="button" class="rte-btn" data-block="blockquote" title="Quote">”</button>
-            <span class="rte-sep"></span>
-            <button type="button" class="rte-btn" data-cmd="insertUnorderedList" title="Bullet list">• ≡</button>
-            <button type="button" class="rte-btn" data-cmd="insertOrderedList" title="Numbered list">1. ≡</button>
-            <span class="rte-sep"></span>
-            <button type="button" class="rte-btn" data-cmd="justifyLeft" title="Align left">⇤</button>
-            <button type="button" class="rte-btn" data-cmd="justifyCenter" title="Align center">↔</button>
-            <button type="button" class="rte-btn" data-cmd="justifyRight" title="Align right">⇥</button>
-            <span class="rte-sep"></span>
-            <button type="button" class="rte-btn" id="rte-link-btn" title="Insert link">🔗</button>
-            <button type="button" class="rte-btn" id="rte-image-btn" title="Insert image">🖼️</button>
-            <span class="rte-sep"></span>
-            <button type="button" class="rte-btn" data-cmd="undo" title="Undo">↺</button>
-            <button type="button" class="rte-btn" data-cmd="redo" title="Redo">↻</button>
-            <input type="file" id="rte-image-file" accept="image/*" style="display:none;">
+        <!-- Right settings panel: toggled by the ⚙ button in the topbar -->
+        <div class="wp-editor-panel" id="wp-editor-panel">
+          <div class="wp-panel-section">
+            <h4>Permalink</h4>
+            <div class="form-field">
+              <label>Slug <span class="field-hint" style="display:inline;">(auto-generated, editable — used in post URL)</span></label>
+              <input type="text" id="bp-slug">
+            </div>
           </div>
 
-          <!-- Shown only when an image inside the editor is selected -->
-          <div class="rte-img-toolbar" id="rte-img-toolbar" hidden>
-            <span class="rte-img-toolbar__label">Image:</span>
-            <button type="button" class="rte-btn" data-imgsize="small">S</button>
-            <button type="button" class="rte-btn" data-imgsize="medium">M</button>
-            <button type="button" class="rte-btn" data-imgsize="large">L</button>
-            <button type="button" class="rte-btn" data-imgsize="full">Full</button>
-            <span class="rte-sep"></span>
-            <button type="button" class="rte-btn" data-imgalign="left">⇤</button>
-            <button type="button" class="rte-btn" data-imgalign="center">↔</button>
-            <button type="button" class="rte-btn" data-imgalign="right">⇥</button>
-            <span class="rte-sep"></span>
-            <input type="text" id="rte-img-caption" placeholder="Caption (optional)" class="rte-img-toolbar__caption">
-            <button type="button" class="rte-btn rte-btn--danger" id="rte-img-remove">Remove</button>
+          <div class="wp-panel-section">
+            <h4>Featured Image</h4>
+            <div class="form-field">
+              <label>Cover Image <span class="field-hint" style="display:inline;">(shown on the blog listing + link previews)</span></label>
+              <input type="file" id="bp-cover-img" accept="image/*">
+              <div class="img-preview-row" id="bp-cover-preview"></div>
+            </div>
           </div>
 
-          <div class="rte-tabs">
-            <button type="button" class="rte-tab-btn active" data-rte-tab="visual">Visual</button>
-            <button type="button" class="rte-tab-btn" data-rte-tab="code">Code</button>
+          <div class="wp-panel-section">
+            <h4>SEO</h4>
+            <div class="form-field">
+              <label>Focus Keyphrase <span class="field-hint" style="display:inline;">(the search term you want this post to rank for — not sent to Google, just a writing guide)</span></label>
+              <input type="text" id="bp-keyphrase" placeholder="e.g. kantha embroidery guide">
+            </div>
+            <div class="form-field">
+              <label>SEO Title <span class="field-hint" style="display:inline;">(shown in Google results — falls back to Post Title if empty)</span></label>
+              <input type="text" id="bp-seo-title" maxlength="70">
+            </div>
+            <div class="form-field">
+              <label>SEO Description</label>
+              <input type="text" id="bp-seo-desc" maxlength="165">
+            </div>
+            <ul id="bp-seo-checklist" style="list-style:none; padding:0; margin:10px 0 0; font-size:13px; display:flex; flex-direction:column; gap:6px;"></ul>
           </div>
-
-          <div id="bp-content-visual" class="rte-editor" contenteditable="true" data-placeholder="Start writing your post…"></div>
-          <textarea id="bp-content-code" class="rte-code" spellcheck="false" hidden></textarea>
         </div>
-
-        <div style="display:flex; gap:8px; margin-top:28px; border-top:1px solid #eee; padding-top:20px;">
-          <button type="button" class="btn btn-primary" id="publish-blogpost-btn">Publish</button>
-          <button type="button" class="btn btn-outline" id="draft-blogpost-btn">Save as Draft</button>
-          <button type="button" class="btn btn-outline nav-btn" data-target="blog-posts">Cancel</button>
-        </div>
-        <p id="blogpost-save-status" style="margin-top:8px; font-size:0.9rem;"></p>
       </div>
     </div>
 

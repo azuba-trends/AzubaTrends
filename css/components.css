@@ -903,6 +903,12 @@
   resize: vertical;
   outline: none;
 }
+/* `display: block` above has the same specificity as the browser's built-in
+   `[hidden] { display: none }` rule, and author CSS always wins that tie —
+   so without this, the Code textarea stayed visible (stacked under the
+   Visual pane) even while "hidden" was set on it in Visual mode. This rule
+   restores hidden actually hiding it, so only one pane ever shows at once. */
+.rte-code[hidden] { display: none; }
 
 /* Image size/align classes — shared by the admin editor (.rte-editor) and
    the public post body (.prose) so what you see while writing matches the

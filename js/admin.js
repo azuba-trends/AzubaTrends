@@ -64,6 +64,9 @@ setTimeout(() => {
     const el = document.getElementById(target);
     if (!el) return;
     el.classList.add("active");
+    // WordPress-style full-screen editor: hide the sidebar/topbar while the
+    // Add/Edit Post screen is open, same as post-new.php / post.php.
+    document.getElementById("admin-layout").classList.toggle("editor-mode", target === "blog-add-post");
     if (!NON_RESTORABLE_SECTIONS.has(target)) {
       try { localStorage.setItem(LAST_SECTION_KEY, target); } catch (err) { /* storage unavailable, ignore */ }
     }
@@ -1071,6 +1074,42 @@ setTimeout(() => {
   function setBlogContentHTML(html) {
     rteVisual.innerHTML = html || "";
     rteCode.value = html || "";
+  }
+
+  // --- Settings panel show/hide (the ⚙ button in the editor topbar) ---
+  const wpPanelToggleBtn = document.getElementById("wp-toggle-panel-btn");
+  const wpEditorPanel = document.getElementById("wp-editor-panel");
+  if (wpPanelToggleBtn && wpEditorPanel) {
+    wpPanelToggleBtn.addEventListener("click", () => {
+      const nowHidden = wpEditorPanel.classList.toggle("panel-hidden");
+      wpPanelToggleBtn.classList.toggle("active", !nowHidden);
+    });
+  }
+
+  // --- Live Preview: opens the post, exactly as typed so far (including
+  // unsaved changes), in a new tab — same idea as WordPress's Preview button. ---
+  const previewBlogPostBtn = document.getElementById("preview-blogpost-btn");
+  if (previewBlogPostBtn) {
+    previewBlogPostBtn.addEventListener("click", () => {
+      const title = document.getElementById("bp-title").value.trim() || "(untitled)";
+      const coverImg = document.getElementById("bp-cover-preview").querySelector("img");
+      const cover = (coverImg && coverImg.src) || document.getElementById("bp-existing-cover").value || "";
+      const content = getBlogContentHTML();
+      const win = window.open("", "_blank");
+      if (!win) { alert("Please allow pop-ups for this site to preview the post."); return; }
+      win.document.write(
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>" + esc(title) + " — Preview</title>" +
+        "<link rel=\"stylesheet\" href=\"" + location.origin + "/css/main.css\">" +
+        "<link rel=\"stylesheet\" href=\"" + location.origin + "/css/components.css\">" +
+        "<style>body{max-width:760px;margin:40px auto;padding:0 20px 60px;font-family:sans-serif;}" +
+        ".wp-preview-badge{display:inline-block;background:#e8a33d;color:#fff;font-size:0.75rem;font-weight:bold;letter-spacing:.03em;padding:4px 12px;border-radius:999px;margin-bottom:18px;}" +
+        ".wp-preview-cover{width:100%;max-height:420px;object-fit:cover;border-radius:8px;margin-bottom:24px;}</style>" +
+        "</head><body><span class=\"wp-preview-badge\">PREVIEW — not yet saved</span><h1>" + esc(title) + "</h1>" +
+        (cover ? "<img class=\"wp-preview-cover\" src=\"" + esc(cover) + "\" alt=\"\">" : "") +
+        "<div class=\"rte-editor\">" + content + "</div></body></html>"
+      );
+      win.document.close();
+    });
   }
 
   // One-time migration: older posts were saved as an array of typed
