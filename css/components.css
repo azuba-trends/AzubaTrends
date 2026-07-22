@@ -1041,3 +1041,31 @@
 .blog-post__figure img { width: 100%; border-radius: var(--radius-md, 10px); display: block; }
 .blog-post__figure figcaption { font-size: 0.85rem; color: var(--color-ink-soft); margin-top: 6px; text-align: center; }
 .blog-post__meta { color: var(--color-ink-soft); font-size: 0.9rem; margin-bottom: var(--space-4); }
+
+/* Full-screen order-processing / order-success overlay (checkout.html).
+   Fixed + covers the whole viewport on both mobile and desktop — this is
+   intentionally NOT a small centered popup. Starts hidden; JS toggles
+   [hidden] off and adds .is-visible on the same frame it swaps the src,
+   which triggers the fade-in + zoom-in transition below. There is no
+   exit/fade-out transition by design — it's hidden instantly once the
+   success animation has finished playing. */
+.order-status-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  width: 100vw;
+  height: 100vh;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+.order-status-overlay[hidden] { display: none; }
+.order-status-overlay.is-visible { opacity: 1; transform: scale(1); }
+.order-status-overlay__gif {
+  width: min(260px, 60vw);
+  height: auto;
+}

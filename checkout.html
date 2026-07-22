@@ -198,6 +198,15 @@
   </div>
 </main>
 
+<!-- Full-screen order processing / success overlay. Covers the entire
+     viewport (mobile + desktop) — not a small popup — while the order is
+     being placed, then swaps straight to the success animation with no
+     exit transition, and only then reveals the confirmation section
+     underneath it. -->
+<div id="order-status-overlay" class="order-status-overlay" hidden aria-live="polite" aria-label="Placing your order">
+  <img id="order-status-gif" class="order-status-overlay__gif" src="images/animations/order-processing.gif" alt="">
+</div>
+
 <div id="footer-mount"></div>
 
 <script src="js/site-config.js"></script>

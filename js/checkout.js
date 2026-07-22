@@ -32,6 +32,47 @@
 
   function $(id) { return document.getElementById(id); }
 
+  // --- Full-screen order-processing / order-success overlay --------------
+  // Covers the whole viewport (see .order-status-overlay in
+  // css/components.css) while the order is being placed, then swaps
+  // straight to the success gif with no exit animation, and only hides
+  // once that gif has finished one full loop — 3640ms, measured directly
+  // from images/animations/order-success.gif's frame timings. If that gif
+  // is ever replaced, update ORDER_SUCCESS_GIF_DURATION_MS to match.
+  const ORDER_SUCCESS_GIF_DURATION_MS = 3640;
+
+  function showOrderStatusOverlay() {
+    const overlay = $('order-status-overlay');
+    const gif = $('order-status-gif');
+    if (!overlay || !gif) return;
+    gif.src = 'images/animations/order-processing.gif';
+    overlay.hidden = false;
+    // Force layout so hidden->visible and the opacity/transform change
+    // land on separate frames — otherwise the browser collapses them and
+    // the fade-in + zoom-in transition never plays.
+    void overlay.offsetWidth;
+    overlay.classList.add('is-visible');
+  }
+
+  function hideOrderStatusOverlay() {
+    const overlay = $('order-status-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('is-visible');
+    overlay.hidden = true;
+  }
+
+  // Swaps the processing gif for the success gif on the same overlay (no
+  // fade-out/fade-in between the two), lets it play one full loop, then
+  // hides the overlay — revealing the confirmation section underneath,
+  // which is already swapped in by the time this fires.
+  function playOrderSuccessOverlay() {
+    const overlay = $('order-status-overlay');
+    const gif = $('order-status-gif');
+    if (!overlay || !gif) return;
+    gif.src = 'images/animations/order-success.gif';
+    setTimeout(hideOrderStatusOverlay, ORDER_SUCCESS_GIF_DURATION_MS);
+  }
+
   // .hidden (the IDL property) toggles the `hidden` *attribute*, which loses
   // to any inline `style="display:none"` already on the element — that
   // mismatch is exactly why the COD/UPI panels never appeared before.
@@ -525,6 +566,7 @@
       btn.disabled = true;
       btn.textContent = isAuto ? 'Placing order...' : 'Processing...';
     }
+    showOrderStatusOverlay();
 
     await reValidateCoupon();
     const items = window.Cart.getItems();
@@ -601,6 +643,7 @@
         // to an unverified write.
         console.error('Server-verified order placement failed:', err);
         alert(err.message || 'Something went wrong while placing your order. Please try again.');
+        hideOrderStatusOverlay();
         if (btn) {
           btn.disabled = false;
           btn.textContent = method === 'COD' ? 'Place Order (COD)' : 'I have paid, Place Order';
@@ -619,6 +662,7 @@
       orderJustPlaced = true;
       window.Cart.clear();
       sessionStorage.removeItem('applied_coupon');
+      playOrderSuccessOverlay();
 
       if (window.Tracking) {
         window.Tracking.trackEvent({
@@ -677,6 +721,7 @@
     } catch (err) {
       console.error(err);
       alert('Something went wrong while placing your order. Please try again.');
+      hideOrderStatusOverlay();
       orderAutoPlacing = false;
       if (btn) {
         btn.disabled = false;
