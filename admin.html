@@ -701,7 +701,10 @@
 
     <!-- ============ STORE: ALL ORDERS ============ -->
     <div id="store-orders" class="section">
-      <h2>All Orders</h2>
+      <div class="section-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>All Orders</h2>
+        <button id="bulk-delete-orders-btn" class="btn btn-outline" style="color:var(--color-danger); border-color:var(--color-danger); display:none;">Delete Selected</button>
+      </div>
       <div class="tab-strip">
         <button class="tab-btn active" data-order-tab="all">All</button>
         <button class="tab-btn" data-order-tab="active">Active</button>
@@ -712,7 +715,7 @@
         <div style="overflow-x: auto;">
           <table>
             <thead>
-              <tr><th>Order ID</th><th>Date</th><th>Customer</th><th>Amount</th><th>Method</th><th>Status</th><th>Action</th></tr>
+              <tr><th><input type="checkbox" id="select-all-orders"></th><th>Order ID</th><th>Date</th><th>Customer</th><th>Amount</th><th>Method</th><th>Status</th><th>Action</th></tr>
             </thead>
             <tbody id="orders-table-body"></tbody>
           </table>

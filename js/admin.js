@@ -1572,17 +1572,31 @@ setTimeout(() => {
 
       const tr = document.createElement("tr");
       tr.innerHTML = `
+        <td><input type="checkbox" class="row-select" data-id="${o.id}"></td>
         <td><strong>${esc(o.orderId)}</strong></td>
         <td>${dateStr}</td>
         <td>${esc(o.customerName)}</td>
         <td>${fmtRupee(o.finalTotal)}</td>
         <td>${esc(o.paymentMethod)}</td>
         <td style="color:${sColor}; font-weight:bold;">${esc(o.status || 'Pending')}</td>
-        <td><button class="btn btn-primary view-order-btn" data-id="${o.id}" style="padding:4px 8px; font-size:0.8rem;">Process</button></td>`;
+        <td>
+          <button class="btn btn-primary view-order-btn" data-id="${o.id}" style="padding:4px 8px; font-size:0.8rem;">Process</button>
+          <button class="btn btn-outline del-order-btn" data-id="${o.id}" style="color:var(--color-danger); padding:4px 8px; font-size:0.8rem;">Delete</button>
+        </td>`;
       tbody.appendChild(tr);
     });
     tbody.querySelectorAll(".view-order-btn").forEach((b) => b.addEventListener("click", () => viewOrder(b.dataset.id)));
+    tbody.querySelectorAll(".del-order-btn").forEach((b) => b.addEventListener("click", () => deleteOrder(b.dataset.id)));
   }
+
+  async function deleteOrder(id) {
+    if (!confirm("Delete this order permanently? This cannot be undone.")) return;
+    await deleteDoc(doc(db, "orders", id));
+  }
+
+  wireBulkSelect("orders-table-body", "select-all-orders", "bulk-delete-orders-btn", async (ids) => {
+    for (const id of ids) await deleteDoc(doc(db, "orders", id));
+  });
 
   wireTabStrip("#store-orders .tab-strip", "orderTab", (tab) => { currentOrderTab = tab; renderOrdersTable(); });
 
