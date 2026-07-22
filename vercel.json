@@ -4,11 +4,11 @@
   "rewrites": [
     {
       "source": "/products/:slug",
-      "destination": "/product.html"
+      "destination": "/product"
     },
     {
       "source": "/blog/:slug",
-      "destination": "/blog-post.html"
+      "destination": "/blog-post"
     },
     {
       "source": "/share",
