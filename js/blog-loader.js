@@ -57,14 +57,22 @@ const BlogLoader = (function () {
     return [...posts].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
   }
 
-  // Plain-text excerpt for cards/meta descriptions — pulls text out of the
-  // first heading/paragraph block, since posts don't have a separate
-  // "excerpt" field. Keeps things simple: one field (blocks) stays the
-  // single source of truth for post content.
+  // Plain-text excerpt for cards/meta descriptions. Posts don't have a
+  // separate "excerpt" field, so this pulls text out of whichever content
+  // representation the post has: the rich-text `content` HTML field
+  // (current posts), or the older `blocks` array (posts saved before the
+  // rich text editor existed).
   function getExcerpt(post, maxLen) {
     maxLen = maxLen || 140;
-    const textBlock = (post.blocks || []).find((b) => (b.type === "paragraph" || b.type === "heading") && b.text && b.text.trim());
-    const raw = textBlock ? textBlock.text.trim() : "";
+    let raw = "";
+    if (post.content) {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = post.content;
+      raw = (tmp.textContent || "").replace(/\s+/g, " ").trim();
+    } else {
+      const textBlock = (post.blocks || []).find((b) => (b.type === "paragraph" || b.type === "heading") && b.text && b.text.trim());
+      raw = textBlock ? textBlock.text.trim() : "";
+    }
     return raw.length > maxLen ? raw.slice(0, maxLen).trim() + "…" : raw;
   }
 
@@ -95,7 +103,27 @@ const BlogLoader = (function () {
     return "";
   }
 
+  // The `content` field is HTML authored in the admin's rich text editor.
+  // Only the site owner can write it (Firestore rules restrict writes to
+  // authenticated admins), but it's still stripped of anything that could
+  // execute script before ever touching the live page, as a safety net.
+  function sanitizeContentHTML(html) {
+    const tmp = document.createElement("div");
+    tmp.innerHTML = html || "";
+    tmp.querySelectorAll("script, style, iframe, object, embed, link, meta").forEach((el) => el.remove());
+    tmp.querySelectorAll("*").forEach((el) => {
+      [...el.attributes].forEach((attr) => {
+        const name = attr.name.toLowerCase();
+        if (name.startsWith("on") || (name === "href" && /^\s*javascript:/i.test(attr.value)) || (name === "src" && /^\s*javascript:/i.test(attr.value))) {
+          el.removeAttribute(attr.name);
+        }
+      });
+    });
+    return tmp.innerHTML;
+  }
+
   function renderPostHTML(post) {
+    if (post.content) return sanitizeContentHTML(post.content);
     return (post.blocks || []).map(renderBlockHTML).join("\n");
   }
 

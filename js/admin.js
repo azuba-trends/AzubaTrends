@@ -908,134 +908,185 @@ setTimeout(() => {
   // built in step 2 — resetBlogPostForm() is a placeholder until then so
   // nav.js's fresh-form wiring doesn't error out when "+ Add Post" is clicked.
   let blogPostsList = [];
-  let bpBlocks = []; // [{ id, type: "heading"|"paragraph"|"image", text, imageUrl, caption }]
-  let bpDragBlockId = null;
 
-  function newBlockId() {
-    return "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  // ----------------------------------------------------------------
+  // Rich text editor: WordPress-Classic-Editor-style "Visual" / "Code"
+  // toggle. bp-content-visual is a contenteditable div driven by
+  // document.execCommand for formatting; bp-content-code is a plain
+  // <textarea> holding the same content as raw HTML. Only one is ever
+  // being typed into at a time, so instead of fighting cursor position
+  // by re-rendering the live pane on every keystroke, each pane keeps
+  // its own value up to date internally and the OTHER pane is synced
+  // whenever: (a) the user switches tabs, or (b) after a short pause in
+  // typing (so "Code" already matches if you peek without switching).
+  // That gives the "both stay live" feel WordPress users expect without
+  // the contenteditable cursor jumping to the start on every re-render.
+  const rteVisual = document.getElementById("bp-content-visual");
+  const rteCode = document.getElementById("bp-content-code");
+  const rteImgToolbar = document.getElementById("rte-img-toolbar");
+  let rteActiveTab = "visual";
+  let rteSelectedImage = null;
+  let rteSyncTimer = null;
+
+  function rteSyncCodeFromVisual() { rteCode.value = rteVisual.innerHTML; }
+  function rteSyncVisualFromCode() { rteVisual.innerHTML = rteCode.value; }
+
+  function rteScheduleSync(fromTab) {
+    clearTimeout(rteSyncTimer);
+    rteSyncTimer = setTimeout(() => {
+      if (fromTab === "visual") rteSyncCodeFromVisual();
+      else rteSyncVisualFromCode();
+    }, 400);
   }
 
-  document.getElementById("bp-add-heading").addEventListener("click", () => {
-    bpBlocks.push({ id: newBlockId(), type: "heading", text: "" });
-    renderBlocksEditor();
-  });
-  document.getElementById("bp-add-paragraph").addEventListener("click", () => {
-    bpBlocks.push({ id: newBlockId(), type: "paragraph", text: "" });
-    renderBlocksEditor();
-  });
-  document.getElementById("bp-add-image").addEventListener("click", () => {
-    bpBlocks.push({ id: newBlockId(), type: "image", imageUrl: "", caption: "" });
-    renderBlocksEditor();
-  });
+  rteVisual.addEventListener("input", () => rteScheduleSync("visual"));
+  rteCode.addEventListener("input", () => rteScheduleSync("code"));
 
-  function moveBlock(id, dir) {
-    const i = bpBlocks.findIndex((b) => b.id === id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= bpBlocks.length) return;
-    [bpBlocks[i], bpBlocks[j]] = [bpBlocks[j], bpBlocks[i]];
-    renderBlocksEditor();
-  }
+  document.querySelectorAll(".rte-tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.rteTab;
+      if (tab === rteActiveTab) return;
+      clearTimeout(rteSyncTimer);
+      if (rteActiveTab === "visual") rteSyncCodeFromVisual();
+      else rteSyncVisualFromCode();
 
-  function removeBlock(id) {
-    bpBlocks = bpBlocks.filter((b) => b.id !== id);
-    renderBlocksEditor();
-  }
-
-  // Renders the block list. Re-rendering after every change is simple and
-  // fast enough here (posts realistically have a handful to a few dozen
-  // blocks) — no need for fine-grained DOM patching.
-  function renderBlocksEditor() {
-    const wrap = document.getElementById("bp-blocks-editor");
-    wrap.innerHTML = "";
-    bpBlocks.forEach((block, idx) => {
-      const div = document.createElement("div");
-      div.className = "block-item";
-      div.draggable = true;
-      div.dataset.id = block.id;
-
-      const typeLabel = block.type === "heading" ? "Heading" : block.type === "paragraph" ? "Paragraph" : "Image";
-      let bodyHtml = "";
-      if (block.type === "heading") {
-        bodyHtml = `<input type="text" class="block-field-text" placeholder="Heading text" value="${esc(block.text || "")}">`;
-      } else if (block.type === "paragraph") {
-        bodyHtml = `<textarea class="block-field-text" rows="3" placeholder="Paragraph text">${esc(block.text || "")}</textarea>`;
-      } else {
-        bodyHtml = `
-          <input type="file" class="block-field-img" accept="image/*">
-          ${block.imageUrl ? `<div class="img-preview-row"><img src="${esc(block.imageUrl)}"></div>` : ""}
-          <input type="text" class="block-field-caption" placeholder="Caption (optional)" value="${esc(block.caption || "")}" style="margin-top:6px;">
-        `;
-      }
-
-      div.innerHTML = `
-        <div class="block-item__header">
-          <span class="block-item__handle" title="Drag to reorder">⠿</span>
-          <span class="block-item__type">${typeLabel}</span>
-          <div class="block-item__actions">
-            <button type="button" class="btn btn-outline block-up-btn" ${idx === 0 ? "disabled" : ""}>↑</button>
-            <button type="button" class="btn btn-outline block-down-btn" ${idx === bpBlocks.length - 1 ? "disabled" : ""}>↓</button>
-            <button type="button" class="btn btn-outline block-del-btn" style="color:var(--color-danger);">Remove</button>
-          </div>
-        </div>
-        ${bodyHtml}
-      `;
-
-      // Text/textarea content just updates in-memory state on input — no
-      // full re-render needed (that would steal focus mid-typing).
-      const textField = div.querySelector(".block-field-text");
-      if (textField) textField.addEventListener("input", (e) => { block.text = e.target.value; });
-
-      const captionField = div.querySelector(".block-field-caption");
-      if (captionField) captionField.addEventListener("input", (e) => { block.caption = e.target.value; });
-
-      const imgField = div.querySelector(".block-field-img");
-      if (imgField) {
-        imgField.addEventListener("change", async (e) => {
-          const file = e.target.files[0];
-          if (!file) return;
-          try {
-            block.imageUrl = await uploadToImgBB(file);
-            renderBlocksEditor();
-          } catch (err) {
-            alert("Image upload failed: " + err.message);
-          }
-        });
-      }
-
-      div.querySelector(".block-up-btn").addEventListener("click", () => moveBlock(block.id, -1));
-      div.querySelector(".block-down-btn").addEventListener("click", () => moveBlock(block.id, 1));
-      div.querySelector(".block-del-btn").addEventListener("click", () => removeBlock(block.id));
-
-      // Native HTML5 drag-and-drop reorder. Falls back gracefully to the
-      // up/down buttons on touch devices where drag doesn't fire.
-      div.addEventListener("dragstart", () => {
-        bpDragBlockId = block.id;
-        div.classList.add("dragging");
-      });
-      div.addEventListener("dragend", () => {
-        div.classList.remove("dragging");
-        wrap.querySelectorAll(".block-item").forEach((el) => el.classList.remove("drag-over"));
-      });
-      div.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        if (block.id !== bpDragBlockId) div.classList.add("drag-over");
-      });
-      div.addEventListener("dragleave", () => div.classList.remove("drag-over"));
-      div.addEventListener("drop", (e) => {
-        e.preventDefault();
-        div.classList.remove("drag-over");
-        if (!bpDragBlockId || bpDragBlockId === block.id) return;
-        const fromIdx = bpBlocks.findIndex((b) => b.id === bpDragBlockId);
-        const toIdx = bpBlocks.findIndex((b) => b.id === block.id);
-        if (fromIdx < 0 || toIdx < 0) return;
-        const [moved] = bpBlocks.splice(fromIdx, 1);
-        bpBlocks.splice(toIdx, 0, moved);
-        bpDragBlockId = null;
-        renderBlocksEditor();
-      });
-
-      wrap.appendChild(div);
+      rteActiveTab = tab;
+      document.querySelectorAll(".rte-tab-btn").forEach((b) => b.classList.toggle("active", b === btn));
+      rteVisual.hidden = tab !== "visual";
+      rteCode.hidden = tab !== "code";
+      if (tab === "visual") { hideImageToolbar(); rteVisual.focus(); } else { rteCode.focus(); }
     });
+  });
+
+  // --- Formatting toolbar (execCommand-based — simple, no dependency,
+  // works the same way the old WordPress Classic Editor toolbar did) ---
+  document.querySelectorAll(".rte-btn[data-cmd]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      rteVisual.focus();
+      document.execCommand(btn.dataset.cmd, false, null);
+      rteSyncCodeFromVisual();
+    });
+  });
+  document.querySelectorAll(".rte-btn[data-block]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      rteVisual.focus();
+      document.execCommand("formatBlock", false, btn.dataset.block);
+      rteSyncCodeFromVisual();
+    });
+  });
+  document.getElementById("rte-link-btn").addEventListener("click", () => {
+    const url = prompt("Link URL:", "https://");
+    if (!url) return;
+    rteVisual.focus();
+    document.execCommand("createLink", false, url);
+    rteSyncCodeFromVisual();
+  });
+
+  // --- Image insert: upload via the same ImgBB pipeline used elsewhere,
+  // then drop an <img> at the cursor, wrapped so size/align classes
+  // (applied via the mini image toolbar below) have something to target. ---
+  const rteImageFile = document.getElementById("rte-image-file");
+  document.getElementById("rte-image-btn").addEventListener("click", () => rteImageFile.click());
+  rteImageFile.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const url = await uploadToImgBB(file);
+      rteVisual.focus();
+      const html = `<img src="${esc(url)}" class="rte-img--medium rte-img--center" alt="">`;
+      if (!document.execCommand("insertHTML", false, html)) {
+        rteVisual.insertAdjacentHTML("beforeend", html);
+      }
+      rteSyncCodeFromVisual();
+    } catch (err) {
+      alert("Image upload failed: " + err.message);
+    }
+  });
+
+  // --- Selecting an image inside the editor shows a mini toolbar for
+  // size (S/M/L/Full) and alignment (left/center/right), plus a caption
+  // field (rendered as a <figcaption> wrapped around the image on save). ---
+  function showImageToolbar(img) {
+    rteSelectedImage = img;
+    document.querySelectorAll(".rte-editor img").forEach((el) => el.classList.remove("rte-img--selected"));
+    img.classList.add("rte-img--selected");
+    rteImgToolbar.hidden = false;
+    document.getElementById("rte-img-caption").value = img.closest("figure")?.querySelector("figcaption")?.textContent || "";
+  }
+  function hideImageToolbar() {
+    if (rteSelectedImage) rteSelectedImage.classList.remove("rte-img--selected");
+    rteSelectedImage = null;
+    rteImgToolbar.hidden = true;
+  }
+  rteVisual.addEventListener("click", (e) => {
+    if (e.target.tagName === "IMG") showImageToolbar(e.target);
+    else hideImageToolbar();
+  });
+  document.querySelectorAll(".rte-btn[data-imgsize]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (!rteSelectedImage) return;
+      rteSelectedImage.classList.remove("rte-img--small", "rte-img--medium", "rte-img--large", "rte-img--full");
+      rteSelectedImage.classList.add("rte-img--" + btn.dataset.imgsize);
+      rteSyncCodeFromVisual();
+    });
+  });
+  document.querySelectorAll(".rte-btn[data-imgalign]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (!rteSelectedImage) return;
+      rteSelectedImage.classList.remove("rte-img--left", "rte-img--center", "rte-img--right", "rte-img--none");
+      rteSelectedImage.classList.add("rte-img--" + btn.dataset.imgalign);
+      rteSyncCodeFromVisual();
+    });
+  });
+  document.getElementById("rte-img-caption").addEventListener("input", (e) => {
+    if (!rteSelectedImage) return;
+    const text = e.target.value;
+    let figure = rteSelectedImage.closest("figure");
+    if (!text) {
+      // No caption: unwrap back to a bare <img> if it was wrapped.
+      if (figure) figure.replaceWith(rteSelectedImage);
+    } else {
+      if (!figure) {
+        figure = document.createElement("figure");
+        rteSelectedImage.replaceWith(figure);
+        figure.appendChild(rteSelectedImage);
+      }
+      let caption = figure.querySelector("figcaption");
+      if (!caption) { caption = document.createElement("figcaption"); figure.appendChild(caption); }
+      caption.textContent = text;
+    }
+    rteSyncCodeFromVisual();
+  });
+  document.getElementById("rte-img-remove").addEventListener("click", () => {
+    if (!rteSelectedImage) return;
+    (rteSelectedImage.closest("figure") || rteSelectedImage).remove();
+    hideImageToolbar();
+    rteSyncCodeFromVisual();
+  });
+
+  function getBlogContentHTML() {
+    return rteActiveTab === "visual" ? rteVisual.innerHTML : rteCode.value;
+  }
+  function setBlogContentHTML(html) {
+    rteVisual.innerHTML = html || "";
+    rteCode.value = html || "";
+  }
+
+  // One-time migration: older posts were saved as an array of typed
+  // blocks (heading/paragraph/image) rather than a single HTML string.
+  // Converting them into equivalent HTML lets old posts open straight
+  // into the new editor and keep working exactly as before.
+  function blocksToHTML(blocks) {
+    return (blocks || []).map((b) => {
+      if (b.type === "heading") return `<h2>${esc(b.text || "")}</h2>`;
+      if (b.type === "paragraph") return `<p>${esc(b.text || "")}</p>`;
+      if (b.type === "image" && b.imageUrl) {
+        const img = `<img src="${esc(b.imageUrl)}" class="rte-img--medium rte-img--center" alt="${esc(b.caption || "")}">`;
+        return b.caption ? `<figure>${img}<figcaption>${esc(b.caption)}</figcaption></figure>` : `<figure>${img}</figure>`;
+      }
+      return "";
+    }).join("\n");
   }
 
   // Same lightweight writing-checklist pattern as the product form.
@@ -1089,8 +1140,12 @@ setTimeout(() => {
     document.getElementById("bp-cover-img").value = "";
     document.getElementById("bp-cover-preview").innerHTML = "";
     document.getElementById("blogpost-form-title").textContent = "Add New Post";
-    bpBlocks = [];
-    renderBlocksEditor();
+    rteActiveTab = "visual";
+    document.querySelectorAll(".rte-tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.rteTab === "visual"));
+    rteVisual.hidden = false;
+    rteCode.hidden = true;
+    hideImageToolbar();
+    setBlogContentHTML("");
     renderBlogSeoChecklist();
   }
 
@@ -1106,8 +1161,15 @@ setTimeout(() => {
     document.getElementById("bp-existing-cover").value = p.coverImage || "";
     document.getElementById("bp-cover-preview").innerHTML = "";
     previewExistingImages(document.getElementById("bp-cover-preview"), p.coverImage ? [p.coverImage] : []);
-    bpBlocks = (p.blocks || []).map((b) => ({ ...b }));
-    renderBlocksEditor();
+    rteActiveTab = "visual";
+    document.querySelectorAll(".rte-tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.rteTab === "visual"));
+    rteVisual.hidden = false;
+    rteCode.hidden = true;
+    hideImageToolbar();
+    // Posts saved before this editor existed only have `blocks`; convert
+    // those to HTML once so they open normally. Anything saved since has
+    // `content` already and is used as-is.
+    setBlogContentHTML(p.content != null ? p.content : blocksToHTML(p.blocks));
     renderBlogSeoChecklist();
     document.getElementById("blogpost-form-title").textContent = "Edit Post";
     goToSection("blog-add-post");
@@ -1133,8 +1195,6 @@ setTimeout(() => {
       const finalSlug = ensureUniqueBlogSlug(generateSlug(rawSlug), pId || null);
       if (finalSlug !== rawSlug) document.getElementById("bp-slug").value = finalSlug;
 
-      // Blocks currently being edited (text field) already write straight
-      // into bpBlocks on input, so it's ready to save as-is.
       const pData = {
         title,
         slug: finalSlug,
@@ -1142,7 +1202,7 @@ setTimeout(() => {
         seoTitle: document.getElementById("bp-seo-title").value.trim(),
         seoDesc: document.getElementById("bp-seo-desc").value.trim(),
         coverImage,
-        blocks: bpBlocks,
+        content: getBlogContentHTML(),
         status,
         updatedAt: new Date().toISOString()
       };

@@ -711,13 +711,59 @@
           </div>
         </div>
 
-        <h3 style="margin-top:28px; border-top:1px solid #eee; padding-top:20px;">Content blocks</h3>
-        <p class="field-hint">Drag a block by its ⠿ handle to reorder, or use the arrow buttons. Add blocks with the buttons below.</p>
-        <div id="bp-blocks-editor"></div>
-        <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
-          <button type="button" class="btn btn-outline" id="bp-add-heading">+ Heading block</button>
-          <button type="button" class="btn btn-outline" id="bp-add-paragraph">+ Paragraph block</button>
-          <button type="button" class="btn btn-outline" id="bp-add-image">+ Image block</button>
+        <h3 style="margin-top:28px; border-top:1px solid #eee; padding-top:20px;">Post Content</h3>
+        <p class="field-hint">Type and format freely in <strong>Visual</strong>, or switch to <strong>Code</strong> to edit the raw HTML directly — both stay in sync.</p>
+
+        <div class="rte-wrap">
+          <div class="rte-toolbar" id="rte-toolbar">
+            <button type="button" class="rte-btn" data-cmd="bold" title="Bold"><b>B</b></button>
+            <button type="button" class="rte-btn" data-cmd="italic" title="Italic"><i>I</i></button>
+            <button type="button" class="rte-btn" data-cmd="underline" title="Underline"><u>U</u></button>
+            <button type="button" class="rte-btn" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+            <span class="rte-sep"></span>
+            <button type="button" class="rte-btn" data-block="p" title="Paragraph">¶</button>
+            <button type="button" class="rte-btn" data-block="h2" title="Heading 2">H2</button>
+            <button type="button" class="rte-btn" data-block="h3" title="Heading 3">H3</button>
+            <button type="button" class="rte-btn" data-block="blockquote" title="Quote">”</button>
+            <span class="rte-sep"></span>
+            <button type="button" class="rte-btn" data-cmd="insertUnorderedList" title="Bullet list">• ≡</button>
+            <button type="button" class="rte-btn" data-cmd="insertOrderedList" title="Numbered list">1. ≡</button>
+            <span class="rte-sep"></span>
+            <button type="button" class="rte-btn" data-cmd="justifyLeft" title="Align left">⇤</button>
+            <button type="button" class="rte-btn" data-cmd="justifyCenter" title="Align center">↔</button>
+            <button type="button" class="rte-btn" data-cmd="justifyRight" title="Align right">⇥</button>
+            <span class="rte-sep"></span>
+            <button type="button" class="rte-btn" id="rte-link-btn" title="Insert link">🔗</button>
+            <button type="button" class="rte-btn" id="rte-image-btn" title="Insert image">🖼️</button>
+            <span class="rte-sep"></span>
+            <button type="button" class="rte-btn" data-cmd="undo" title="Undo">↺</button>
+            <button type="button" class="rte-btn" data-cmd="redo" title="Redo">↻</button>
+            <input type="file" id="rte-image-file" accept="image/*" style="display:none;">
+          </div>
+
+          <!-- Shown only when an image inside the editor is selected -->
+          <div class="rte-img-toolbar" id="rte-img-toolbar" hidden>
+            <span class="rte-img-toolbar__label">Image:</span>
+            <button type="button" class="rte-btn" data-imgsize="small">S</button>
+            <button type="button" class="rte-btn" data-imgsize="medium">M</button>
+            <button type="button" class="rte-btn" data-imgsize="large">L</button>
+            <button type="button" class="rte-btn" data-imgsize="full">Full</button>
+            <span class="rte-sep"></span>
+            <button type="button" class="rte-btn" data-imgalign="left">⇤</button>
+            <button type="button" class="rte-btn" data-imgalign="center">↔</button>
+            <button type="button" class="rte-btn" data-imgalign="right">⇥</button>
+            <span class="rte-sep"></span>
+            <input type="text" id="rte-img-caption" placeholder="Caption (optional)" class="rte-img-toolbar__caption">
+            <button type="button" class="rte-btn rte-btn--danger" id="rte-img-remove">Remove</button>
+          </div>
+
+          <div class="rte-tabs">
+            <button type="button" class="rte-tab-btn active" data-rte-tab="visual">Visual</button>
+            <button type="button" class="rte-tab-btn" data-rte-tab="code">Code</button>
+          </div>
+
+          <div id="bp-content-visual" class="rte-editor" contenteditable="true" data-placeholder="Start writing your post…"></div>
+          <textarea id="bp-content-code" class="rte-code" spellcheck="false" hidden></textarea>
         </div>
 
         <div style="display:flex; gap:8px; margin-top:28px; border-top:1px solid #eee; padding-top:20px;">
