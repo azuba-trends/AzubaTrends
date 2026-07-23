@@ -39,11 +39,11 @@
   <p class="tester-note">
     Internal tool — not linked from the storefront, delete or ignore once you're done testing.
     <br><br>
-    This page fetches <code>/api/product?id=YOUR_ID</code> (the Vercel serverless function in <code>api/product.js</code>)
+    This page fetches <code>/api/share?type=product&id=YOUR_ID</code> (the Vercel serverless function in <code>api/share.js</code>)
     and reads back the Open Graph meta tags (<code>og:title</code>, <code>og:description</code>, <code>og:image</code>)
     it returns — the same tags WhatsApp/Facebook/Twitter read when someone shares a product link.
     <br><br>
-    <strong>This only works when this page itself is deployed on Vercel</strong> (same place <code>api/product.js</code> runs) —
+    <strong>This only works when this page itself is deployed on Vercel</strong> (same place <code>api/share.js</code> runs) —
     it will NOT work on GitHub Pages or when just opened as a local file, since there's no serverless function to call there.
     Deploy this file to your Vercel project alongside everything else, then open it at
     <code>https://your-site.vercel.app/share-preview-tester.html</code>.
@@ -94,7 +94,7 @@ document.getElementById("tester-form").addEventListener("submit", async (e) => {
   card.style.display = "none";
   rawBox.style.display = "none";
   status.className = "";
-  status.textContent = "Fetching /api/product...";
+  status.textContent = "Fetching /api/share...";
 
   const id = extractProductId(document.getElementById("tester-input").value);
   if (!id) {
@@ -104,10 +104,10 @@ document.getElementById("tester-form").addEventListener("submit", async (e) => {
   }
 
   try {
-    const res = await fetch(`/api/product?id=${encodeURIComponent(id)}`);
+    const res = await fetch(`/api/share?type=product&id=${encodeURIComponent(id)}`);
     if (res.status === 404) {
       status.className = "error";
-      status.textContent = "Got a 404 for /api/product — this route doesn't exist on whatever is currently hosting this page. Make sure you're viewing this on your Vercel deployment, not GitHub Pages or a local file.";
+      status.textContent = "Got a 404 for /api/share — this route doesn't exist on whatever is currently hosting this page. Make sure you're viewing this on your Vercel deployment, not GitHub Pages or a local file.";
       return;
     }
     const html = await res.text();
@@ -129,7 +129,7 @@ document.getElementById("tester-form").addEventListener("submit", async (e) => {
     rawBox.style.display = "block";
 
     status.className = "ok";
-    status.textContent = "✓ api/product.js responded — this is what a link preview should look like when this product is shared.";
+    status.textContent = "✓ api/share.js responded — this is what a link preview should look like when this product is shared.";
   } catch (err) {
     status.className = "error";
     status.textContent = "Fetch failed: " + (err.message || err);

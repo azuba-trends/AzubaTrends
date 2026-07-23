@@ -110,6 +110,18 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Pages — anyone can read (that's how /:slug pages render without a
+    // server), only the logged-in admin can write. Default pages (Home,
+    // About, Terms, 404 — isDefault: true) can be EDITED by the admin but
+    // never DELETED, even by the admin, even from DevTools/Firestore
+    // console access — this check happens server-side here, not just as a
+    // disabled button in the UI, so it can't be bypassed.
+    match /pages/{pageId} {
+      allow read: if true;
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin() && resource.data.isDefault != true;
+    }
+
     // Telegram bot configs — UNLIKE every other collection above, this is
     // NOT public-read. A Telegram bot token is a real secret: whoever has
     // it can send messages as your bot into any chat/group it's in, and

@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     name: storeName,
     short_name: storeName.length > 12 ? storeName.slice(0, 12) : storeName,
     description: `Shop ${storeName} — order online, delivered to your door.`,
-    start_url: "/index.html",
+    start_url: "/",
     scope: "/",
     display: "standalone",
     background_color: "#F7F3EC",

@@ -14,11 +14,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Terms &amp; Conditions — AzubaTrends</title>
 <meta name="description" content="Terms and conditions for shopping with AzubaTrends.">
-<link rel="canonical" href="https://azuba-trends.vercel.app/terms.html">
+<link rel="canonical" href="https://azuba-trends.vercel.app/terms">
 
 <!-- OPEN GRAPH (Facebook, WhatsApp) -->
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://azuba-trends.vercel.app/terms.html">
+<meta property="og:url" content="https://azuba-trends.vercel.app/terms">
 <meta property="og:title" content="Terms &amp; Conditions — AzubaTrends">
 <meta property="og:description" content="Terms and conditions for shopping with AzubaTrends.">
 <meta property="og:image" content="https://azuba-trends.vercel.app/images/icons/icon-512.png">
@@ -43,12 +43,12 @@
 <main>
   <div class="container">
     <section class="page-header">
-      <div class="breadcrumb"><a href="/index.html">Home</a> / Terms &amp; Conditions</div>
-      <h1>Terms &amp; Conditions</h1>
+      <div class="breadcrumb"><a href="/">Home</a> / Terms &amp; Conditions</div>
+      <h1 id="terms-heading">Terms &amp; Conditions</h1>
       <p>Placeholder text below — replace with the site owner's actual policy before launch.</p>
     </section>
 
-    <article class="prose">
+    <article class="prose" id="terms-content">
       <h2>1. About these terms</h2>
       <p>
         These terms govern purchases made on this website. By placing an order,
@@ -106,7 +106,7 @@
       </p>
       <p>
         To start a return or exchange, contact us using the details on the
-        <a href="/about.html">About</a> page with your order number.
+        <a href="/about">About</a> page with your order number.
       </p>
 
       <h2>6. Reviews</h2>
@@ -135,9 +135,14 @@
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
 <script src="js/product-loader.js"></script>
 <script src="js/search.js"></script>
+<script src="js/page-loader.js"></script>
 <script>
   window.addEventListener("layout:ready", () => ProductLoader.initHeader());
   document.addEventListener("DOMContentLoaded", () => {
+    PageLoader.overlayDefaultPage("terms", {
+      headingEl: document.getElementById("terms-heading"),
+      contentEl: document.getElementById("terms-content")
+    });
     Security.setTextSafely(document.getElementById("terms-contact-email"), SITE_CONFIG.adminEmail);
     document.getElementById("terms-contact-email").href = "mailto:" + SITE_CONFIG.adminEmail;
   });

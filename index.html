@@ -73,6 +73,10 @@
       <h2 id="recommended-heading">Recommended for you</h2>
       <div class="product-grid" id="recommended-grid"></div>
     </section>
+
+    <!-- Filled from Admin -> Pages -> Home (only if the admin has written
+         something there) — sits below the product grid, above the footer. -->
+    <article class="prose" id="page-content-block" style="margin-top: var(--space-8);"></article>
   </div>
 </main>
 
@@ -87,10 +91,17 @@
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
 <script src="js/product-loader.js"></script>
 <script src="js/search.js"></script>
+<script src="js/page-loader.js"></script>
 <script>
   window.addEventListener("layout:ready", () => ProductLoader.initHeader());
 
   document.addEventListener("DOMContentLoaded", async () => {
+    // Admin -> Pages -> Home: overlays SEO title/description if set, and
+    // fills the block below the product grid ONLY if the admin actually
+    // wrote something there — an empty editor leaves this page exactly as
+    // it already is.
+    PageLoader.overlayDefaultPage("home", { contentEl: document.getElementById("page-content-block") });
+
     if (SITE_CONFIG.tagline) Security.setTextSafely(document.getElementById("home-tagline"), SITE_CONFIG.tagline);
 
     const grid = document.getElementById("product-grid");

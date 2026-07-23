@@ -25,8 +25,6 @@ export default async function handler(req, res) {
   const staticUrls = [
     { loc: "/", priority: "1.0", changefreq: "daily" },
     { loc: "/category", priority: "0.7", changefreq: "weekly" },
-    { loc: "/about.html", priority: "0.4", changefreq: "monthly" },
-    { loc: "/terms.html", priority: "0.3", changefreq: "monthly" },
     { loc: "/blog", priority: "0.6", changefreq: "weekly" }
   ];
 
@@ -35,6 +33,7 @@ export default async function handler(req, res) {
   let productUrls = [];
   let categoryUrls = [];
   let blogCategoryUrls = [];
+  let pageUrls = [];
 
   try {
     const db = getDb();
@@ -82,15 +81,32 @@ export default async function handler(req, res) {
         changefreq: "weekly"
       });
     });
+    // Pages — both custom pages (added from Admin -> Pages) and the
+    // default pages (about/terms/home/404), all now Firestore-backed so a
+    // meta-title/description edit shows up here with an updated <lastmod>
+    // the moment it's saved, no code change or redeploy needed. "home" and
+    // "404" are skipped: home is already covered by "/" above, and 404
+    // should never be submitted for indexing.
+    const pagesSnap = await db.collection("pages").where("status", "==", "published").get();
+    pagesSnap.forEach((doc) => {
+      const p = doc.data();
+      if (!p.slug || p.slug === "home" || p.slug === "404") return;
+      pageUrls.push({
+        loc: `/${encodeURIComponent(p.slug)}`,
+        priority: p.isDefault ? "0.5" : "0.6",
+        changefreq: "monthly",
+        lastmod: p.updatedAt || p.createdAt
+      });
+    });
   } catch (err) {
     // If Firestore/service-account isn't reachable, still return a valid
     // (if smaller) sitemap with just the static pages, rather than a
     // broken response — Search Console handles a small sitemap fine, but
     // a malformed one gets the whole submission flagged.
-    console.error("sitemap: could not load products/categories/blogCategories:", err.message);
+    console.error("sitemap: could not load products/categories/blogCategories/pages:", err.message);
   }
 
-  const allUrls = [...staticUrls, ...categoryUrls, ...productUrls, ...blogUrls, ...blogCategoryUrls];
+  const allUrls = [...staticUrls, ...categoryUrls, ...productUrls, ...blogUrls, ...blogCategoryUrls, ...pageUrls];
 
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

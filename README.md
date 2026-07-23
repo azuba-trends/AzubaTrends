@@ -92,7 +92,8 @@ AzubaTrends/
 │
 ├── api/                      Vercel serverless functions (Vercel-only, see limitation #5)
 │   ├── place-order.js        Server-side price/stock/coupon re-verification + order write
-│   ├── product.js, blog-post.js   Per-item OG tags for WhatsApp/social link previews
+│   ├── share.js               Per-item OG tags for WhatsApp/social link previews — product AND blog, merged into one function (was product.js + blog-post.js)
+│   ├── page.js                Full server-side rendering for custom Pages (Admin -> Pages) — real content in the first response, not just OG-tag stub
 │   ├── products.js, blog-posts.js, product-feed.js, sitemap.js, manifest.js
 │   ├── import-product.js     One-time product-prefill helper from a third-party URL
 │   ├── submit-review.js      Rate-limited, profanity-filtered public review submission

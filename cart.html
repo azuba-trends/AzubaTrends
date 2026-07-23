@@ -46,7 +46,7 @@
   <div id="empty-cart-msg" style="display: none; text-align: center; margin-top: 50px;">
     <h2>Your cart is empty!</h2>
     <p>Looks like you haven't added anything yet.</p>
-    <a href="/index.html" class="btn btn-primary" style="margin-top: 20px;">Continue Shopping</a>
+    <a href="/" class="btn btn-primary" style="margin-top: 20px;">Continue Shopping</a>
   </div>
 
   <div class="cart-page-grid" id="cart-content" style="display: none;">
@@ -225,7 +225,7 @@
 
     // Checkout Button
     document.getElementById("checkout-btn").addEventListener("click", () => {
-      window.location.href = "/checkout.html";
+      window.location.href = "/checkout";
     });
 
     renderCartPage();

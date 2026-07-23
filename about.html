@@ -14,11 +14,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>About Us — AzubaTrends</title>
 <meta name="description" content="About AzubaTrends — a home goods store delivering across West Bengal.">
-<link rel="canonical" href="https://azuba-trends.vercel.app/about.html">
+<link rel="canonical" href="https://azuba-trends.vercel.app/about">
 
 <!-- OPEN GRAPH (Facebook, WhatsApp) -->
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://azuba-trends.vercel.app/about.html">
+<meta property="og:url" content="https://azuba-trends.vercel.app/about">
 <meta property="og:title" content="About Us — AzubaTrends">
 <meta property="og:description" content="About AzubaTrends — a home goods store delivering across West Bengal.">
 <meta property="og:image" content="https://azuba-trends.vercel.app/images/icons/icon-512.png">
@@ -43,8 +43,8 @@
 <main>
   <div class="container">
     <section class="page-header">
-      <div class="breadcrumb"><a href="/index.html">Home</a> / About</div>
-      <h1>About Us</h1>
+      <div class="breadcrumb"><a href="/">Home</a> / About</div>
+      <h1 id="about-heading">About Us</h1>
     </section>
 
     <!--
@@ -52,7 +52,7 @@
       content. Structure (h2 sections) is kept simple and predictable
       so it's easy to find-and-replace later without touching layout.
     -->
-    <article class="prose">
+    <article class="prose" id="about-content">
       <h2>Our story</h2>
       <p>
         AzubaTrends started as a way to bring hand-made and hand-loomed goods from
@@ -94,9 +94,14 @@
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
 <script src="js/product-loader.js"></script>
 <script src="js/search.js"></script>
+<script src="js/page-loader.js"></script>
 <script>
   window.addEventListener("layout:ready", () => ProductLoader.initHeader());
   document.addEventListener("DOMContentLoaded", () => {
+    PageLoader.overlayDefaultPage("about", {
+      headingEl: document.getElementById("about-heading"),
+      contentEl: document.getElementById("about-content")
+    });
     Security.setTextSafely(document.getElementById("about-contact-email"), SITE_CONFIG.adminEmail);
     document.getElementById("about-contact-email").href = "mailto:" + SITE_CONFIG.adminEmail;
   });

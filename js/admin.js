@@ -54,7 +54,7 @@ setTimeout(() => {
   // for instance) are never restored on reload — that would resurrect a
   // half-filled form as if it still applied, which is more confusing than
   // just landing on Overview.
-  const NON_RESTORABLE_SECTIONS = new Set(["store-add-product", "store-add-category", "store-add-brand", "store-add-coupon", "blog-add-post", "blog-add-category"]);
+  const NON_RESTORABLE_SECTIONS = new Set(["store-add-product", "store-add-category", "store-add-brand", "store-add-coupon", "blog-add-post", "blog-add-category", "add-page"]);
 
   // --- Collapsible "All X" -> "Add X" sidebar groups (accordion) ---
   // Opening one group's submenu closes every other one; `except` (a
@@ -94,7 +94,7 @@ setTimeout(() => {
     el.classList.add("active");
     // WordPress-style full-screen editor: hide the sidebar/topbar while the
     // Add/Edit Post screen is open, same as post-new.php / post.php.
-    document.getElementById("admin-layout").classList.toggle("editor-mode", target === "blog-add-post");
+    document.getElementById("admin-layout").classList.toggle("editor-mode", target === "blog-add-post" || target === "add-page");
     if (!NON_RESTORABLE_SECTIONS.has(target)) {
       try { localStorage.setItem(LAST_SECTION_KEY, target); } catch (err) { /* storage unavailable, ignore */ }
     }
@@ -139,6 +139,7 @@ setTimeout(() => {
       if (fresh === "coupon") resetCouponForm();
       if (fresh === "blogpost") resetBlogPostForm();
       if (fresh === "blogcategory") resetBlogCategoryForm();
+      if (fresh === "page") resetPageForm();
     });
   });
 
@@ -1114,7 +1115,7 @@ setTimeout(() => {
   rteVisual.addEventListener("input", () => rteScheduleSync("visual"));
   rteCode.addEventListener("input", () => rteScheduleSync("code"));
 
-  document.querySelectorAll(".rte-tab-btn").forEach((btn) => {
+  document.querySelectorAll("#blog-add-post .rte-tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const tab = btn.dataset.rteTab;
       if (tab === rteActiveTab) return;
@@ -1123,7 +1124,7 @@ setTimeout(() => {
       else rteSyncVisualFromCode();
 
       rteActiveTab = tab;
-      document.querySelectorAll(".rte-tab-btn").forEach((b) => b.classList.toggle("active", b === btn));
+      document.querySelectorAll("#blog-add-post .rte-tab-btn").forEach((b) => b.classList.toggle("active", b === btn));
       rteVisual.hidden = tab !== "visual";
       rteCode.hidden = tab !== "code";
       if (tab === "visual") { hideImageToolbar(); rteVisual.focus(); } else { rteCode.focus(); }
@@ -1385,7 +1386,7 @@ setTimeout(() => {
     document.getElementById("bp-cover-preview").innerHTML = "";
     document.getElementById("blogpost-form-title").textContent = "Add New Post";
     rteActiveTab = "visual";
-    document.querySelectorAll(".rte-tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.rteTab === "visual"));
+    document.querySelectorAll("#blog-add-post .rte-tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.rteTab === "visual"));
     rteVisual.hidden = false;
     rteCode.hidden = true;
     hideImageToolbar();
@@ -1410,7 +1411,7 @@ setTimeout(() => {
     document.getElementById("bp-cover-preview").innerHTML = "";
     previewExistingImages(document.getElementById("bp-cover-preview"), p.coverImage ? [p.coverImage] : []);
     rteActiveTab = "visual";
-    document.querySelectorAll(".rte-tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.rteTab === "visual"));
+    document.querySelectorAll("#blog-add-post .rte-tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.rteTab === "visual"));
     rteVisual.hidden = false;
     rteCode.hidden = true;
     hideImageToolbar();
@@ -1523,6 +1524,391 @@ setTimeout(() => {
   wireBulkSelect("blogposts-table-body", "select-all-blogposts", "bulk-delete-blogposts-btn", async (ids) => {
     for (const id of ids) await deleteDoc(doc(db, "blogPosts", id));
   });
+
+  // ================================================================
+  // PAGES
+  // ================================================================
+  let pagesList = [];
+  let pagesSeeded = false;
+
+  // Reserved slugs — names already used by a real static file/route in this
+  // project. A custom page using one of these would silently never be
+  // reachable (the real file always wins over our catch-all rewrite), so
+  // block it at save time instead of letting the admin discover it later.
+  const RESERVED_SLUGS = new Set([
+    "about", "terms", "cart", "checkout", "admin", "404", "index", "page",
+    "robots", "sitemap", "manifest", "share", "share-blog", "product",
+    "category", "blog", "products", "product-feed", "api", "images",
+    "css", "js", "lib", "partials", "config", "home"
+  ]);
+
+  // Default pages that already exist as static HTML files. Seeded once
+  // (only if the "pages" collection is completely empty) so they show up
+  // in All Pages and become editable, without touching/losing whatever is
+  // already live in the actual .html files' <head> tags right now.
+  const DEFAULT_PAGES_SEED = [
+    {
+      slug: "home", isDefault: true, heading: "AzubaTrends — Everyday goods for the home",
+      metaTitle: "AzubaTrends — Everyday goods for the home",
+      metaDesc: "Handmade and hand-loomed home goods, delivered across West Bengal. Terracotta, jute, brass, kantha textiles, and more.",
+      keyphrase: "", content: "", contentPosition: "after-products", status: "published"
+    },
+    {
+      slug: "about", isDefault: true, heading: "About Us",
+      metaTitle: "About Us — AzubaTrends",
+      metaDesc: "About AzubaTrends — a home goods store delivering across West Bengal.",
+      keyphrase: "", content: "", contentPosition: "normal", status: "published"
+    },
+    {
+      slug: "terms", isDefault: true, heading: "Terms & Conditions",
+      metaTitle: "Terms & Conditions — AzubaTrends",
+      metaDesc: "Terms and conditions for shopping with AzubaTrends.",
+      keyphrase: "", content: "", contentPosition: "normal", status: "published"
+    },
+    {
+      slug: "404", isDefault: true, heading: "Page not found",
+      metaTitle: "Page not found — AzubaTrends",
+      metaDesc: "The page you're looking for doesn't exist.",
+      keyphrase: "", content: "", contentPosition: "normal", status: "published"
+    }
+  ];
+
+  async function seedDefaultPagesIfEmpty() {
+    if (pagesSeeded) return;
+    pagesSeeded = true;
+    try {
+      const existing = new Set(pagesList.map((p) => p.slug));
+      const missing = DEFAULT_PAGES_SEED.filter((p) => !existing.has(p.slug));
+      if (missing.length === 0) return;
+      for (const p of missing) {
+        const now = new Date().toISOString();
+        await addDoc(collection(db, "pages"), { ...p, createdAt: now, updatedAt: now });
+      }
+    } catch (err) {
+      console.error("seedDefaultPagesIfEmpty error", err);
+    }
+  }
+
+  let unsubPages = null;
+  function listenPages() {
+    if (unsubPages) return;
+    unsubPages = onSnapshot(collection(db, "pages"), (snap) => {
+      pagesList = [];
+      snap.forEach((d) => pagesList.push({ id: d.id, ...d.data() }));
+      seedDefaultPagesIfEmpty();
+      renderPagesTable();
+    }, (err) => console.error("pages listener error", err));
+  }
+
+  function renderPagesTable() {
+    const tbody = document.getElementById("pages-table-body");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    const sorted = [...pagesList].sort((a, b) => {
+      if (!!a.isDefault !== !!b.isDefault) return a.isDefault ? -1 : 1; // defaults first
+      return (b.updatedAt || b.createdAt || "").localeCompare(a.updatedAt || a.createdAt || "");
+    });
+    sorted.forEach((p) => {
+      const sColor = p.status === "published" ? "var(--color-success)" : "var(--color-accent-dark)";
+      const dateStr = p.updatedAt ? new Date(p.updatedAt).toLocaleDateString("en-IN") : "—";
+      const url = p.slug === "home" ? "/" : `/${p.slug}`;
+      const deleteBtn = p.isDefault
+        ? `<button class="btn btn-outline" disabled title="Default pages can't be deleted, only edited" style="padding:4px 8px; font-size:0.8rem; opacity:0.5; cursor:not-allowed;">Delete</button>`
+        : `<button class="btn btn-outline del-page-btn" data-id="${p.id}" style="color:var(--color-danger); padding:4px 8px; font-size:0.8rem;">Delete</button>`;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${p.isDefault ? "" : `<input type="checkbox" class="row-select" data-id="${p.id}">`}</td>
+        <td>${esc(p.heading || "(untitled)")}</td>
+        <td><a href="${esc(url)}" target="_blank" style="color:var(--color-primary);">${esc(url)}</a></td>
+        <td>${p.isDefault ? '<span style="font-weight:bold;">Default</span>' : "Custom"}</td>
+        <td style="color:${sColor}; font-weight:bold;">${esc((p.status || "draft").toUpperCase())}</td>
+        <td>${dateStr}</td>
+        <td>
+          <button class="btn btn-outline edit-page-btn" data-id="${p.id}" style="padding:4px 8px; font-size:0.8rem;">Edit</button>
+          ${deleteBtn}
+        </td>`;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll(".edit-page-btn").forEach((b) => b.addEventListener("click", () => editPage(b.dataset.id)));
+    tbody.querySelectorAll(".del-page-btn").forEach((b) => b.addEventListener("click", () => deletePage(b.dataset.id)));
+
+    const totalEl = document.getElementById("pages-total-count");
+    const defEl = document.getElementById("pages-default-count");
+    const custEl = document.getElementById("pages-custom-count");
+    if (totalEl) {
+      const defCount = pagesList.filter((p) => p.isDefault).length;
+      totalEl.textContent = pagesList.length;
+      defEl.textContent = defCount;
+      custEl.textContent = pagesList.length - defCount;
+    }
+  }
+
+  async function deletePage(id) {
+    const p = pagesList.find((x) => x.id === id);
+    if (p && p.isDefault) { alert("Default pages can't be deleted — only edited."); return; }
+    if (!confirm("Delete this page permanently?")) return;
+    await deleteDoc(doc(db, "pages", id));
+  }
+
+  wireBulkSelect("pages-table-body", "select-all-pages", "bulk-delete-pages-btn", async (ids) => {
+    // Default pages never render a checkbox (see renderPagesTable), so any
+    // id reaching here is already guaranteed custom — but double-check
+    // against Firestore rules' own protection as a second safety net.
+    for (const id of ids) {
+      const p = pagesList.find((x) => x.id === id);
+      if (p && p.isDefault) continue;
+      await deleteDoc(doc(db, "pages", id));
+    }
+  });
+
+  // --- Page editor: simplified rich-text editor (same execCommand approach
+  // as the blog post editor, but scoped to its own ids/classes so the two
+  // editors never cross-wire each other). ---
+  const pgRteVisual = document.getElementById("pg-content-visual");
+  const pgRteCode = document.getElementById("pg-content-code");
+  let pgRteActiveTab = "visual";
+  function pgSyncCodeFromVisual() { pgRteCode.value = pgRteVisual.innerHTML; }
+  function pgSyncVisualFromCode() { pgRteVisual.innerHTML = pgRteCode.value; }
+
+  document.querySelectorAll('[data-pgrte-tab]').forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.pgrteTab;
+      if (tab === pgRteActiveTab) return;
+      if (pgRteActiveTab === "visual") pgSyncCodeFromVisual(); else pgSyncVisualFromCode();
+      pgRteActiveTab = tab;
+      document.querySelectorAll('[data-pgrte-tab]').forEach((b) => b.classList.toggle("active", b === btn));
+      pgRteVisual.hidden = tab !== "visual";
+      pgRteCode.hidden = tab !== "code";
+      (tab === "visual" ? pgRteVisual : pgRteCode).focus();
+    });
+  });
+  document.querySelectorAll('#pg-rte-toolbar .rte-btn[data-pgcmd]').forEach((btn) => {
+    btn.addEventListener("click", () => {
+      pgRteVisual.focus();
+      document.execCommand(btn.dataset.pgcmd, false, null);
+      pgSyncCodeFromVisual();
+    });
+  });
+  document.getElementById("pg-rte-block-select").addEventListener("change", (e) => {
+    const val = e.target.value;
+    e.target.selectedIndex = 0;
+    if (!val) return;
+    pgRteVisual.focus();
+    document.execCommand("formatBlock", false, val);
+    pgSyncCodeFromVisual();
+  });
+  document.getElementById("pg-rte-link-btn").addEventListener("click", () => {
+    const url = prompt("Link URL:");
+    if (!url) return;
+    pgRteVisual.focus();
+    document.execCommand("createLink", false, url);
+    pgSyncCodeFromVisual();
+  });
+  pgRteVisual.addEventListener("input", pgSyncCodeFromVisual);
+  pgRteCode.addEventListener("input", pgSyncVisualFromCode);
+
+  function getPageContentHTML() { return pgRteActiveTab === "visual" ? pgRteVisual.innerHTML : pgRteCode.value; }
+  function setPageContentHTML(html) { pgRteVisual.innerHTML = html || ""; pgRteCode.value = html || ""; }
+
+  const pgPanelToggleBtn = document.getElementById("wp-toggle-page-panel-btn");
+  const pgEditorPanel = document.getElementById("wp-editor-page-panel");
+  if (pgPanelToggleBtn && pgEditorPanel) {
+    pgPanelToggleBtn.addEventListener("click", () => {
+      const nowHidden = pgEditorPanel.classList.toggle("panel-hidden");
+      pgPanelToggleBtn.classList.toggle("active", !nowHidden);
+    });
+  }
+
+  function renderPageSeoChecklist() {
+    const list = document.getElementById("pg-seo-checklist");
+    if (!list) return;
+    const kp = (document.getElementById("pg-keyphrase").value || "").trim().toLowerCase();
+    const seoTitle = (document.getElementById("pg-meta-title").value || document.getElementById("pg-heading").value || "").toLowerCase();
+    const seoDesc = (document.getElementById("pg-meta-desc").value || "").toLowerCase();
+    const slug = (document.getElementById("pg-slug").value || "").toLowerCase();
+
+    if (!kp) { list.innerHTML = '<li style="color:#888;">Add a focus keyphrase to see SEO checks.</li>'; return; }
+
+    const checks = [
+      { label: "In Meta Title", ok: seoTitle.includes(kp) },
+      { label: "In Meta Description", ok: seoDesc.includes(kp) },
+      { label: "In URL slug", ok: slug.includes(generateSlug(kp)) },
+      { label: `Title length ok (${seoTitle.length}/70)`, ok: seoTitle.length > 0 && seoTitle.length <= 70 },
+      { label: `Description length ok (${seoDesc.length}/165)`, ok: seoDesc.length >= 50 && seoDesc.length <= 165 },
+    ];
+    list.innerHTML = checks.map(c =>
+      `<li style="color:${c.ok ? 'var(--color-success, #1a7f37)' : 'var(--color-danger, #c0392b)'};">${c.ok ? '✓' : '✗'} ${c.label}</li>`
+    ).join("");
+  }
+  ["pg-keyphrase", "pg-meta-title", "pg-meta-desc", "pg-slug"].forEach((id) => {
+    document.getElementById(id).addEventListener("input", renderPageSeoChecklist);
+  });
+  document.getElementById("pg-heading").addEventListener("input", (e) => {
+    // Default pages keep their fixed slug (home/about/terms/404) — only
+    // custom pages get their slug auto-derived from the heading as typed.
+    if (document.getElementById("pg-is-default").value !== "true") {
+      document.getElementById("pg-slug").value = generateSlug(e.target.value);
+      document.getElementById("pg-slug-preview").textContent = document.getElementById("pg-slug").value || "slug";
+    }
+    renderPageSeoChecklist();
+  });
+  document.getElementById("pg-slug").addEventListener("input", (e) => {
+    document.getElementById("pg-slug-preview").textContent = e.target.value || "slug";
+    renderPageSeoChecklist();
+  });
+  document.getElementById("pg-image").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("pg-image-preview"), 1));
+
+  function ensureUniquePageSlug(baseSlug, excludeId) {
+    const taken = new Set(pagesList.filter((p) => p.id !== excludeId).map((p) => p.slug).filter(Boolean));
+    if (!taken.has(baseSlug)) return baseSlug;
+    let n = 2;
+    while (taken.has(`${baseSlug}-${n}`)) n++;
+    return `${baseSlug}-${n}`;
+  }
+
+  function resetPageForm() {
+    document.getElementById("pg-id").value = "";
+    document.getElementById("pg-is-default").value = "false";
+    document.getElementById("pg-existing-image").value = "";
+    document.getElementById("pg-heading").value = "";
+    document.getElementById("pg-slug").value = "";
+    document.getElementById("pg-slug").readOnly = false;
+    document.getElementById("pg-slug-preview").textContent = "slug";
+    document.getElementById("pg-default-slug-note").style.display = "none";
+    document.getElementById("pg-content-position").value = "normal";
+    document.getElementById("pg-keyphrase").value = "";
+    document.getElementById("pg-meta-title").value = "";
+    document.getElementById("pg-meta-desc").value = "";
+    document.getElementById("pg-image").value = "";
+    document.getElementById("pg-image-preview").innerHTML = "";
+    document.getElementById("page-form-title").textContent = "Add New Page";
+    pgRteActiveTab = "visual";
+    document.querySelectorAll('[data-pgrte-tab]').forEach((b) => b.classList.toggle("active", b.dataset.pgrteTab === "visual"));
+    pgRteVisual.hidden = false;
+    pgRteCode.hidden = true;
+    setPageContentHTML("");
+    renderPageSeoChecklist();
+  }
+
+  function editPage(id) {
+    const p = pagesList.find((x) => x.id === id);
+    if (!p) return;
+    document.getElementById("pg-id").value = id;
+    document.getElementById("pg-is-default").value = p.isDefault ? "true" : "false";
+    document.getElementById("pg-heading").value = p.heading || "";
+    document.getElementById("pg-slug").value = p.slug || "";
+    document.getElementById("pg-slug").readOnly = !!p.isDefault; // default pages: URL locked
+    document.getElementById("pg-slug-preview").textContent = p.slug || "slug";
+    document.getElementById("pg-default-slug-note").style.display = p.isDefault ? "block" : "none";
+    document.getElementById("pg-content-position").value = p.contentPosition || "normal";
+    document.getElementById("pg-keyphrase").value = p.keyphrase || "";
+    document.getElementById("pg-meta-title").value = p.metaTitle || "";
+    document.getElementById("pg-meta-desc").value = p.metaDesc || "";
+    document.getElementById("pg-existing-image").value = p.image || "";
+    document.getElementById("pg-image-preview").innerHTML = "";
+    previewExistingImages(document.getElementById("pg-image-preview"), p.image ? [p.image] : []);
+    pgRteActiveTab = "visual";
+    document.querySelectorAll('[data-pgrte-tab]').forEach((b) => b.classList.toggle("active", b.dataset.pgrteTab === "visual"));
+    pgRteVisual.hidden = false;
+    pgRteCode.hidden = true;
+    setPageContentHTML(p.content || "");
+    renderPageSeoChecklist();
+    document.getElementById("page-form-title").textContent = "Edit Page";
+    goToSection("add-page");
+  }
+  window.editPage = editPage;
+
+  async function handlePageSave(status) {
+    const heading = document.getElementById("pg-heading").value.trim();
+    if (!heading) return alert("Page heading is required");
+
+    const isDefault = document.getElementById("pg-is-default").value === "true";
+    const saveBtn = status === "published" ? document.getElementById("publish-page-btn") : document.getElementById("draft-page-btn");
+    const originalText = saveBtn.textContent;
+    saveBtn.textContent = "Saving..."; saveBtn.disabled = true;
+    document.getElementById("page-save-status").textContent = "";
+
+    try {
+      const pId = document.getElementById("pg-id").value;
+      let finalSlug = document.getElementById("pg-slug").value.trim() || generateSlug(heading);
+      finalSlug = generateSlug(finalSlug);
+
+      if (!isDefault) {
+        if (RESERVED_SLUGS.has(finalSlug)) {
+          throw new Error(`"/${finalSlug}" is already used by a core page of the site. Please choose a different slug.`);
+        }
+        finalSlug = ensureUniquePageSlug(finalSlug, pId || null);
+        document.getElementById("pg-slug").value = finalSlug;
+      }
+      // Default pages keep whatever slug they were seeded with, always —
+      // never overwritten from the (locked/read-only) slug field.
+      if (isDefault) {
+        const existingDefault = pagesList.find((x) => x.id === pId);
+        finalSlug = existingDefault ? existingDefault.slug : finalSlug;
+      }
+
+      let image = document.getElementById("pg-existing-image").value || "";
+      const imageFile = document.getElementById("pg-image").files[0];
+      if (imageFile) image = await uploadToImgBB(imageFile);
+
+      const pData = {
+        heading,
+        slug: finalSlug,
+        contentPosition: document.getElementById("pg-content-position").value,
+        keyphrase: document.getElementById("pg-keyphrase").value.trim(),
+        metaTitle: document.getElementById("pg-meta-title").value.trim(),
+        metaDesc: document.getElementById("pg-meta-desc").value.trim(),
+        image,
+        content: getPageContentHTML(),
+        status,
+        isDefault,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (pId) {
+        await updateDoc(doc(db, "pages", pId), pData);
+      } else {
+        pData.createdAt = new Date().toISOString();
+        await addDoc(collection(db, "pages"), pData);
+      }
+      resetPageForm();
+      goToSection("all-pages");
+    } catch (err) {
+      document.getElementById("page-save-status").textContent = "Error: " + err.message;
+      document.getElementById("page-save-status").style.color = "var(--color-danger)";
+    } finally {
+      saveBtn.textContent = originalText; saveBtn.disabled = false;
+    }
+  }
+
+  document.getElementById("publish-page-btn").addEventListener("click", () => handlePageSave("published"));
+  document.getElementById("draft-page-btn").addEventListener("click", () => handlePageSave("draft"));
+
+  const previewPageBtn = document.getElementById("preview-page-btn");
+  if (previewPageBtn) {
+    previewPageBtn.addEventListener("click", () => {
+      const heading = document.getElementById("pg-heading").value.trim() || "(untitled)";
+      const imgEl = document.getElementById("pg-image-preview").querySelector("img");
+      const image = (imgEl && imgEl.src) || document.getElementById("pg-existing-image").value || "";
+      const content = getPageContentHTML();
+      const win = window.open("", "_blank");
+      if (!win) { alert("Please allow pop-ups for this site to preview the page."); return; }
+      win.document.write(
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>" + esc(heading) + " — Preview</title>" +
+        "<link rel=\"stylesheet\" href=\"" + location.origin + "/css/main.css\">" +
+        "<link rel=\"stylesheet\" href=\"" + location.origin + "/css/components.css\">" +
+        "<style>body{max-width:760px;margin:40px auto;padding:0 20px 60px;font-family:sans-serif;overflow-wrap:break-word;word-break:break-word;}" +
+        ".wp-preview-badge{display:inline-block;background:#e8a33d;color:#fff;font-size:0.75rem;font-weight:bold;letter-spacing:.03em;padding:4px 12px;border-radius:999px;margin-bottom:18px;}" +
+        "h1{overflow-wrap:break-word;word-break:break-word;}" +
+        ".wp-preview-img{width:100%;max-height:420px;object-fit:cover;border-radius:8px;margin-bottom:24px;}</style>" +
+        "</head><body><span class=\"wp-preview-badge\">PREVIEW — not yet saved</span><h1>" + esc(heading) + "</h1>" +
+        (image ? "<img class=\"wp-preview-img\" src=\"" + esc(image) + "\" alt=\"\">" : "") +
+        "<div class=\"prose\">" + content + "</div></body></html>"
+      );
+      win.document.close();
+    });
+  }
 
   // ================================================================
   // ORDERS
@@ -2191,6 +2577,7 @@ setTimeout(() => {
     listenTelegramBots();
     listenBlogPosts();
     listenBlogCategories();
+    listenPages();
 
     // Reopen whichever section the admin was last looking at (Overview by
     // default) instead of always resetting to the first sidebar item on a
@@ -2204,11 +2591,12 @@ setTimeout(() => {
   }
 
   function stopRealtimeSync() {
-    [unsubCategories, unsubBrands, unsubCoupons, unsubProducts, unsubOrders, unsubTelegramBots, unsubBlogPosts, unsubBlogCategories].forEach((unsub) => {
+    [unsubCategories, unsubBrands, unsubCoupons, unsubProducts, unsubOrders, unsubTelegramBots, unsubBlogPosts, unsubBlogCategories, unsubPages].forEach((unsub) => {
       if (typeof unsub === "function") unsub();
     });
-    unsubCategories = unsubBrands = unsubCoupons = unsubProducts = unsubOrders = unsubTelegramBots = unsubBlogPosts = unsubBlogCategories = null;
+    unsubCategories = unsubBrands = unsubCoupons = unsubProducts = unsubOrders = unsubTelegramBots = unsubBlogPosts = unsubBlogCategories = unsubPages = null;
     syncStarted = false;
+    pagesSeeded = false;
   }
 
 }, 500);

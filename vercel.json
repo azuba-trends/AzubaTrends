@@ -20,11 +20,11 @@
     },
     {
       "source": "/share",
-      "destination": "/api/product"
+      "destination": "/api/share?type=product"
     },
     {
       "source": "/share-blog",
-      "destination": "/api/blog-post"
+      "destination": "/api/share?type=blog"
     },
     {
       "source": "/sitemap.xml",
@@ -37,6 +37,10 @@
     {
       "source": "/manifest.webmanifest",
       "destination": "/api/manifest"
+    },
+    {
+      "source": "/:slug",
+      "destination": "/api/page?slug=:slug"
     }
   ],
   "crons": [

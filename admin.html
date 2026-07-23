@@ -303,6 +303,14 @@
         </div>
       </div>
 
+      <div class="nav-group-title">Pages</div>
+      <div class="nav-item">
+        <button class="nav-btn nav-parent-btn" data-target="all-pages">All Pages<span class="nav-arrow">▸</span></button>
+        <div class="nav-submenu">
+          <button class="nav-btn nav-subbtn" data-target="add-page" data-fresh-form="page">Add Page</button>
+        </div>
+      </div>
+
       <div class="nav-group-title">Settings</div>
       <button class="nav-btn" data-target="settings">Account, Payment &amp; Support</button>
     </div>
@@ -986,6 +994,153 @@
             <button type="button" class="btn btn-outline nav-btn" data-target="blog-categories">Cancel</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- ============ PAGES: ALL PAGES ============ -->
+    <div id="all-pages" class="section">
+      <div class="section-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>All Pages</h2>
+        <div style="display:flex; gap:8px;">
+          <button id="bulk-delete-pages-btn" class="btn btn-outline" style="color:var(--color-danger); border-color:var(--color-danger); display:none;">Delete Selected</button>
+          <button class="btn btn-primary nav-btn" data-target="add-page" data-fresh-form="page">+ Add Page</button>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:16px;">
+        <p style="color:var(--color-ink-soft); font-size:0.9rem; margin:0;">
+          Total Pages: <strong id="pages-total-count">—</strong>
+          &nbsp;(<span id="pages-default-count">—</span> Default, <span id="pages-custom-count">—</span> Custom)
+        </p>
+      </div>
+      <div class="card">
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="select-all-pages"></th>
+                <th>Page Title</th><th>URL</th><th>Type</th><th>Status</th><th>Last Updated</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="pages-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ PAGES: ADD / EDIT PAGE ============ -->
+    <div id="add-page" class="section wp-editor">
+
+      <div class="wp-editor-topbar">
+        <button type="button" class="wp-editor-back nav-btn" data-target="all-pages" title="Back to All Pages">←</button>
+        <div class="wp-editor-crumb">Page &nbsp;·&nbsp; <strong id="page-form-title">Add New Page</strong></div>
+        <div class="wp-editor-topbar-actions">
+          <span id="page-save-status" class="wp-editor-save-status"></span>
+          <button type="button" class="btn btn-outline btn-sm" id="preview-page-btn">Preview</button>
+          <button type="button" class="btn btn-outline btn-sm" id="draft-page-btn">Save Draft</button>
+          <button type="button" class="wp-icon-btn active" id="wp-toggle-page-panel-btn" title="Show/hide settings panel">⚙</button>
+          <button type="button" class="btn btn-primary btn-sm" id="publish-page-btn">Publish</button>
+          <button type="button" class="btn btn-outline btn-sm nav-btn" data-target="all-pages">Cancel</button>
+        </div>
+      </div>
+
+      <div class="wp-editor-body">
+        <!-- Main column: heading + content editor -->
+        <div class="wp-editor-main">
+          <div class="wp-editor-main-inner">
+            <input type="hidden" id="pg-id">
+            <input type="hidden" id="pg-is-default" value="false">
+            <input type="hidden" id="pg-existing-image">
+
+            <input type="text" id="pg-heading" class="wp-editor-title-input" placeholder="Page heading (the H1 shown on the page)" required>
+
+            <div class="rte-wrap">
+              <div class="rte-toolbar" id="pg-rte-toolbar">
+                <button type="button" class="rte-btn" data-pgcmd="bold" title="Bold"><b>B</b></button>
+                <button type="button" class="rte-btn" data-pgcmd="italic" title="Italic"><i>I</i></button>
+                <button type="button" class="rte-btn" data-pgcmd="underline" title="Underline"><u>U</u></button>
+                <button type="button" class="rte-btn" data-pgcmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+                <span class="rte-sep"></span>
+                <select class="rte-select" id="pg-rte-block-select" title="Paragraph / Heading">
+                  <option value="" selected disabled>Format ▾</option>
+                  <option value="p">Paragraph</option>
+                  <option value="h2">Heading 2</option>
+                  <option value="h3">Heading 3</option>
+                  <option value="h4">Heading 4</option>
+                  <option value="blockquote">Quote</option>
+                </select>
+                <span class="rte-sep"></span>
+                <button type="button" class="rte-btn" data-pgcmd="insertUnorderedList" title="Bullet list">• ≡</button>
+                <button type="button" class="rte-btn" data-pgcmd="insertOrderedList" title="Numbered list">1. ≡</button>
+                <span class="rte-sep"></span>
+                <button type="button" class="rte-btn" data-pgcmd="justifyLeft" title="Align left">⇤</button>
+                <button type="button" class="rte-btn" data-pgcmd="justifyCenter" title="Align center">↔</button>
+                <button type="button" class="rte-btn" data-pgcmd="justifyRight" title="Align right">⇥</button>
+                <span class="rte-sep"></span>
+                <button type="button" class="rte-btn" id="pg-rte-link-btn" title="Insert link">🔗</button>
+                <span class="rte-sep"></span>
+                <button type="button" class="rte-btn" data-pgcmd="undo" title="Undo">↺</button>
+                <button type="button" class="rte-btn" data-pgcmd="redo" title="Redo">↻</button>
+              </div>
+
+              <div class="rte-tabs">
+                <button type="button" class="rte-tab-btn active" data-pgrte-tab="visual">Visual</button>
+                <button type="button" class="rte-tab-btn" data-pgrte-tab="code">Code</button>
+              </div>
+
+              <div id="pg-content-visual" class="rte-editor" contenteditable="true" data-placeholder="Start writing this page's content…"></div>
+              <textarea id="pg-content-code" class="rte-code" spellcheck="false" hidden></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right settings panel -->
+        <div class="wp-editor-panel" id="wp-editor-page-panel">
+          <div class="wp-panel-section" id="pg-slug-section">
+            <h4>Permalink</h4>
+            <div class="form-field">
+              <label>Slug <span class="field-hint" style="display:inline;">(used in page URL — yoursite.com/<span id="pg-slug-preview">slug</span>)</span></label>
+              <input type="text" id="pg-slug">
+              <p id="pg-default-slug-note" class="field-hint" style="display:none; margin-top:4px;">This is a default page — its URL can't be changed here.</p>
+            </div>
+          </div>
+
+          <div class="wp-panel-section">
+            <h4>Content Placement</h4>
+            <div class="form-field">
+              <label>Where should the content above show up?</label>
+              <select id="pg-content-position">
+                <option value="normal">Normal — main content area of the page</option>
+                <option value="after-products">After Products — below the product/listing grid, above the footer (for pages like Home/Category that already show products)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="wp-panel-section">
+            <h4>Featured Image</h4>
+            <div class="form-field">
+              <label>Image <span class="field-hint" style="display:inline;">(optional — shown on the page + link previews)</span></label>
+              <input type="file" id="pg-image" accept="image/*">
+              <div class="img-preview-row" id="pg-image-preview"></div>
+            </div>
+          </div>
+
+          <div class="wp-panel-section">
+            <h4>SEO</h4>
+            <div class="form-field">
+              <label>Focus Keyphrase <span class="field-hint" style="display:inline;">(the search term you want this page to rank for — writing guide, not sent to Google)</span></label>
+              <input type="text" id="pg-keyphrase" placeholder="e.g. return and refund policy">
+            </div>
+            <div class="form-field">
+              <label>Meta Title <span class="field-hint" style="display:inline;">(shown in Google results / browser tab — falls back to Heading if empty)</span></label>
+              <input type="text" id="pg-meta-title" maxlength="70">
+            </div>
+            <div class="form-field">
+              <label>Meta Description</label>
+              <input type="text" id="pg-meta-desc" maxlength="165">
+            </div>
+            <ul id="pg-seo-checklist" style="list-style:none; padding:0; margin:10px 0 0; font-size:13px; display:flex; flex-direction:column; gap:6px;"></ul>
+          </div>
+        </div>
       </div>
     </div>
 

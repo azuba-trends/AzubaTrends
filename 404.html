@@ -27,11 +27,11 @@
 <main>
   <div class="notfound">
     <div class="notfound__code">404</div>
-    <h1>This page wandered off</h1>
+    <h1 id="notfound-heading">This page wandered off</h1>
     <p style="max-width:44ch; margin-top:8px;">
       The page you're looking for doesn't exist, or the link may be out of date.
     </p>
-    <p style="margin-top:24px;"><a class="btn btn-primary" href="/index.html">Back to shop</a></p>
+    <p style="margin-top:24px;"><a class="btn btn-primary" href="/">Back to shop</a></p>
   </div>
 </main>
 
@@ -45,8 +45,17 @@
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
 <script src="/js/product-loader.js"></script>
 <script src="/js/search.js"></script>
+<script src="/js/page-loader.js"></script>
 <script>
   window.addEventListener("layout:ready", () => ProductLoader.initHeader());
+  document.addEventListener("DOMContentLoaded", () => {
+    // Heading text only — title/meta stay hardcoded "noindex" on purpose,
+    // that's correct SEO practice for an error page (Google should never
+    // index /404, regardless of what the admin writes for its heading).
+    PageLoader.getPageBySlug("404").then((page) => {
+      if (page && page.heading) Security.setTextSafely(document.getElementById("notfound-heading"), page.heading);
+    });
+  });
 </script>
 </body>
 </html>
