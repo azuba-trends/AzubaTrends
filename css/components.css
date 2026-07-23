@@ -1069,3 +1069,71 @@
   width: min(260px, 60vw);
   height: auto;
 }
+
+/* "Add to Home Screen" banner (js/a2hs.js). Bottom sheet on mobile,
+   bottom-left card on wider screens. Slides/fades in via .a2hs-in,
+   added one frame after insertion so the transition actually runs. */
+#a2hs-banner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3000;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-4);
+  pointer-events: none;
+}
+#a2hs-banner .a2hs-card {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 420px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  position: relative;
+  transform: translateY(16px);
+  opacity: 0;
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+#a2hs-banner.a2hs-in .a2hs-card { transform: translateY(0); opacity: 1; }
+#a2hs-banner .a2hs-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: 4px;
+}
+#a2hs-banner .a2hs-close:hover { color: var(--color-ink); }
+#a2hs-banner .a2hs-body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-right: var(--space-5);
+}
+#a2hs-banner .a2hs-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+#a2hs-banner .a2hs-text { display: flex; flex-direction: column; gap: 2px; }
+#a2hs-banner .a2hs-title { font-size: 0.95rem; color: var(--color-ink); }
+#a2hs-banner .a2hs-sub { font-size: 0.83rem; color: var(--color-ink-soft); }
+#a2hs-banner .a2hs-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+#a2hs-banner .a2hs-actions .btn { flex: 1; }
+
+@media (min-width: 640px) {
+  #a2hs-banner { justify-content: flex-start; padding: var(--space-5); }
+}

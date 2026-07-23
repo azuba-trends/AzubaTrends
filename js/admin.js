@@ -1573,6 +1573,51 @@ setTimeout(() => {
     }
   ];
 
+  // Default pages (about/terms) already ship with real placeholder copy
+  // written directly into their .html files — that text is what visitors
+  // see today, but the Firestore doc's `content` field is intentionally
+  // seeded blank (see DEFAULT_PAGES_SEED comment above: "empty = admin
+  // hasn't touched this yet", so the live static markup isn't silently
+  // overwritten by an empty editor on first save).
+  //
+  // The problem that caused: opening Edit for About/Terms in the admin
+  // showed a BLANK editor, even though the page clearly has content live
+  // on the site — it just wasn't sitting in Firestore yet. This constant
+  // is that same static copy, kept only so editPage() can pre-fill the
+  // editor with it for *display* purposes when the Firestore field is
+  // still empty. Nothing here is written to Firestore until the admin
+  // actually hits Publish/Save — at that point it becomes real, editable,
+  // saved content like any other page.
+  const DEFAULT_PAGE_LIVE_CONTENT = {
+    about: `<h2>Our story</h2>
+<p>AzubaTrends started as a way to bring hand-made and hand-loomed goods from artisans across West Bengal directly to nearby homes — without a showroom, and without the usual markup. "AzubaTrends" means courtyard: the shared, everyday space where a home actually happens.</p>
+<h2>What we sell</h2>
+<p>Everything in the shop is either handmade or hand-finished — terracotta, jute, brass, copper, and hand-stitched textiles among them. Replace this paragraph with real sourcing details, artisan partners, or workshop locations once available.</p>
+<h2>Delivery area</h2>
+<p>We currently deliver within West Bengal, India only. If an address falls outside that area, checkout will let you know before you pay.</p>
+<h2>Get in touch</h2>
+<p>Questions about an order or a product? Reach us at <a href="mailto:admin@example.com">admin@example.com</a>.</p>`,
+    terms: `<h2>1. About these terms</h2>
+<p>These terms govern purchases made on this website. By placing an order, you agree to the terms on this page as they stand at the time of your order.</p>
+<h2>2. Delivery area</h2>
+<p>Orders are currently delivered within West Bengal, India only. Addresses outside this area cannot be accepted at checkout.</p>
+<h2>3. Ordering &amp; payment</h2>
+<p>No account or login is required to place an order — checkout is guest-only. Accepted payment methods, order confirmation, and cancellation details will be listed here by the site owner.</p>
+<h2>4. Pricing &amp; availability</h2>
+<p>Prices are shown in Indian Rupees (₹) and include any discount already applied at checkout. Stock is limited and not reserved until an order is placed; an item may occasionally sell out between browsing and checkout.</p>
+<h2>5. Returns &amp; refunds</h2>
+<p>We accept returns and exchanges within <strong>7 days of delivery</strong>.</p>
+<p><strong>Defective, damaged, or wrong item received:</strong> Contact us within 7 days of delivery with photos of the item. We'll offer a free replacement or a full refund, and any return shipping cost in this case is on us.</p>
+<p><strong>Change of mind (non-defective returns):</strong> We also accept returns for items you simply don't want, as long as the item is unused, unwashed, and in its original packaging with tags intact. In this case, return shipping is paid by the customer, and the refund is issued once we receive and inspect the returned item.</p>
+<p><strong>Exchanges:</strong> Available for size/variant issues on the same product, subject to stock availability, within the same 7-day window.</p>
+<p><strong>Refund method &amp; timeline:</strong> Refunds are issued to the original payment method (or via UPI for Cash on Delivery orders) within 5–7 business days of the returned item passing inspection.</p>
+<p>To start a return or exchange, contact us using the details on the <a href="/about">About</a> page with your order number.</p>
+<h2>6. Reviews</h2>
+<p>Product reviews are submitted voluntarily by visitors and reflect their own opinions. Reviews may include an uploaded photo; do not submit anything you don't have the rights to share.</p>
+<h2>7. Contact</h2>
+<p>Questions about these terms can be sent to <a href="mailto:admin@example.com">admin@example.com</a>.</p>`
+  };
+
   async function seedDefaultPagesIfEmpty() {
     if (pagesSeeded) return;
     pagesSeeded = true;
@@ -1812,7 +1857,28 @@ setTimeout(() => {
     document.querySelectorAll('[data-pgrte-tab]').forEach((b) => b.classList.toggle("active", b.dataset.pgrteTab === "visual"));
     pgRteVisual.hidden = false;
     pgRteCode.hidden = true;
-    setPageContentHTML(p.content || "");
+
+    // Firestore content empty on a default page usually just means
+    // "nobody has saved anything here yet" — NOT that the page has no
+    // content. About/Terms already have real copy live on the site
+    // (baked into the .html file). Pre-fill from that so the editor
+    // shows what's actually live instead of a blank box, and shows a
+    // small note that this text isn't "officially" saved until Publish
+    // is pressed.
+    const hasRealContent = !!(p.content && p.content.trim());
+    const fallback = !hasRealContent ? (DEFAULT_PAGE_LIVE_CONTENT[p.slug] || "") : "";
+    setPageContentHTML(hasRealContent ? p.content : fallback);
+
+    const statusEl = document.getElementById("page-save-status");
+    if (statusEl) {
+      if (!hasRealContent && fallback) {
+        statusEl.textContent = "Showing the content currently live on the site. Press Publish to save it here so it's officially editable going forward.";
+        statusEl.style.color = "var(--color-ink-soft)";
+      } else {
+        statusEl.textContent = "";
+      }
+    }
+
     renderPageSeoChecklist();
     document.getElementById("page-form-title").textContent = "Edit Page";
     goToSection("add-page");
