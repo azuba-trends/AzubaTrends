@@ -19,6 +19,14 @@
       "destination": "/blog-post"
     },
     {
+      "source": "/api/products",
+      "destination": "/api/list?type=products"
+    },
+    {
+      "source": "/api/blog-posts",
+      "destination": "/api/list?type=posts"
+    },
+    {
       "source": "/share",
       "destination": "/api/share?type=product"
     },
