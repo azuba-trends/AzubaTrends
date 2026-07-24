@@ -59,10 +59,10 @@ const OrderEmail = (function () {
 
   function formatItemsForEmail(items) {
     return (items || [])
-      .map(
-        (item, i) =>
-          `${i + 1}. ${item.title} x${item.quantity} — ${SITE_CONFIG.currencySymbol}${item.price * item.quantity}`
-      )
+      .map((item, i) => {
+        const variant = (item.size || item.color) ? ` [${[item.size, item.color].filter(Boolean).join("/")}]` : "";
+        return `${i + 1}. ${item.title}${variant} x${item.quantity} — ${SITE_CONFIG.currencySymbol}${item.price * item.quantity}`;
+      })
       .join("\n");
   }
 

@@ -49,7 +49,9 @@
       keys: [
         { name: "title", weight: 0.5 },
         { name: "tags", weight: 0.3 },
-        { name: "category", weight: 0.2 }
+        { name: "category", weight: 0.2 },
+        { name: "color", weight: 0.15 },
+        { name: "size", weight: 0.1 }
       ],
       threshold: 0.38, // permissive enough for real typos, not so loose it's noisy
       ignoreLocation: true,
@@ -72,7 +74,7 @@
 
   function buildSuggestionRow(product, rawQuery) {
     const row = document.createElement("a");
-    row.href = product.slug ? `/products/${encodeURIComponent(product.slug)}` : `product.html?id=${encodeURIComponent(product.id)}`;
+    row.href = ProductLoader.productUrl(product);
     row.className = "search-suggestion" + (product.stock === 0 ? " is-out-of-stock" : "");
     row.setAttribute("role", "option");
 
@@ -92,9 +94,10 @@
 
     const sub = document.createElement("div");
     sub.className = "search-suggestion__sub";
+    const variantLabel = (product.size || product.color) ? `${[product.size, product.color].filter(Boolean).join("/")} · ` : "";
     sub.textContent = product.stock === 0
-      ? `${product.category || ""} · Out of stock`
-      : `${product.category || ""} · ${ProductLoader.formatPrice(product.sellingPrice)}`;
+      ? `${variantLabel}${product.category || ""} · Out of stock`
+      : `${variantLabel}${product.category || ""} · ${ProductLoader.formatPrice(product.sellingPrice)}`;
 
     meta.appendChild(titleEl);
     meta.appendChild(sub);

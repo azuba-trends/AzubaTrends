@@ -61,6 +61,8 @@
             <span class="discount-pill" id="product-discount" hidden></span>
           </div>
 
+          <div id="product-variant-selector" hidden></div>
+
           <div class="delivery-partner-note" id="delivery-partner-note" hidden>
             This product comes from
             <img id="delivery-partner-logo" alt="" hidden>
@@ -202,17 +204,23 @@
     // the new slug URL. This keeps old WhatsApp/Google links working while
     // steering everyone (and search engines) onto the canonical slug URL.
     const pathParts = window.location.pathname.split("/").filter(Boolean);
-    const slugFromPath = pathParts[0] === "products" ? pathParts[1] : null;
+    // /products/{slug} -> normal product. /products/{parentId}/{variantSlug}
+    // -> a specific size/color variant of that parent.
+    const slugFromPath = (pathParts[0] === "products" && pathParts.length === 2) ? pathParts[1] : null;
+    const variantParentId = (pathParts[0] === "products" && pathParts.length === 3) ? pathParts[1] : null;
+    const variantSlugFromPath = variantParentId ? pathParts[2] : null;
     const params = new URLSearchParams(window.location.search);
     const legacyId = params.get("id");
 
     let product = null;
-    if (slugFromPath) {
+    if (variantParentId) {
+      product = await ProductLoader.getProductByParentAndVariantSlug(variantParentId, variantSlugFromPath);
+    } else if (slugFromPath) {
       product = await ProductLoader.getProductBySlug(slugFromPath);
     } else if (legacyId) {
       product = await ProductLoader.getProductById(legacyId);
       if (product && product.slug) {
-        window.location.replace(`/products/${product.slug}`);
+        window.location.replace(ProductLoader.productUrl(product));
         return;
       }
     }
@@ -238,7 +246,7 @@
     // is out of scope for a plain static multi-page site like this one.
     document.title = product.seoTitle || `${product.title} — ${SITE_CONFIG.siteName}`;
     document.getElementById("page-description").setAttribute("content", product.seoDesc || product.shortDescription || product.title);
-    document.getElementById("page-canonical").setAttribute("href", `https://azuba-trends.vercel.app/products/${product.slug}`);
+    document.getElementById("page-canonical").setAttribute("href", `https://azuba-trends.vercel.app${ProductLoader.productUrl(product)}`);
 
     if (window.Tracking) {
       window.Tracking.trackEvent({
@@ -424,6 +432,85 @@
       discEl.hidden = false;
     }
 
+    // ---- Variant selector (Size / Color) ---------------------------
+    // Two INDEPENDENT rows, not one combined dropdown — picking a color
+    // keeps the current size selected if that combo exists, otherwise
+    // falls back to the first size available in that color. Either way,
+    // choosing something navigates straight to that variant's own URL
+    // (matches how Amazon/Myntra behave), rather than swapping data in
+    // place under the same URL.
+    if (product.isVariant) {
+      const siblings = await ProductLoader.getVariantSiblings(product);
+      const sizes = [...new Set(siblings.map((s) => s.size).filter(Boolean))];
+      const colors = [...new Set(siblings.map((s) => s.color).filter(Boolean))];
+
+      if (sizes.length > 0 || colors.length > 0) {
+        const wrap = document.getElementById("product-variant-selector");
+        wrap.hidden = false;
+        wrap.innerHTML = "";
+
+        function findSibling(size, color) {
+          return siblings.find((s) => (size ? s.size === size : true) && (color ? s.color === color : true)) || null;
+        }
+        function goToVariant(sibling) {
+          if (!sibling || sibling.id === product.id) return;
+          window.location.href = ProductLoader.productUrl(sibling);
+        }
+
+        if (colors.length > 0) {
+          const group = document.createElement("div");
+          group.className = "variant-selector-group";
+          group.innerHTML = `<span class="variant-selector-group__label">Color</span>`;
+          const row = document.createElement("div");
+          row.className = "variant-color-row";
+          colors.forEach((color) => {
+            // "Available" here means at least one size exists for this
+            // color at all — the Size row below is what narrows further
+            // once a color is picked.
+            const anyForColor = siblings.some((s) => s.color === color);
+            const swatch = document.createElement("button");
+            swatch.type = "button";
+            swatch.className = "variant-color-swatch" + (color === product.color ? " is-active" : "");
+            swatch.style.background = /^#|^rgb|^hsl/i.test(color) ? color : (color || "").toLowerCase();
+            swatch.title = color;
+            swatch.setAttribute("aria-label", color);
+            if (!anyForColor) swatch.disabled = true;
+            swatch.addEventListener("click", () => {
+              // Keep the current size if this color has it, else the
+              // first size this color does have.
+              const target = findSibling(product.size, color) || findSibling(null, color);
+              goToVariant(target);
+            });
+            row.appendChild(swatch);
+          });
+          group.appendChild(row);
+          wrap.appendChild(group);
+        }
+
+        if (sizes.length > 0) {
+          const group = document.createElement("div");
+          group.className = "variant-selector-group";
+          group.innerHTML = `<span class="variant-selector-group__label">Size</span>`;
+          const row = document.createElement("div");
+          row.className = "variant-size-row";
+          sizes.forEach((size) => {
+            // Enabled only if this exact size+currentColor combo exists
+            // as a real variant (and, ideally, has stock).
+            const match = findSibling(size, product.color);
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "variant-size-btn" + (size === product.size ? " is-active" : "");
+            btn.textContent = size;
+            if (!match || match.stock === 0) btn.disabled = true;
+            btn.addEventListener("click", () => goToVariant(match));
+            row.appendChild(btn);
+          });
+          group.appendChild(row);
+          wrap.appendChild(group);
+        }
+      }
+    }
+
     // Delivery partner note — only shown when the admin actually set a
     // name or logo for this product; otherwise the whole row stays hidden
     // rather than showing an empty/half-filled line.
@@ -467,7 +554,9 @@
         title: product.title,
         price: product.sellingPrice,
         image: images[0],
-        stock: product.stock
+        stock: product.stock,
+        size: product.size || "",
+        color: product.color || ""
       });
 
       // "Buy Now" — see cart.js: uses the item's existing cart quantity if
@@ -478,6 +567,8 @@
       buyNowBtn.setAttribute("data-product-title", product.title);
       buyNowBtn.setAttribute("data-product-price", String(product.sellingPrice));
       buyNowBtn.setAttribute("data-product-image", images[0]);
+      buyNowBtn.setAttribute("data-product-size", product.size || "");
+      buyNowBtn.setAttribute("data-product-color", product.color || "");
     }
 
     // ---- SEO: Structured Data (Schema.org Product) -------------------
@@ -544,7 +635,7 @@
     // ---- Related / recommended products -----------------------
     window.ProductLoader.mountRelatedProducts(
       document.getElementById("related-products-grid"),
-      { excludeId: product.id, category: product.category }
+      { excludeId: product.id, excludeParentId: product.parentId, category: product.category }
     );
   });
 </script>

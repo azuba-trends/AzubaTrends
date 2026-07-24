@@ -22,7 +22,22 @@ import { getDb } from "../lib/firebase-admin.js";
 async function handleProducts(req, res) {
   const db = getDb();
   const snap = await db.collection("products").where("status", "==", "active").get();
-  const products = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  // costPrice is internal-only (what the seller pays, used for profit
+  // reports in the admin panel) and must never reach a customer's
+  // browser — strip it here rather than trusting every future frontend
+  // call site to remember not to display it.
+  //
+  // Parent "template" products (hasVariants:true) are never sellable
+  // themselves — only their size/color variants are real, orderable
+  // products — so they're excluded here too. Everything else (plain
+  // products AND variant products, which are ordinary docs with
+  // isVariant:true/parentId set) passes through untouched.
+  const products = snap.docs
+    .filter((d) => !d.data().hasVariants)
+    .map((d) => {
+      const { costPrice, ...publicData } = d.data();
+      return { id: d.id, ...publicData };
+    });
 
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "public, s-maxage=60, stale-while-revalidate=30");

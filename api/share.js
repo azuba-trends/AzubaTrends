@@ -77,14 +77,18 @@ function sendPreviewHtml(res, { title, description, imageUrl, redirectPath, ogTy
 }
 
 async function handleProduct(req, res) {
-  const { id, slug } = req.query;
-  if (!id && !slug) return res.redirect(301, "/");
+  const { id, slug, parentId, variantSlug } = req.query;
+  if (!id && !slug && !(parentId && variantSlug)) return res.redirect(301, "/");
 
   const db = getDb();
   let product;
   let resolvedSlug = slug;
 
-  if (slug) {
+  if (parentId && variantSlug) {
+    const snap = await db.collection("products")
+      .where("parentId", "==", parentId).where("variantSlug", "==", variantSlug).limit(1).get();
+    product = snap.empty ? null : snap.docs[0].data();
+  } else if (slug) {
     const snap = await db.collection("products").where("slug", "==", slug).limit(1).get();
     product = snap.empty ? null : snap.docs[0].data();
   } else {
@@ -96,7 +100,9 @@ async function handleProduct(req, res) {
   const title = product?.seoTitle || product?.title || "AzubaTrends Product";
   const description = product?.seoDesc || product?.shortDescription || "Buy amazing products on AzubaTrends.";
   const imageUrl = (Array.isArray(product?.images) && product.images[0]) || "https://azuba-trends.vercel.app/images/logo-placeholder.png";
-  const redirectPath = resolvedSlug ? `/products/${encodeURIComponent(resolvedSlug)}` : `/?id=${encodeURIComponent(id || "")}`;
+  const redirectPath = (product?.isVariant && product?.parentId && product?.variantSlug)
+    ? `/products/${encodeURIComponent(product.parentId)}/${encodeURIComponent(product.variantSlug)}`
+    : (resolvedSlug ? `/products/${encodeURIComponent(resolvedSlug)}` : `/?id=${encodeURIComponent(id || "")}`);
 
   return sendPreviewHtml(res, { title, description, imageUrl, redirectPath, ogType: "product" });
 }

@@ -336,6 +336,36 @@
       <div class="card">
         <p style="color:var(--color-ink-soft); font-size:0.9rem;">Revenue counts every order that isn't Cancelled. Refreshes each time you open the Dashboard.</p>
       </div>
+
+      <div class="card">
+        <h3 style="margin-top:0;">Export Report (CSV)</h3>
+        <div class="form-grid">
+          <div class="form-field">
+            <label>Date Range</label>
+            <select id="ov-export-range">
+              <option value="7d">Last 7 days</option>
+              <option value="28d">Last 28 days</option>
+              <option value="this_month">This Month</option>
+              <option value="prev_month">Previous Month</option>
+              <option value="this_year">This Year</option>
+              <option value="all" selected>All Time</option>
+              <option value="custom">Custom Range</option>
+            </select>
+          </div>
+          <div class="form-field" id="ov-export-from-wrap" style="display:none;">
+            <label>From</label>
+            <input type="date" id="ov-export-from">
+          </div>
+          <div class="form-field" id="ov-export-to-wrap" style="display:none;">
+            <label>To</label>
+            <input type="date" id="ov-export-to">
+          </div>
+          <div class="form-field" style="align-self:end;">
+            <button type="button" class="btn btn-primary" id="ov-export-csv-btn">⬇ Export Report CSV</button>
+          </div>
+        </div>
+        <p style="color:var(--color-ink-soft); font-size:0.85rem; margin-bottom:0;">Includes orders, revenue, discounts, profit, coupon usage and top products for the selected range.</p>
+      </div>
     </div>
 
     <!-- ============ DASHBOARD: ANALYTICS ============ -->
@@ -369,6 +399,7 @@
         <h2>All Products</h2>
         <div style="display:flex; gap:8px;">
           <button id="bulk-delete-products-btn" class="btn btn-outline" style="color:var(--color-danger); border-color:var(--color-danger); display:none;">Delete Selected</button>
+          <button id="export-products-csv-btn" class="btn btn-outline">⬇ Export CSV</button>
           <button class="btn btn-primary nav-btn" data-target="store-add-product" data-fresh-form="product">+ Add Product</button>
         </div>
       </div>
@@ -440,12 +471,21 @@
           </div>
 
           <div class="form-field">
+            <label>Cost Price ₹ <span class="required-star">*</span> <span class="field-hint" style="display:inline;">(what YOU pay for this — never shown to customers, used to calculate profit in reports)</span></label>
+            <input type="number" id="prod-cost-price" min="0" required>
+          </div>
+
+          <div class="form-field">
             <label>Stock Quantity <span class="required-star">*</span></label>
             <input type="number" id="prod-stock" min="0" required>
           </div>
           <div class="form-field">
             <label>SKU</label>
             <input type="text" id="prod-sku">
+          </div>
+          <div class="form-field">
+            <label>HSN Code <span class="field-hint" style="display:inline;">(optional — shown on invoices, GST classification)</span></label>
+            <input type="text" id="prod-hsn">
           </div>
 
           <div class="form-field">
@@ -455,6 +495,48 @@
           <div class="form-field">
             <label>Delivery Partner Name</label>
             <input type="text" id="prod-delivery-partner-name" placeholder="e.g. Delhivery">
+          </div>
+
+          <input type="hidden" id="prod-is-variant" value="">
+          <input type="hidden" id="prod-parent-id" value="">
+
+          <div class="form-field" id="variant-size-wrap" style="display:none;">
+            <label>Size</label>
+            <input type="text" id="prod-variant-size">
+          </div>
+          <div class="form-field" id="variant-color-wrap" style="display:none;">
+            <label>Color</label>
+            <input type="text" id="prod-variant-color">
+          </div>
+
+          <div class="form-field full-width" id="variants-toggle-wrap">
+            <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
+              <input type="checkbox" id="prod-has-variants" style="width:auto;">
+              This product has variants (different sizes / colors, each with its own stock)
+            </label>
+          </div>
+
+          <div class="form-field full-width" id="variants-section" style="display:none; border:1px solid var(--color-border,#e2ddd0); border-radius:8px; padding:16px; background:#fafaf7;">
+            <h3 style="margin-top:0;">Variants</h3>
+            <p class="field-hint">List every size and every color this product comes in, comma-separated, then press Add Variants — a box will be created for every size × color combination.</p>
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div class="form-field">
+                <label>Sizes <span class="field-hint" style="display:inline;">(e.g. S, M, L, XL)</span></label>
+                <input type="text" id="variant-sizes-input" placeholder="XS, S, M, L">
+              </div>
+              <div class="form-field">
+                <label>Colors <span class="field-hint" style="display:inline;">(e.g. Red, Green, Blue)</span></label>
+                <input type="text" id="variant-colors-input" placeholder="Red, Green, Blue">
+              </div>
+            </div>
+            <button type="button" class="btn btn-outline" id="add-variants-btn" style="margin-top:8px;">+ Add Variants</button>
+
+            <div id="variant-boxes-container" style="display:flex; flex-direction:column; gap:12px; margin-top:16px;"></div>
+          </div>
+
+          <div class="form-field full-width" id="variant-sync-wrap" style="display:none;">
+            <button type="button" class="btn btn-outline" id="variant-auto-sync-btn">🔄 Auto Sync from Parent</button>
+            <p class="field-hint" style="margin-top:6px;">Overwrites this variant's Name, Description, Category, Brand, Tags, Delivery info and Images with whatever the parent product currently has. Its own Size, Color, MRP, Sale Price, HSN and Source URL are left untouched.</p>
           </div>
 
           <div class="form-field full-width">
@@ -578,6 +660,7 @@
         <h2>All Brands</h2>
         <div style="display:flex; gap:8px;">
           <button id="bulk-delete-brands-btn" class="btn btn-outline" style="color:var(--color-danger); border-color:var(--color-danger); display:none;">Delete Selected</button>
+          <button id="export-brands-csv-btn" class="btn btn-outline">⬇ Export CSV</button>
           <button class="btn btn-primary nav-btn" data-target="store-add-brand" data-fresh-form="brand">+ Add Brand</button>
         </div>
       </div>
@@ -636,6 +719,7 @@
         <h2>All Coupons</h2>
         <div style="display:flex; gap:8px;">
           <button id="bulk-delete-coupons-btn" class="btn btn-outline" style="color:var(--color-danger); border-color:var(--color-danger); display:none;">Delete Selected</button>
+          <button id="export-coupons-csv-btn" class="btn btn-outline">⬇ Export CSV</button>
           <button class="btn btn-primary nav-btn" data-target="store-add-coupon" data-fresh-form="coupon">+ Add Coupon</button>
         </div>
       </div>
@@ -711,8 +795,13 @@
     <div id="store-orders" class="section">
       <div class="section-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h2>All Orders</h2>
-        <button id="bulk-delete-orders-btn" class="btn btn-outline" style="color:var(--color-danger); border-color:var(--color-danger); display:none;">Delete Selected</button>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button id="bulk-delete-orders-btn" class="btn btn-outline" style="color:var(--color-danger); border-color:var(--color-danger); display:none;">Delete Selected</button>
+          <button id="export-orders-csv-btn" class="btn btn-outline">⬇ Export CSV</button>
+          <button id="download-all-invoices-btn" class="btn btn-outline">⬇ Download All Invoices (ZIP)</button>
+        </div>
       </div>
+      <p id="download-all-invoices-status" style="color:var(--color-ink-soft); font-size:0.85rem; margin:-12px 0 16px;"></p>
       <div class="tab-strip">
         <button class="tab-btn active" data-order-tab="all">All</button>
         <button class="tab-btn" data-order-tab="active">Active</button>
@@ -1177,6 +1266,38 @@
             <div class="form-field">
               <label>Image Upload API Key <span class="field-hint" style="display:inline;">(ImgBB — free key from api.imgbb.com)</span></label>
               <input type="text" id="set-imgbb-key">
+            </div>
+            <div class="form-field full-width"><h3 style="border-bottom:1px solid #eee; padding-bottom:5px;">Invoice / Seller Details <span class="field-hint" style="display:inline; font-weight:normal;">(shown on downloadable order invoices — fill this in for your own registered business, whoever is reselling using this site)</span></h3></div>
+            <div class="form-field">
+              <label>Seller / Business Name <span class="field-hint" style="display:inline;">(falls back to Store Name if blank)</span></label>
+              <input type="text" id="set-seller-name">
+            </div>
+            <div class="form-field">
+              <label>Seller ID <span class="field-hint" style="display:inline;">(your own internal code, optional — e.g. seller/vendor ID)</span></label>
+              <input type="text" id="set-seller-id">
+            </div>
+            <div class="form-field full-width">
+              <label>Seller Address</label>
+              <textarea id="set-seller-address" rows="2" placeholder="Street, City, PIN"></textarea>
+            </div>
+            <div class="form-field full-width">
+              <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
+                <input type="checkbox" id="set-tax-enabled" style="width:auto;">
+                This business is GST-registered — show tax breakup on invoices
+              </label>
+              <span class="field-hint" style="display:block; margin-top:4px;">Leave this OFF if you're reselling without a GST registration — invoices will print as a plain Bill of Supply with no tax lines, which is correct for most small resellers. Turn it ON only if you actually have a GSTIN.</span>
+            </div>
+            <div class="form-field">
+              <label>Seller State <span class="field-hint" style="display:inline;">(used to decide CGST+SGST vs IGST — only matters if GST is enabled above)</span></label>
+              <input type="text" id="set-seller-state" placeholder="e.g. West Bengal">
+            </div>
+            <div class="form-field">
+              <label>GST Registration No.</label>
+              <input type="text" id="set-gst-number">
+            </div>
+            <div class="form-field">
+              <label>Tax Rate %</label>
+              <input type="number" id="set-tax-rate" min="0" step="0.01" value="0">
             </div>
             <div class="form-field full-width"><h3 style="border-bottom:1px solid #eee; padding-bottom:5px;">EmailJS (order email notifications)</h3></div>
             <div class="form-field">

@@ -3,6 +3,10 @@
   "trailingSlash": false,
   "rewrites": [
     {
+      "source": "/products/:parentId/:variantSlug",
+      "destination": "/product"
+    },
+    {
       "source": "/products/:slug",
       "destination": "/product"
     },
@@ -36,7 +40,7 @@
     },
     {
       "source": "/sitemap.xml",
-      "destination": "/api/sitemap"
+      "destination": "/api/site-meta?type=sitemap"
     },
     {
       "source": "/product-feed.csv",
@@ -44,7 +48,7 @@
     },
     {
       "source": "/manifest.webmanifest",
-      "destination": "/api/manifest"
+      "destination": "/api/site-meta?type=manifest"
     },
     {
       "source": "/:slug",

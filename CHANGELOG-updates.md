@@ -1,5 +1,199 @@
 # AzubaTrends — Update Changelog
 
+## 2026-07-25 — Product Variants (Size × Color), explicit GST toggle
+
+**1. Explicit "GST-registered" toggle in Settings.**
+Tax on invoices was already opt-in (blank GSTIN = no tax), but that was
+implicit. Added `set-tax-enabled` checkbox — Settings → Account →
+Invoice/Seller Details — as the single, explicit source of truth.
+`api/admin-tools.js`'s invoice generator now checks `settings.taxEnabled`
+directly rather than inferring intent from whether a GSTIN happens to be
+filled in.
+
+**2. New: Product Variants (Size × Color).**
+Big one. A parent product can now be marked "has variants," given a
+comma-separated Sizes list and Colors list, and "Add Variants" generates
+one box per size×color combination — each gets its own optional
+MRP/Sale Price/HSN/Source URL (falls back to the parent's value, snapshotted
+once at creation — not a live link) and a required Stock count.
+
+Each variant is created as its own **ordinary product document** in the
+same `products` collection (`isVariant:true`, `parentId`, `size`, `color`)
+rather than a separate data structure — that one decision is what let
+cart, checkout, stock/price verification, sitemap, and the Google/Meta
+shopping feed all pick variants up with little-to-no extra code, since
+they already just query `products`. The parent itself (`hasVariants:true`)
+is excluded from every public-facing query (`api/list.js`,
+`js/product-loader.js`'s Firestore fallback, `api/product-feed.js`,
+sitemap) — it's an admin-only template from then on, never itself
+orderable.
+
+**URL scheme:** normal products stay at `/products/{slug}`; a variant is
+`/products/{parentId}/{variantSlug}` — the parentId in the path is what
+keeps two unrelated products' variants from ever colliding even with
+identical size/color text. New `vercel.json` rewrite added for the nested
+path; `js/product-loader.js` gained `productUrl()`,
+`getProductByParentAndVariantSlug()`, and `getVariantSiblings()` as the
+shared building blocks every other file uses instead of constructing
+product URLs by hand.
+
+**Product page:** two independent selector rows (Color swatches, Size
+buttons — not one combined dropdown). Picking a color keeps the current
+size if that combo exists, else jumps to the first size that does;
+either way, selecting something **navigates** to that variant's own URL
+(matches Amazon/Myntra), it doesn't swap data in place under one URL.
+Unavailable combinations show disabled/greyed.
+
+**Admin Products list:** a parent with variants gets a ▸ expand arrow
+(same visual language as the sidebar's own nav arrows); expanding shows
+each variant as an indented row with the exact same Edit/Delete/Pause
+buttons as any other product. Editing a variant directly hides the
+Variants section (parent-only) and shows a **"🔄 Auto Sync from Parent"**
+button instead — pulls the parent's current Name/Description/Category/
+Brand/Tags/Delivery/Images onto this variant on demand; its own Size,
+Color, MRP, Sale Price, HSN and Source URL are left alone, both by Auto
+Sync and by the parent's own normal re-saves (a variant's already-set
+override fields are never silently touched by editing the parent again —
+only blank-at-creation fields ever inherited from the parent, and only
+once).
+
+**Everywhere else variants now show up:** Cart (`js/cart.js`,
+`js/cart-button-ui.js`, `cart.html`) and Checkout (`js/checkout.js`)
+display Size/Color and carry it into the order — no special stock/price
+logic was needed there since each variant already has its own unique
+`productId`, so the existing per-product cart/checkout code just works.
+`api/place-order.js` snapshots `size`/`color`/`hsnCode` onto each order
+item (same pattern as `costPrice`); stock/price re-verification already
+happens against the correct variant's own document with zero changes,
+for the same reason. Telegram alerts (`lib/telegram.js`) and order emails
+(`js/emailjs-integration.js`) show `[Size/Color]` next to affected items;
+low-stock/out-of-stock alerts specify which variant. Invoice PDFs
+(`api/admin-tools.js`) print size/color under the item title. CSV exports
+(Products, Orders) gained Size/Color columns; the Products export leaves
+out parent template rows (never sellable). `js/search.js`'s Fuse index
+now also matches on size/color text, and its result rows/subtitles show
+the variant. Related-products on the product page no longer recommends a
+product's own other sizes/colors as if they were separate items.
+
+**A subtle bug caught and fixed while building this:** the first version
+copied the parent's `slug` field onto every variant (harmless-seeming,
+since variants route by `parentId`+`variantSlug`, not `slug`). But that
+meant `ensureUniqueSlug()` would then see the parent's own slug as
+"already taken" (by its own children) on the parent's next save, and
+silently append "-2", "-3", etc. each time. Fixed two ways: variants no
+longer get a `slug` field at all (only `variantSlug`, which is what
+their routing actually uses), and `ensureUniqueSlug()` now excludes
+`isVariant` docs from its collision check as a second layer of defense.
+
+**Files changed:** `admin.html`, `js/admin.js` (bulk of the admin-side
+logic), `js/product-loader.js`, `product.html`, `css/components.css`,
+`vercel.json`, `js/cart.js`, `js/cart-button-ui.js`, `cart.html`,
+`js/checkout.js`, `js/search.js`, `js/emailjs-integration.js`,
+`api/place-order.js`, `api/admin-tools.js`, `api/list.js`,
+`api/site-meta.js`, `api/product-feed.js`, `api/share.js`,
+`lib/telegram.js`. **Zero new `/api` files** — still 11.
+
+---
+
+## 2026-07-24 — Cost Price + profit reporting, CSV exports, order invoices (PDF+ZIP), A2HS prompt, About/Terms edit-blank fix
+
+**1. Fix: editing About/Terms in the admin showed a blank content editor.**
+Root cause: `about.html`/`terms.html` ship with real placeholder copy baked
+into the static HTML, but the matching Firestore `pages` docs are seeded
+with `content: ""` on purpose (so a blank first save never silently wipes
+the live page). The admin editor read straight from that empty Firestore
+field, so it looked like the existing content had vanished. Fix: added
+`DEFAULT_PAGE_LIVE_CONTENT` in `js/admin.js` — `editPage()` now pre-fills
+the editor with the actual live static copy when the Firestore field is
+still empty (display-only, until Publish is pressed, at which point it's
+saved for real like any other page).
+
+**2. New: mandatory product Cost Price + profit reporting.**
+Products previously had no way to record what the seller actually paid —
+only Selling Price. Added a required `costPrice` field (Product form,
+`admin.html`/`js/admin.js`), snapshotted onto each order line at checkout
+time (`api/place-order.js`, same pattern as `price`) so historical profit
+stays accurate even if cost price changes later. Existing products saved
+before this field existed are NOT required retroactively — they show a
+"⚠ Cost price missing" badge in the Products table instead, and their
+profit shows as N/A in reports rather than crashing anything.
+
+**3. New: CSV exports — Overview / Products / Brands / Coupons / Orders.**
+All built entirely client-side in `js/admin.js` against data already
+loaded live via the existing `onSnapshot` listeners (`productsList` /
+`brandsList` / `couponsList` / `ordersList`) — **zero new `/api` routes**.
+Overview export includes a date-range picker (Last 7/28 days, This/Prev
+Month, This Year, All Time, Custom) and reports revenue, discounts,
+profit, order-status breakdown, top products, and coupon usage for that
+range.
+
+**4. New: order invoices — single PDF + bulk ZIP.**
+Every order row now has a "⬇ Invoice" button; All Orders also has a
+"⬇ Download All Invoices (ZIP)" button. Backed by a new admin-only
+route, `api/admin-tools.js` (`?action=invoice&orderId=`, `?action=
+invoice-bulk`), authenticated the same way as `api/import-product.js`
+(`Authorization: Bearer <admin's Firebase ID token>`). PDFs are drawn
+directly with `pdfkit` (no headless-Chromium dependency — keeps this
+viable on Vercel Hobby's function-size limits); bulk mode streams a ZIP
+built with `archiver`. Invoice layout follows the seller-agnostic
+"Tax Invoice/Bill of Supply/Cash Memo" format (works whether or not the
+reseller has a GSTIN) — new Settings → Account → "Invoice/Seller
+Details" fields (Seller Name/ID/Address/State, GSTIN, Tax Rate) feed it.
+Tax, when shown, is backed OUT of the already-agreed checkout price
+(tax-inclusive), never added on top — the invoice total always matches
+what the customer actually paid. Added optional per-product `hsnCode`
+field (shown on invoice line items when set), also snapshotted onto
+order items at checkout.
+
+**5. `/api` file count — merged `manifest.js` + `sitemap.js` → `site-meta.js`.**
+Adding `api/admin-tools.js` for #4 would have pushed `/api` to 11 files;
+comfortably under the Hobby cap, but to leave headroom, `api/manifest.js`
+and `api/sitemap.js` (both small, GET-only, Firestore-read-only, already
+following the `?type=` dispatch pattern used by `api/list.js`) were
+merged into `api/site-meta.js` (`?type=manifest` / `?type=sitemap`).
+`vercel.json`'s rewrites for `/manifest.webmanifest` and `/sitemap.xml`
+were updated to match. Net result: **11 files** (was 11 before this
+update too — the merge exactly offset the one new file added).
+
+**6. New: "Add to Home Screen" prompt.**
+New `js/a2hs.js`, included on every customer-facing page (not
+`admin.html`). Shows once per first visit (not every reload); if
+dismissed (✕ or "Remind me later"), won't reappear for 2 hours, even
+across closing/reopening the browser. Never shows if already installed.
+Uses the real native `beforeinstallprompt` flow on Android/Chrome/Edge;
+on iOS Safari (no such API exists) shows manual "Tap Share → Add to Home
+Screen" instructions instead.
+
+**Security fix found & closed while building #2:** `costPrice` would
+otherwise have been readable by any visitor — `api/list.js`'s public
+`/api/products` response and `api/place-order.js`'s order-confirmation
+response both used to spread every field of a product/order doc verbatim.
+Both now explicitly strip `costPrice` before responding to the browser.
+**Known limitation:** `js/product-loader.js`'s direct-Firestore fallback
+(only used if `/api/products` itself is unreachable) still reads full
+product docs client-side, since Firestore security rules can't hide a
+single field without moving it to a separate admin-only document — this
+is a pre-existing pattern for every product field, not something new,
+but worth knowing if that fallback path ever becomes the normal path.
+
+**Files changed:**
+| File | What changed |
+|---|---|
+| `js/admin.js` | `DEFAULT_PAGE_LIVE_CONTENT` fallback + `editPage()` fix; Cost Price + HSN Code fields (product form/save/edit/table badge); CSV export engine + button wiring (Overview/Products/Brands/Coupons/Orders); invoice download + bulk ZIP wiring; Settings load/save for new Seller/Invoice fields. |
+| `admin.html` | Cost Price (required) + HSN Code fields on product form; Export CSV buttons (Products/Brands/Coupons/Orders); Download-All-Invoices button + status line; Overview "Export Report (CSV)" card with date-range picker; Settings → Account → "Invoice / Seller Details" section. |
+| `api/admin-tools.js` | **New** — admin-only invoice PDF (single + bulk ZIP) generator. |
+| `api/site-meta.js` | **New** — merged replacement for `api/manifest.js` + `api/sitemap.js`. |
+| `api/manifest.js`, `api/sitemap.js` | **Deleted** — logic moved into `api/site-meta.js`. |
+| `api/place-order.js` | Snapshots `costPrice`/`hsnCode` onto order items; strips `costPrice` from the client-facing response. |
+| `api/list.js` | Strips `costPrice` from the public `/api/products` response. |
+| `js/a2hs.js` | **New** — Add to Home Screen prompt. |
+| `css/components.css` | Styles for the A2HS banner. |
+| `index.html`, `blog.html`, `blog-post.html`, `cart.html`, `checkout.html`, `category.html`, `about.html`, `terms.html`, `product.html`, `404.html` | Added `<script src=".../js/a2hs.js">` (not `admin.html`, by design). |
+| `vercel.json` | `/manifest.webmanifest` and `/sitemap.xml` rewrites now point at `/api/site-meta?type=...`. |
+| `package.json` | Added `pdfkit` and `archiver` dependencies. |
+
+---
+
 ## 2026-07-22 (later same day) — Fixed deploy failure: 13 serverless functions on Hobby plan
 
 **What broke:** After pushing the previous update, Vercel deploys started

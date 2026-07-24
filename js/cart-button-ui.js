@@ -46,7 +46,9 @@ const CartButtonUI = (function () {
           data-product-id="${product.productId}"
           data-product-title="${product.title}"
           data-product-price="${product.price}"
-          data-product-image="${product.image}">
+          data-product-image="${product.image}"
+          data-product-size="${product.size || ''}"
+          data-product-color="${product.color || ''}">
           Add to Cart
         </button>`;
     }

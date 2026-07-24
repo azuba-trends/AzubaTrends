@@ -108,12 +108,29 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: `Only ${currentStock} of "${product.title}" left in stock.` });
       }
       const price = Number(product.sellingPrice);
+      // Snapshotted the same way price is — so profit reports for this
+      // order stay accurate even if the admin changes (or hasn't yet set)
+      // the product's cost price later. `null` (not 0) when genuinely
+      // unset, so reports can tell "no cost recorded" apart from "free".
+      const costPrice = (product.costPrice !== undefined && product.costPrice !== null && product.costPrice !== "")
+        ? Number(product.costPrice)
+        : null;
       subtotal += price * qty;
       deliveryFee += Number(product.deliveryFee) || 0;
       verifiedItems.push({
         productId: reqItem.productId,
         title: product.title,
         price,
+        costPrice,
+        hsnCode: product.hsnCode || "",
+        // A variant is just a normal product doc with size/color set —
+        // stock and price verification above already used THIS exact
+        // variant's own document (looked up by productId), so no extra
+        // variant-aware logic was needed there. This just carries the
+        // size/color through onto the order so admin views, emails,
+        // Telegram alerts, invoices and CSV exports can show it.
+        size: product.size || "",
+        color: product.color || "",
         quantity: qty,
         sourcePlatformUrl: product.sourcePlatformUrl || null
       });
@@ -207,9 +224,10 @@ export default async function handler(req, res) {
     });
 
     for (const { product, newStock } of stockUpdates) {
+      const variantSuffix = (product.size || product.color) ? ` [${[product.size, product.color].filter(Boolean).join("/")}]` : "";
       if (newStock === 0) {
         await dispatchTelegramEvent(db, "out_of_stock", {
-          title: product.title,
+          title: product.title + variantSuffix,
           sku: product.sku,
           sourcePlatformUrl: product.sourcePlatformUrl || null,
           lastOrderId: orderId,
@@ -217,7 +235,7 @@ export default async function handler(req, res) {
         });
       } else if (newStock <= LOW_STOCK_THRESHOLD) {
         await dispatchTelegramEvent(db, "low_stock", {
-          title: product.title,
+          title: product.title + variantSuffix,
           sku: product.sku,
           sourcePlatformUrl: product.sourcePlatformUrl || null,
           stockLeft: newStock,
@@ -226,7 +244,16 @@ export default async function handler(req, res) {
       }
     }
 
-    return res.status(200).json({ success: true, order: orderPayload });
+    // costPrice lives in the STORED order (orderPayload, for admin profit
+    // reports) but must never reach the customer's own browser in this
+    // response — it's what the seller pays, not something a shopper
+    // should be able to read from their own order-confirmation network
+    // request.
+    const clientSafeOrder = {
+      ...orderPayload,
+      items: orderPayload.items.map(({ costPrice, ...rest }) => rest)
+    };
+    return res.status(200).json({ success: true, order: clientSafeOrder });
   } catch (err) {
     console.error(err);
     if (err.code === 6 || /already exists/i.test(err.message || "")) {

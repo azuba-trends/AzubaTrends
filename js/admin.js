@@ -161,6 +161,278 @@ setTimeout(() => {
 
   function fmtRupee(n) { return '₹' + Number(n || 0).toLocaleString('en-IN'); }
 
+  // ================================================================
+  // CSV EXPORT ENGINE (shared by Overview / Products / Brands /
+  // Coupons / Orders "Export CSV" buttons). Runs entirely client-side
+  // against the data the admin already has loaded live via onSnapshot
+  // (productsList / brandsList / couponsList / ordersList) — no server
+  // round-trip needed, so this adds zero new /api functions.
+  // ================================================================
+
+  // Wraps a value in quotes and escapes internal quotes only when needed
+  // (commas, quotes, or newlines present) — keeps plain numbers/short text
+  // unquoted for a cleaner-looking file, same as Excel/Sheets' own export.
+  function csvCell(value) {
+    const s = value === null || value === undefined ? "" : String(value);
+    if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+
+  function rowsToCSV(rows) {
+    return rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
+  }
+
+  function downloadCSV(filename, rows) {
+    const csv = "\uFEFF" + rowsToCSV(rows); // BOM so Excel opens ₹/UTF-8 correctly
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  // Resolves a range key (from the Overview export picker) to concrete
+  // [start, end] Date bounds, in local time — consistent with
+  // localDateKey()'s local-day bucketing used elsewhere in Analytics.
+  function resolveDateRange(rangeKey, customFrom, customTo) {
+    const now = new Date();
+    const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+    const endOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+    switch (rangeKey) {
+      case "7d": {
+        const start = new Date(now); start.setDate(start.getDate() - 6);
+        return { start: startOfDay(start), end: endOfDay(now), label: "Last 7 days" };
+      }
+      case "28d": {
+        const start = new Date(now); start.setDate(start.getDate() - 27);
+        return { start: startOfDay(start), end: endOfDay(now), label: "Last 28 days" };
+      }
+      case "this_month": {
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        return { start: startOfDay(start), end: endOfDay(now), label: "This Month" };
+      }
+      case "prev_month": {
+        const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const end = new Date(now.getFullYear(), now.getMonth(), 0);
+        return { start: startOfDay(start), end: endOfDay(end), label: "Previous Month" };
+      }
+      case "this_year": {
+        const start = new Date(now.getFullYear(), 0, 1);
+        return { start: startOfDay(start), end: endOfDay(now), label: "This Year" };
+      }
+      case "custom": {
+        const start = customFrom ? startOfDay(new Date(customFrom)) : startOfDay(new Date(2000, 0, 1));
+        const end = customTo ? endOfDay(new Date(customTo)) : endOfDay(now);
+        return { start, end, label: `${customFrom || "…"} to ${customTo || "…"}` };
+      }
+      case "all":
+      default:
+        return { start: startOfDay(new Date(2000, 0, 1)), end: endOfDay(now), label: "All Time" };
+    }
+  }
+
+  function ordersInRange(start, end) {
+    return ordersList.filter((o) => {
+      if (!o.createdAt) return false;
+      const t = new Date(o.createdAt);
+      return t >= start && t <= end;
+    });
+  }
+
+  // Per-line profit: (sale price − cost price at time of order) × qty.
+  // costPrice is snapshotted on the order item at checkout (api/place-order.js);
+  // null means "not recorded" (product had no Cost Price set at order time),
+  // which the caller reports separately rather than silently treating as 0.
+  function orderProfitBreakdown(order) {
+    let profit = 0;
+    let hasUnknownCost = false;
+    (order.items || []).forEach((it) => {
+      if (it.costPrice === null || it.costPrice === undefined) { hasUnknownCost = true; return; }
+      profit += (Number(it.price || 0) - Number(it.costPrice || 0)) * Number(it.quantity || 0);
+    });
+    return { profit, hasUnknownCost };
+  }
+
+  function buildOverviewReportCSV(rangeKey, customFrom, customTo) {
+    const { start, end, label } = resolveDateRange(rangeKey, customFrom, customTo);
+    const orders = ordersInRange(start, end);
+    const nonCancelled = orders.filter((o) => o.status !== "Cancelled");
+
+    const revenue = nonCancelled.reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
+    const discountTotal = nonCancelled.reduce((s, o) => s + (Number(o.discount) || 0), 0);
+    const deliveryFeeTotal = nonCancelled.reduce((s, o) => s + (Number(o.deliveryFee) || 0), 0);
+    const codChargeTotal = nonCancelled.reduce((s, o) => s + (Number(o.codCharge) || 0), 0);
+    let profitTotal = 0, ordersWithUnknownCost = 0;
+    nonCancelled.forEach((o) => {
+      const { profit, hasUnknownCost } = orderProfitBreakdown(o);
+      profitTotal += profit;
+      if (hasUnknownCost) ordersWithUnknownCost++;
+    });
+
+    const statusCounts = {};
+    orders.forEach((o) => { statusCounts[o.status || "Unknown"] = (statusCounts[o.status || "Unknown"] || 0) + 1; });
+
+    const productSales = {}; // productId -> { title, qty, revenue }
+    nonCancelled.forEach((o) => {
+      (o.items || []).forEach((it) => {
+        const key = it.productId || it.title;
+        if (!productSales[key]) productSales[key] = { title: it.title, qty: 0, revenue: 0 };
+        productSales[key].qty += Number(it.quantity || 0);
+        productSales[key].revenue += Number(it.price || 0) * Number(it.quantity || 0);
+      });
+    });
+    const topProducts = Object.values(productSales).sort((a, b) => b.qty - a.qty).slice(0, 20);
+
+    const couponUsage = {}; // code -> { count, discount, revenue }
+    nonCancelled.forEach((o) => {
+      if (!o.couponCode) return;
+      if (!couponUsage[o.couponCode]) couponUsage[o.couponCode] = { count: 0, discount: 0, revenue: 0 };
+      couponUsage[o.couponCode].count += 1;
+      couponUsage[o.couponCode].discount += Number(o.discount) || 0;
+      couponUsage[o.couponCode].revenue += Number(o.finalTotal) || 0;
+    });
+
+    const rows = [];
+    rows.push(["AzubaTrends — Overview Report"]);
+    rows.push(["Range", label]);
+    rows.push(["Generated At", new Date().toLocaleString("en-IN")]);
+    rows.push([]);
+    rows.push(["Summary"]);
+    rows.push(["Total Orders (all statuses)", orders.length]);
+    rows.push(["Orders Counted for Revenue (excl. Cancelled)", nonCancelled.length]);
+    rows.push(["Total Revenue", revenue]);
+    rows.push(["Total Discount Given", discountTotal]);
+    rows.push(["Total Delivery Fee Collected", deliveryFeeTotal]);
+    rows.push(["Total COD Charge Collected", codChargeTotal]);
+    rows.push(["Total Profit", profitTotal + (ordersWithUnknownCost ? " (partial — see note)" : "")]);
+    if (ordersWithUnknownCost) {
+      rows.push(["Note", `${ordersWithUnknownCost} order(s) include a product with no Cost Price recorded — their profit is under-counted above. Set Cost Price on those products (see Products export for which ones).`]);
+    }
+    rows.push([]);
+    rows.push(["Orders by Status"]);
+    rows.push(["Status", "Count"]);
+    Object.entries(statusCounts).forEach(([status, count]) => rows.push([status, count]));
+    rows.push([]);
+    rows.push(["Top Products (by units sold, in this range)"]);
+    rows.push(["Product", "Units Sold", "Revenue"]);
+    topProducts.forEach((p) => rows.push([p.title, p.qty, p.revenue]));
+    rows.push([]);
+    rows.push(["Coupon Usage (in this range)"]);
+    rows.push(["Coupon Code", "Times Used", "Total Discount Given", "Revenue From Those Orders"]);
+    Object.entries(couponUsage).forEach(([code, u]) => rows.push([code, u.count, u.discount, u.revenue]));
+    return rows;
+  }
+
+  function buildProductsReportCSV() {
+    const salesByProduct = {};
+    ordersList.forEach((o) => {
+      if (o.status === "Cancelled") return;
+      (o.items || []).forEach((it) => {
+        const key = it.productId;
+        if (!key) return;
+        if (!salesByProduct[key]) salesByProduct[key] = { qty: 0, revenue: 0 };
+        salesByProduct[key].qty += Number(it.quantity || 0);
+        salesByProduct[key].revenue += Number(it.price || 0) * Number(it.quantity || 0);
+      });
+    });
+
+    const rows = [[
+      "Title", "Size", "Color", "SKU", "Brand", "Category", "Status", "MRP", "Selling Price", "Cost Price",
+      "Stock", "Units Sold (all time)", "Revenue Generated (all time)", "Created At"
+    ]];
+    productsList.forEach((p) => {
+      // Parent "template" records (hasVariants:true) aren't sellable
+      // themselves — only their variants are actual orderable products —
+      // so they're left out of this export to avoid double-counting or
+      // a confusing all-zero row. Every variant IS included, listed
+      // right alongside normal (non-variant) products.
+      if (p.hasVariants) return;
+      const sales = salesByProduct[p.id] || { qty: 0, revenue: 0 };
+      rows.push([
+        p.title || "", p.size || "", p.color || "", p.sku || "", p.brand || "", p.category || "", p.status || "",
+        Number(p.mrp || 0), Number(p.sellingPrice || 0),
+        (p.costPrice === undefined || p.costPrice === null || p.costPrice === "") ? "NOT SET" : Number(p.costPrice),
+        Number(p.stock || 0), sales.qty, sales.revenue,
+        p.createdAt ? new Date(p.createdAt).toLocaleDateString("en-IN") : ""
+      ]);
+    });
+    return rows;
+  }
+
+  function buildBrandsReportCSV() {
+    const rows = [["Brand Name", "Slug", "Total Products", "Total Stock", "Units Sold (all time)", "Revenue Generated (all time)"]];
+    const salesByProduct = {};
+    ordersList.forEach((o) => {
+      if (o.status === "Cancelled") return;
+      (o.items || []).forEach((it) => {
+        if (!it.productId) return;
+        if (!salesByProduct[it.productId]) salesByProduct[it.productId] = { qty: 0, revenue: 0 };
+        salesByProduct[it.productId].qty += Number(it.quantity || 0);
+        salesByProduct[it.productId].revenue += Number(it.price || 0) * Number(it.quantity || 0);
+      });
+    });
+    brandsList.forEach((b) => {
+      const brandProducts = productsList.filter((p) => p.brand === b.name);
+      let qty = 0, revenue = 0, stock = 0;
+      brandProducts.forEach((p) => {
+        stock += Number(p.stock || 0);
+        const s = salesByProduct[p.id];
+        if (s) { qty += s.qty; revenue += s.revenue; }
+      });
+      rows.push([b.name || "", b.slug || "", brandProducts.length, stock, qty, revenue]);
+    });
+    return rows;
+  }
+
+  function buildCouponsReportCSV() {
+    const rows = [["Code", "Type", "Value", "Min Order Value", "Max Discount", "Expiry Date", "Active", "Times Used", "Total Discount Given", "Revenue From Those Orders"]];
+    couponsList.forEach((c) => {
+      const usedOrders = ordersList.filter((o) => o.status !== "Cancelled" && o.couponCode === c.code);
+      const discountGiven = usedOrders.reduce((s, o) => s + (Number(o.discount) || 0), 0);
+      const revenue = usedOrders.reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
+      rows.push([
+        c.code || "", c.type || "", c.value ?? "", c.minOrderValue ?? 0, c.maxDiscount ?? "",
+        c.expiryDate || "", c.active ? "Yes" : "No", usedOrders.length, discountGiven, revenue
+      ]);
+    });
+    return rows;
+  }
+
+  function buildOrdersReportCSV() {
+    const rows = [[
+      "Order ID", "Date", "Customer Name", "Phone", "Address", "City", "Pincode",
+      "Items (title x qty @ price)", "Subtotal", "Discount", "Coupon Code",
+      "Delivery Fee", "COD Charge", "Final Total", "Cost Total", "Profit",
+      "Payment Method", "Status"
+    ]];
+    ordersList.forEach((o) => {
+      const itemsStr = (o.items || []).map((it) => {
+        const variant = (it.size || it.color) ? ` [${[it.size, it.color].filter(Boolean).join("/")}]` : "";
+        return `${it.title}${variant} x${it.quantity} @${it.price}`;
+      }).join(" | ");
+      const { profit, hasUnknownCost } = orderProfitBreakdown(o);
+      const costTotal = (o.items || []).reduce((s, it) => s + ((it.costPrice === null || it.costPrice === undefined) ? 0 : Number(it.costPrice) * Number(it.quantity || 0)), 0);
+      rows.push([
+        o.orderId || o.id || "", o.createdAt ? new Date(o.createdAt).toLocaleString("en-IN") : "",
+        o.customerName || "", o.customerPhone || "", o.customerAddress || "", o.customerCity || "", o.customerPincode || "",
+        itemsStr, Number(o.subtotal || 0), Number(o.discount || 0), o.couponCode || "",
+        Number(o.deliveryFee || 0), Number(o.codCharge || 0), Number(o.finalTotal || 0),
+        costTotal, hasUnknownCost ? `${profit} (partial — cost missing on 1+ items)` : profit,
+        o.paymentMethod || "", o.status || ""
+      ]);
+    });
+    return rows;
+  }
+
+  function todayFileStamp() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
   // Resizes/compresses an image file in the browser before upload — phone
   // camera photos are often 3-10 MB at 4000px+ wide, which is massive
   // overkill for a product card/gallery and makes the storefront feel slow
@@ -885,6 +1157,20 @@ setTimeout(() => {
     document.getElementById("prod-gallery-preview").innerHTML = "";
     document.getElementById("prod-delivery-preview").innerHTML = "";
     document.getElementById("product-form-title").textContent = "Add New Product";
+    // Variant state
+    document.getElementById("prod-is-variant").value = "";
+    document.getElementById("prod-parent-id").value = "";
+    document.getElementById("prod-variant-size").value = "";
+    document.getElementById("prod-variant-color").value = "";
+    document.getElementById("variant-size-wrap").style.display = "none";
+    document.getElementById("variant-color-wrap").style.display = "none";
+    document.getElementById("variants-toggle-wrap").style.display = "";
+    document.getElementById("prod-has-variants").checked = false;
+    document.getElementById("variants-section").style.display = "none";
+    document.getElementById("variant-boxes-container").innerHTML = "";
+    document.getElementById("variant-sizes-input").value = "";
+    document.getElementById("variant-colors-input").value = "";
+    document.getElementById("variant-sync-wrap").style.display = "none";
     renderSeoChecklist();
   }
 
@@ -900,33 +1186,61 @@ setTimeout(() => {
     }, (err) => console.error("products listener error", err));
   }
 
+  // Which parent products currently have their variant rows expanded —
+  // module-level so it survives a re-render (e.g. after a Firestore
+  // update) instead of collapsing everything the admin had open.
+  const expandedProductParents = new Set();
+
+  function buildProductRow(p, opts) {
+    const sColor = p.status === "active" ? "var(--color-success)" : "var(--color-accent-dark)";
+    const img = (p.images && p.images[0]) ? p.images[0] : "images/logo-placeholder.svg";
+    const dateStr = p.createdAt ? new Date(p.createdAt).toLocaleDateString("en-IN") : "—";
+    const missingCostPrice = p.costPrice === undefined || p.costPrice === null || p.costPrice === 0;
+    const isExpanded = expandedProductParents.has(p.id);
+
+    const nameCell = opts.isChild
+      ? `<span style="padding-left:24px; color:var(--color-ink-soft);">↳ ${esc(p.size || "")} / ${esc(p.color || "")} — </span>${esc(p.title)}`
+      : `${opts.hasChildren ? `<button type="button" class="product-expand-btn" data-id="${p.id}" style="background:none; border:none; cursor:pointer; font-size:0.85rem; margin-right:6px; transform:rotate(${isExpanded ? "90deg" : "0deg"}); transition:transform .15s;">▸</button>` : `<span style="display:inline-block; width:18px;"></span>`}${esc(p.title)}`;
+
+    const tr = document.createElement("tr");
+    if (opts.isChild) tr.style.background = "#fafaf7";
+    tr.innerHTML = `
+      <td><input type="checkbox" class="row-select" data-id="${p.id}"></td>
+      <td><img src="${esc(img)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" alt=""></td>
+      <td>${nameCell}${missingCostPrice ? ` <span title="Cost Price not set — profit reports will show N/A for this product until you add it in Edit" style="color:var(--color-accent-dark); font-size:0.8rem; white-space:nowrap;">⚠ Cost price missing</span>` : ""}${(!opts.isChild && p.hasVariants) ? ` <span style="color:var(--color-ink-soft); font-size:0.78rem;">(${opts.childCount} variant${opts.childCount === 1 ? "" : "s"})</span>` : ""}</td>
+      <td>${esc(p.brand || "—")}</td>
+      <td>${esc((p.tags || []).join(", "))}</td>
+      <td>${esc(p.category)}</td>
+      <td>${dateStr}</td>
+      <td style="color:${p.stock > 0 ? 'inherit' : 'var(--color-danger)'}; font-weight:bold;">${(!opts.isChild && p.hasVariants) ? "—" : p.stock}</td>
+      <td style="color:${sColor}; font-weight:bold;">${esc((p.status || "").toUpperCase())}</td>
+      <td>${p.sourcePlatformUrl ? `<button class="btn btn-outline source-platform-btn" data-url="${esc(p.sourcePlatformUrl)}" style="padding:4px 8px; font-size:0.8rem;">Source Platform</button>` : '<span style="color:var(--color-ink-soft); font-size:0.8rem;">—</span>'}</td>
+      <td>
+        <button class="btn btn-outline pause-prod-btn" data-id="${p.id}" data-status="${p.status}" style="padding:4px 8px; font-size:0.8rem;">${p.status === 'active' ? 'Pause' : 'Live'}</button>
+        <button class="btn btn-outline edit-prod-btn" data-id="${p.id}" style="padding:4px 8px; font-size:0.8rem;">Edit</button>
+        <button class="btn btn-outline del-prod-btn" data-id="${p.id}" style="color:var(--color-danger); padding:4px 8px; font-size:0.8rem;">Delete</button>
+      </td>`;
+    return tr;
+  }
+
   function renderProductsTable() {
     const tbody = document.getElementById("products-table-body");
     tbody.innerHTML = "";
-    productsList.forEach((p) => {
-      const sColor = p.status === "active" ? "var(--color-success)" : "var(--color-accent-dark)";
-      const img = (p.images && p.images[0]) ? p.images[0] : "images/logo-placeholder.svg";
-      const dateStr = p.createdAt ? new Date(p.createdAt).toLocaleDateString("en-IN") : "—";
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td><input type="checkbox" class="row-select" data-id="${p.id}"></td>
-        <td><img src="${esc(img)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" alt=""></td>
-        <td>${esc(p.title)}</td>
-        <td>${esc(p.brand || "—")}</td>
-        <td>${esc((p.tags || []).join(", "))}</td>
-        <td>${esc(p.category)}</td>
-        <td>${dateStr}</td>
-        <td style="color:${p.stock > 0 ? 'inherit' : 'var(--color-danger)'}; font-weight:bold;">${p.stock}</td>
-        <td style="color:${sColor}; font-weight:bold;">${esc((p.status || "").toUpperCase())}</td>
-        <td>${p.sourcePlatformUrl ? `<button class="btn btn-outline source-platform-btn" data-url="${esc(p.sourcePlatformUrl)}" style="padding:4px 8px; font-size:0.8rem;">Source Platform</button>` : '<span style="color:var(--color-ink-soft); font-size:0.8rem;">—</span>'}</td>
-        <td>
-          <button class="btn btn-outline pause-prod-btn" data-id="${p.id}" data-status="${p.status}" style="padding:4px 8px; font-size:0.8rem;">${p.status === 'active' ? 'Pause' : 'Live'}</button>
-          <button class="btn btn-outline edit-prod-btn" data-id="${p.id}" style="padding:4px 8px; font-size:0.8rem;">Edit</button>
-          <button class="btn btn-outline del-prod-btn" data-id="${p.id}" style="color:var(--color-danger); padding:4px 8px; font-size:0.8rem;">Delete</button>
-        </td>`;
-      tbody.appendChild(tr);
+    const topLevel = productsList.filter((p) => !p.isVariant);
+
+    topLevel.forEach((p) => {
+      const children = p.hasVariants ? productsList.filter((c) => c.isVariant && c.parentId === p.id) : [];
+      tbody.appendChild(buildProductRow(p, { isChild: false, hasChildren: children.length > 0, childCount: children.length }));
+      if (children.length > 0 && expandedProductParents.has(p.id)) {
+        children.forEach((c) => tbody.appendChild(buildProductRow(c, { isChild: true })));
+      }
     });
 
+    tbody.querySelectorAll(".product-expand-btn").forEach((b) => b.addEventListener("click", () => {
+      const id = b.dataset.id;
+      if (expandedProductParents.has(id)) expandedProductParents.delete(id); else expandedProductParents.add(id);
+      renderProductsTable();
+    }));
     tbody.querySelectorAll(".pause-prod-btn").forEach((b) => b.addEventListener("click", () => toggleProductStatus(b.dataset.id, b.dataset.status)));
     tbody.querySelectorAll(".edit-prod-btn").forEach((b) => b.addEventListener("click", () => editProduct(b.dataset.id)));
     tbody.querySelectorAll(".del-prod-btn").forEach((b) => b.addEventListener("click", () => deleteProduct(b.dataset.id)));
@@ -944,9 +1258,14 @@ setTimeout(() => {
     document.getElementById("prod-seo-desc").value = p.seoDesc || "";
     document.getElementById("prod-mrp").value = p.mrp ?? "";
     document.getElementById("prod-price").value = p.sellingPrice ?? "";
+    // Older products saved before this field existed won't have it —
+    // leave blank rather than defaulting to 0, so the admin notices and
+    // fills in the real number instead of accidentally saving "free".
+    document.getElementById("prod-cost-price").value = (p.costPrice !== undefined && p.costPrice !== null) ? p.costPrice : "";
     document.getElementById("prod-stock").value = p.stock ?? "";
     document.getElementById("prod-tags").value = (p.tags || []).join(", ");
     document.getElementById("prod-sku").value = p.sku || "";
+    document.getElementById("prod-hsn").value = p.hsnCode || "";
     document.getElementById("prod-source-url").value = p.sourcePlatformUrl || "";
     document.getElementById("prod-short-desc").value = p.shortDescription || "";
     document.getElementById("prod-long-desc").value = p.description || "";
@@ -962,7 +1281,33 @@ setTimeout(() => {
       document.getElementById("prod-brand").value = p.brand || "";
     }, 100);
 
-    document.getElementById("product-form-title").textContent = "Edit Product";
+    // Variant-related form state — three cases: a variant itself, a
+    // parent with variants, or a plain product with neither.
+    document.getElementById("prod-is-variant").value = p.isVariant ? "1" : "";
+    document.getElementById("prod-parent-id").value = p.parentId || "";
+    if (p.isVariant) {
+      document.getElementById("variant-size-wrap").style.display = "";
+      document.getElementById("variant-color-wrap").style.display = "";
+      document.getElementById("prod-variant-size").value = p.size || "";
+      document.getElementById("prod-variant-color").value = p.color || "";
+      // A variant can't itself have variants — that section is parent-only.
+      document.getElementById("variants-toggle-wrap").style.display = "none";
+      document.getElementById("variants-section").style.display = "none";
+      document.getElementById("variant-sync-wrap").style.display = p.parentId ? "" : "none";
+    } else {
+      document.getElementById("variant-size-wrap").style.display = "none";
+      document.getElementById("variant-color-wrap").style.display = "none";
+      document.getElementById("variant-sync-wrap").style.display = "none";
+      document.getElementById("variants-toggle-wrap").style.display = "";
+      document.getElementById("prod-has-variants").checked = !!p.hasVariants;
+      document.getElementById("variants-section").style.display = p.hasVariants ? "" : "none";
+      document.getElementById("variant-sizes-input").value = (p.variantAxes && p.variantAxes.sizes) ? p.variantAxes.sizes.join(", ") : "";
+      document.getElementById("variant-colors-input").value = (p.variantAxes && p.variantAxes.colors) ? p.variantAxes.colors.join(", ") : "";
+      document.getElementById("variant-boxes-container").innerHTML = "";
+      if (p.hasVariants) populateVariantBoxesForParent(id);
+    }
+
+    document.getElementById("product-form-title").textContent = p.isVariant ? `Edit Variant (${p.size || ""} / ${p.color || ""})` : "Edit Product";
     renderSeoChecklist();
     goToSection("store-add-product");
   }
@@ -970,8 +1315,11 @@ setTimeout(() => {
   // Ensures no two products share a slug — if "terracotta-diya-set" is taken,
   // tries "terracotta-diya-set-2", "-3", etc. `excludeId` lets an edit keep its own slug.
   function ensureUniqueSlug(baseSlug, excludeId) {
+    // Variants don't use `slug` for routing (they use parentId +
+    // variantSlug), so they're excluded here too — belt and suspenders
+    // alongside not writing `slug` onto them in the first place.
     const taken = new Set(
-      productsList.filter((p) => p.id !== excludeId).map((p) => p.slug).filter(Boolean)
+      productsList.filter((p) => p.id !== excludeId && !p.isVariant).map((p) => p.slug).filter(Boolean)
     );
     if (!taken.has(baseSlug)) return baseSlug;
     let n = 2;
@@ -985,6 +1333,19 @@ setTimeout(() => {
   }
 
   async function deleteProduct(id) {
+    const p = productsList.find((x) => x.id === id);
+    const children = p && p.hasVariants ? productsList.filter((c) => c.isVariant && c.parentId === id) : [];
+
+    if (children.length > 0) {
+      const choice = confirm(
+        `This product has ${children.length} variant(s). Press OK to delete the product AND all ${children.length} variant(s), or Cancel to keep them (you can delete each variant individually instead).`
+      );
+      if (!choice) return;
+      for (const c of children) await deleteDoc(doc(db, "products", c.id));
+      await deleteDoc(doc(db, "products", id));
+      return;
+    }
+
     if (!confirm("Delete this product permanently?")) return;
     await deleteDoc(doc(db, "products", id));
   }
@@ -993,6 +1354,22 @@ setTimeout(() => {
     const title = document.getElementById("prod-name").value.trim();
     if (!title) return alert("Product name is required");
     if (!document.getElementById("prod-category").value) return alert("Please select a category");
+    if (document.getElementById("prod-cost-price").value.trim() === "") {
+      return alert("Cost Price is required — it's what you pay for this product, used to calculate profit in reports. It's never shown to customers.");
+    }
+
+    const isVariant = document.getElementById("prod-is-variant").value === "1";
+    const hasVariants = !isVariant && variantsToggle.checked;
+    const variantBoxes = hasVariants ? Array.from(variantBoxesContainer.children) : [];
+    if (hasVariants) {
+      if (variantBoxes.length === 0) { alert("Add at least one size/color variant, or turn off \"This product has variants\"."); return; }
+      for (const box of variantBoxes) {
+        if (box.querySelector(".vb-stock").value.trim() === "") {
+          alert(`Stock is required for the ${box.dataset.size} / ${box.dataset.color} variant.`);
+          return;
+        }
+      }
+    }
 
     const saveBtn = status === "active" ? document.getElementById("publish-prod-btn") : document.getElementById("draft-prod-btn");
     const originalText = saveBtn.textContent;
@@ -1037,8 +1414,10 @@ setTimeout(() => {
         brand: document.getElementById("prod-brand").value,
         mrp: Number(document.getElementById("prod-mrp").value) || 0,
         sellingPrice: Number(document.getElementById("prod-price").value) || 0,
+        costPrice: Number(document.getElementById("prod-cost-price").value) || 0,
         stock: Number(document.getElementById("prod-stock").value) || 0,
         sku: document.getElementById("prod-sku").value,
+        hsnCode: document.getElementById("prod-hsn").value.trim(),
         sourcePlatformUrl: document.getElementById("prod-source-url").value.trim(),
         tags: document.getElementById("prod-tags").value.split(",").map((t) => t.trim()).filter(Boolean),
         shortDescription: document.getElementById("prod-short-desc").value,
@@ -1048,15 +1427,91 @@ setTimeout(() => {
         deliveryPartnerImage,
         images,
         status,
+        // Parent-only bookkeeping. A plain product (no variants at all)
+        // just carries hasVariants:false harmlessly.
+        hasVariants,
+        variantAxes: hasVariants ? {
+          sizes: document.getElementById("variant-sizes-input").value.split(",").map((s) => s.trim()).filter(Boolean),
+          colors: document.getElementById("variant-colors-input").value.split(",").map((c) => c.trim()).filter(Boolean)
+        } : null,
         updatedAt: new Date().toISOString()
       };
 
+      if (isVariant) {
+        // A variant is a normal product doc PLUS these three fields —
+        // never has its own hasVariants/variantAxes.
+        pData.isVariant = true;
+        pData.parentId = document.getElementById("prod-parent-id").value;
+        pData.size = document.getElementById("prod-variant-size").value.trim();
+        pData.color = document.getElementById("prod-variant-color").value.trim();
+        delete pData.hasVariants;
+        delete pData.variantAxes;
+      }
+
+      let docId = pId;
       if (pId) {
         await updateDoc(doc(db, "products", pId), pData);
       } else {
         pData.createdAt = new Date().toISOString();
-        await addDoc(collection(db, "products"), pData);
+        const ref = await addDoc(collection(db, "products"), pData);
+        docId = ref.id;
       }
+
+      // Create/update each size×color variant as its own product doc.
+      // New boxes (no data-existing-id) get a full copy of everything
+      // just saved above, EXCEPT MRP/Sale Price/HSN/Source URL/Stock —
+      // those come from the box itself if filled in, or fall back to a
+      // one-time snapshot of the parent's value if left blank (not a
+      // live link — see the "Auto Sync" button for pulling parent
+      // changes in later). Existing boxes only touch fields the admin
+      // actually typed something into, so re-saving the parent never
+      // silently wipes a variant's own already-configured price/stock.
+      if (hasVariants) {
+        for (const box of variantBoxes) {
+          const size = box.dataset.size, color = box.dataset.color;
+          const mrpVal = box.querySelector(".vb-mrp").value.trim();
+          const priceVal = box.querySelector(".vb-price").value.trim();
+          const hsnVal = box.querySelector(".vb-hsn").value.trim();
+          const sourceVal = box.querySelector(".vb-source").value.trim();
+          const stockVal = box.querySelector(".vb-stock").value.trim();
+
+          if (box.dataset.existingId) {
+            const patch = { size, color, stock: Number(stockVal) || 0 };
+            if (mrpVal !== "") patch.mrp = Number(mrpVal);
+            if (priceVal !== "") patch.sellingPrice = Number(priceVal);
+            if (hsnVal !== "") patch.hsnCode = hsnVal;
+            if (sourceVal !== "") patch.sourcePlatformUrl = sourceVal;
+            await updateDoc(doc(db, "products", box.dataset.existingId), patch);
+          } else {
+            const childData = {
+              ...pData,
+              isVariant: true,
+              parentId: docId,
+              size, color,
+              mrp: mrpVal !== "" ? Number(mrpVal) : pData.mrp,
+              sellingPrice: priceVal !== "" ? Number(priceVal) : pData.sellingPrice,
+              hsnCode: hsnVal !== "" ? hsnVal : pData.hsnCode,
+              sourcePlatformUrl: sourceVal !== "" ? sourceVal : pData.sourcePlatformUrl,
+              stock: Number(stockVal) || 0,
+              hasVariants: false,
+              variantAxes: null,
+              variantSlug: slugifyVariant(`${size}-${color}`),
+              createdAt: new Date().toISOString()
+            };
+            // Not `slug` — that field drives /products/:slug routing and
+            // ensureUniqueSlug()'s collision check for NORMAL products.
+            // A variant is never reached by that route (it uses parentId
+            // + variantSlug instead), so copying the parent's slug here
+            // would just sit there unused — and worse, on the parent's
+            // NEXT save, ensureUniqueSlug() would see its own slug as
+            // "already taken" by this child and needlessly append "-2".
+            delete childData.slug;
+            delete childData.updatedAt;
+            await addDoc(collection(db, "products"), childData);
+          }
+        }
+      }
+
       resetProductForm();
       goToSection("store-products");
     } catch (err) {
@@ -1072,6 +1527,128 @@ setTimeout(() => {
 
   wireBulkSelect("products-table-body", "select-all-products", "bulk-delete-products-btn", async (ids) => {
     for (const id of ids) await deleteDoc(doc(db, "products", id));
+  });
+
+  // ================================================================
+  // PRODUCT VARIANTS (Size × Color sub-products)
+  // ----------------------------------------------------------------
+  // A variant is a REAL product document in the same `products`
+  // collection (isVariant:true, parentId:<parent's id>) — this is what
+  // makes it show up automatically everywhere a normal product already
+  // does (home/category/search/cart/checkout/sitemap/feed) with zero
+  // extra query logic in most of those places. The parent itself is
+  // excluded from all public-facing queries once it has variants (see
+  // api/list.js and js/product-loader.js) — it only exists from then on
+  // as an admin-side "template" record.
+  // ================================================================
+  const variantsToggle = document.getElementById("prod-has-variants");
+  const variantsSection = document.getElementById("variants-section");
+  const variantBoxesContainer = document.getElementById("variant-boxes-container");
+  const variantSyncWrap = document.getElementById("variant-sync-wrap");
+
+  variantsToggle.addEventListener("change", () => {
+    variantsSection.style.display = variantsToggle.checked ? "" : "none";
+  });
+
+  function slugifyVariant(text) {
+    return String(text || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-+|-+$)/g, "");
+  }
+  function variantBoxKey(size, color) { return `${size}::${color}`; }
+
+  function buildVariantBox(size, color, existingProduct) {
+    const box = document.createElement("div");
+    box.className = "variant-box";
+    box.dataset.size = size;
+    box.dataset.color = color;
+    box.dataset.existingId = existingProduct ? existingProduct.id : "";
+    box.style.cssText = "border:1px solid var(--color-border,#e2ddd0); border-radius:6px; padding:12px; background:#fff;";
+
+    const mrp = (existingProduct && existingProduct.mrp !== undefined && existingProduct.mrp !== null) ? existingProduct.mrp : "";
+    const price = (existingProduct && existingProduct.sellingPrice !== undefined && existingProduct.sellingPrice !== null) ? existingProduct.sellingPrice : "";
+    const hsn = existingProduct ? (existingProduct.hsnCode || "") : "";
+    const sourceUrl = existingProduct ? (existingProduct.sourcePlatformUrl || "") : "";
+    const stock = (existingProduct && existingProduct.stock !== undefined) ? existingProduct.stock : "";
+
+    box.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+        <strong>${esc(size)} / ${esc(color)}</strong>
+        ${existingProduct
+          ? `<div style="display:flex; gap:6px;">
+               <button type="button" class="btn btn-outline variant-edit-btn" style="padding:2px 8px; font-size:0.78rem;">Edit as Product</button>
+               <button type="button" class="btn btn-outline variant-delete-btn" style="padding:2px 8px; font-size:0.78rem; color:var(--color-danger); border-color:var(--color-danger);">🗑 Delete</button>
+             </div>`
+          : `<button type="button" class="btn btn-outline variant-remove-btn" style="padding:2px 8px; font-size:0.78rem; color:var(--color-danger); border-color:var(--color-danger);">Remove</button>`
+        }
+      </div>
+      <div class="form-grid" style="grid-template-columns: repeat(5, minmax(90px,1fr)); gap:8px;">
+        <div class="form-field"><label style="font-size:0.78rem;">MRP ₹ <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="number" class="vb-mrp" min="0" value="${mrp}" placeholder="parent's"></div>
+        <div class="form-field"><label style="font-size:0.78rem;">Sale Price ₹ <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="number" class="vb-price" min="0" value="${price}" placeholder="parent's"></div>
+        <div class="form-field"><label style="font-size:0.78rem;">HSN <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="text" class="vb-hsn" value="${esc(hsn)}" placeholder="parent's"></div>
+        <div class="form-field"><label style="font-size:0.78rem;">Source URL <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="url" class="vb-source" value="${esc(sourceUrl)}" placeholder="parent's"></div>
+        <div class="form-field"><label style="font-size:0.78rem;">Stock <span class="required-star">*</span></label><input type="number" class="vb-stock" min="0" value="${stock}"></div>
+      </div>
+    `;
+
+    if (existingProduct) {
+      box.querySelector(".variant-edit-btn").addEventListener("click", () => editProduct(existingProduct.id));
+      box.querySelector(".variant-delete-btn").addEventListener("click", async () => {
+        if (!confirm(`Delete the ${size} / ${color} variant permanently? This cannot be undone.`)) return;
+        await deleteDoc(doc(db, "products", existingProduct.id));
+        box.remove();
+      });
+    } else {
+      box.querySelector(".variant-remove-btn").addEventListener("click", () => box.remove());
+    }
+    return box;
+  }
+
+  document.getElementById("add-variants-btn").addEventListener("click", () => {
+    const sizes = document.getElementById("variant-sizes-input").value.split(",").map((s) => s.trim()).filter(Boolean);
+    const colors = document.getElementById("variant-colors-input").value.split(",").map((c) => c.trim()).filter(Boolean);
+    if (!sizes.length || !colors.length) { alert("Enter at least one size and one color, comma-separated."); return; }
+
+    const existingKeys = new Set(
+      Array.from(variantBoxesContainer.children).map((box) => variantBoxKey(box.dataset.size, box.dataset.color))
+    );
+    sizes.forEach((size) => {
+      colors.forEach((color) => {
+        const key = variantBoxKey(size, color);
+        if (existingKeys.has(key)) return; // already have a box for this combo — don't duplicate
+        variantBoxesContainer.appendChild(buildVariantBox(size, color, null));
+        existingKeys.add(key);
+      });
+    });
+  });
+
+  function populateVariantBoxesForParent(parentId) {
+    variantBoxesContainer.innerHTML = "";
+    productsList.filter((p) => p.isVariant && p.parentId === parentId)
+      .forEach((child) => variantBoxesContainer.appendChild(buildVariantBox(child.size, child.color, child)));
+  }
+
+  document.getElementById("variant-auto-sync-btn").addEventListener("click", async () => {
+    const parentId = document.getElementById("prod-parent-id").value;
+    const parent = productsList.find((p) => p.id === parentId);
+    if (!parent) { alert("Can't find the parent product — it may have been deleted."); return; }
+    if (!confirm("Overwrite this variant's Name, Description, Category, Brand, Tags, Delivery info and Images with the parent's current data? Size, Color, MRP, Sale Price, HSN and Source URL are kept as-is.")) return;
+
+    const variantId = document.getElementById("prod-id").value;
+    const syncPatch = {
+      title: parent.title, slug: parent.slug, keyphrase: parent.keyphrase, seoTitle: parent.seoTitle, seoDesc: parent.seoDesc,
+      category: parent.category, brand: parent.brand, tags: parent.tags || [],
+      shortDescription: parent.shortDescription, description: parent.description,
+      deliveryFee: parent.deliveryFee, deliveryPartnerName: parent.deliveryPartnerName, deliveryPartnerImage: parent.deliveryPartnerImage,
+      images: parent.images || []
+    };
+    try {
+      if (variantId) await updateDoc(doc(db, "products", variantId), syncPatch);
+      // Refresh the open form so the admin sees the synced values immediately.
+      Object.entries(syncPatch).forEach(() => {}); // no-op, real refresh below
+      editProduct(variantId);
+      alert("Synced from parent.");
+    } catch (err) {
+      alert("Couldn't sync: " + err.message);
+    }
   });
 
   // ================================================================
@@ -2033,11 +2610,13 @@ setTimeout(() => {
         <td style="color:${sColor}; font-weight:bold;">${esc(o.status || 'Pending')}</td>
         <td>
           <button class="btn btn-primary view-order-btn" data-id="${o.id}" style="padding:4px 8px; font-size:0.8rem;">Process</button>
+          <button class="btn btn-outline invoice-order-btn" data-id="${o.id}" data-order-id="${esc(o.orderId)}" style="padding:4px 8px; font-size:0.8rem;">⬇ Invoice</button>
           <button class="btn btn-outline del-order-btn" data-id="${o.id}" style="color:var(--color-danger); padding:4px 8px; font-size:0.8rem;">Delete</button>
         </td>`;
       tbody.appendChild(tr);
     });
     tbody.querySelectorAll(".view-order-btn").forEach((b) => b.addEventListener("click", () => viewOrder(b.dataset.id)));
+    tbody.querySelectorAll(".invoice-order-btn").forEach((b) => b.addEventListener("click", () => downloadSingleInvoice(b.dataset.id, b.dataset.orderId, b)));
     tbody.querySelectorAll(".del-order-btn").forEach((b) => b.addEventListener("click", () => deleteOrder(b.dataset.id)));
   }
 
@@ -2045,6 +2624,49 @@ setTimeout(() => {
     if (!confirm("Delete this order permanently? This cannot be undone.")) return;
     await deleteDoc(doc(db, "orders", id));
   }
+
+  // Fetches a file (PDF/ZIP) from an admin-only API route, authenticated
+  // with the admin's live Firebase ID token, and triggers a normal
+  // browser download — same token pattern already used by
+  // product-import-tester.html against api/import-product.js.
+  async function downloadAdminFile(url, fallbackFilename, btn, busyLabel) {
+    const originalText = btn ? btn.textContent : null;
+    if (btn) { btn.disabled = true; btn.textContent = busyLabel; }
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${idToken}` } });
+      if (!res.ok) {
+        let msg = `Request failed (${res.status})`;
+        try { const j = await res.json(); if (j.error) msg = j.error; } catch (e) { /* not JSON */ }
+        throw new Error(msg);
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const match = /filename="([^"]+)"/.exec(disposition);
+      const filename = match ? match[1] : fallbackFilename;
+      const dlUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = dlUrl; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(dlUrl), 1000);
+    } catch (err) {
+      alert("Couldn't download: " + err.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = originalText; }
+    }
+  }
+
+  function downloadSingleInvoice(dbId, orderIdLabel, btn) {
+    downloadAdminFile(`/api/admin-tools?action=invoice&orderId=${encodeURIComponent(dbId)}`, `Invoice-${orderIdLabel}.pdf`, btn, "Generating…");
+  }
+
+  document.getElementById("download-all-invoices-btn").addEventListener("click", async () => {
+    const btn = document.getElementById("download-all-invoices-btn");
+    const statusEl = document.getElementById("download-all-invoices-status");
+    if (statusEl) statusEl.textContent = `Generating ${ordersList.length} invoice(s) — this can take a little while for a lot of orders, please don't close this tab…`;
+    await downloadAdminFile(`/api/admin-tools?action=invoice-bulk`, `Invoices-${todayFileStamp()}.zip`, btn, "Generating ZIP…");
+    if (statusEl) statusEl.textContent = "";
+  });
 
   wireBulkSelect("orders-table-body", "select-all-orders", "bulk-delete-orders-btn", async (ids) => {
     for (const id of ids) await deleteDoc(doc(db, "orders", id));
@@ -2382,6 +3004,13 @@ setTimeout(() => {
     document.getElementById("set-store-name").value = SETTINGS.storeName || "";
     document.getElementById("set-admin-name").value = SETTINGS.adminName || "";
     document.getElementById("set-admin-username").value = SETTINGS.adminUsername || "";
+    document.getElementById("set-seller-name").value = SETTINGS.sellerName || "";
+    document.getElementById("set-seller-id").value = SETTINGS.sellerId || "";
+    document.getElementById("set-seller-address").value = SETTINGS.sellerAddress || "";
+    document.getElementById("set-tax-enabled").checked = !!SETTINGS.taxEnabled;
+    document.getElementById("set-seller-state").value = SETTINGS.sellerState || "";
+    document.getElementById("set-gst-number").value = SETTINGS.gstNumber || "";
+    document.getElementById("set-tax-rate").value = SETTINGS.taxRate ?? 0;
     document.getElementById("set-imgbb-key").value = SETTINGS.imgbbKey || "";
     document.getElementById("set-email-pub").value = SETTINGS.emailjs_publicKey || "";
     document.getElementById("set-email-srv").value = SETTINGS.emailjs_serviceId || "";
@@ -2422,6 +3051,13 @@ setTimeout(() => {
       storeName: document.getElementById("set-store-name").value,
       adminName: document.getElementById("set-admin-name").value,
       adminUsername: document.getElementById("set-admin-username").value,
+      sellerName: document.getElementById("set-seller-name").value.trim(),
+      sellerId: document.getElementById("set-seller-id").value.trim(),
+      sellerAddress: document.getElementById("set-seller-address").value.trim(),
+      taxEnabled: document.getElementById("set-tax-enabled").checked,
+      sellerState: document.getElementById("set-seller-state").value.trim(),
+      gstNumber: document.getElementById("set-gst-number").value.trim(),
+      taxRate: Number(document.getElementById("set-tax-rate").value) || 0,
       imgbbKey: document.getElementById("set-imgbb-key").value,
       emailjs_publicKey: document.getElementById("set-email-pub").value,
       emailjs_serviceId: document.getElementById("set-email-srv").value,
@@ -2620,6 +3256,45 @@ setTimeout(() => {
 
   document.getElementById("tg-fetch-chat-id-btn").addEventListener("click", () => callTelegramTestApi("fetchChatId"));
   document.getElementById("tg-test-btn").addEventListener("click", () => callTelegramTestApi("test"));
+
+  // ================================================================
+  // CSV export buttons (Overview / Products / Brands / Coupons / Orders)
+  // ================================================================
+  const ovRangeSelect = document.getElementById("ov-export-range");
+  const ovFromWrap = document.getElementById("ov-export-from-wrap");
+  const ovToWrap = document.getElementById("ov-export-to-wrap");
+  if (ovRangeSelect) {
+    ovRangeSelect.addEventListener("change", () => {
+      const isCustom = ovRangeSelect.value === "custom";
+      ovFromWrap.style.display = isCustom ? "" : "none";
+      ovToWrap.style.display = isCustom ? "" : "none";
+    });
+  }
+
+  document.getElementById("ov-export-csv-btn")?.addEventListener("click", () => {
+    const range = ovRangeSelect.value;
+    const from = document.getElementById("ov-export-from").value;
+    const to = document.getElementById("ov-export-to").value;
+    if (range === "custom" && (!from || !to)) { alert("Please pick both a From and To date for a custom range."); return; }
+    const rows = buildOverviewReportCSV(range, from, to);
+    downloadCSV(`overview-report-${range}-${todayFileStamp()}.csv`, rows);
+  });
+
+  document.getElementById("export-products-csv-btn")?.addEventListener("click", () => {
+    downloadCSV(`products-${todayFileStamp()}.csv`, buildProductsReportCSV());
+  });
+
+  document.getElementById("export-brands-csv-btn")?.addEventListener("click", () => {
+    downloadCSV(`brands-${todayFileStamp()}.csv`, buildBrandsReportCSV());
+  });
+
+  document.getElementById("export-coupons-csv-btn")?.addEventListener("click", () => {
+    downloadCSV(`coupons-${todayFileStamp()}.csv`, buildCouponsReportCSV());
+  });
+
+  document.getElementById("export-orders-csv-btn")?.addEventListener("click", () => {
+    downloadCSV(`orders-${todayFileStamp()}.csv`, buildOrdersReportCSV());
+  });
 
   // ================================================================
   // Boot sequence — realtime sync

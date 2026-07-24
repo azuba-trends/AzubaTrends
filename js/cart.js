@@ -8,7 +8,10 @@
  * Exposes a global `Cart` object, same pattern as `Security` / `GeoRestriction`.
  *
  * Cart item shape (the contract Claude 2's "Add to Cart" buttons rely on):
- *   { productId, title, price, quantity, image }
+ *   { productId, title, price, quantity, image, size, color }
+ *   (size/color are '' for a non-variant product — each variant already
+ *   has its own unique productId, so cart/qty logic needs no special
+ *   casing for variants; size/color here are purely for display.)
  *
  * Every mutation dispatches `cart:updated` on `window` with
  * `{ detail: { count } }` so the header badge can react without this module
@@ -43,7 +46,9 @@
           title: String(item.title || ''),
           price: Number(item.price) || 0,
           quantity: Math.max(0, Math.floor(Number(item.quantity) || 0)),
-          image: item.image ? String(item.image) : ''
+          image: item.image ? String(item.image) : '',
+          size: item.size ? String(item.size) : '',
+          color: item.color ? String(item.color) : ''
         }))
         .filter((item) => item.quantity > 0);
     } catch (err) {
@@ -98,13 +103,17 @@
       items[idx].title = product.title != null ? String(product.title) : items[idx].title;
       items[idx].price = product.price != null ? Number(product.price) : items[idx].price;
       items[idx].image = product.image != null ? String(product.image) : items[idx].image;
+      if (product.size != null) items[idx].size = String(product.size);
+      if (product.color != null) items[idx].color = String(product.color);
     } else {
       items.push({
         productId: String(product.productId),
         title: String(product.title || ''),
         price: Number(product.price) || 0,
         quantity: qtyToAdd,
-        image: product.image ? String(product.image) : ''
+        image: product.image ? String(product.image) : '',
+        size: product.size ? String(product.size) : '',
+        color: product.color ? String(product.color) : ''
       });
     }
     notify();
@@ -208,7 +217,9 @@
         productId: productId,
         title: btn.getAttribute('data-product-title') || '',
         price: Number(btn.getAttribute('data-product-price')) || 0,
-        image: btn.getAttribute('data-product-image') || ''
+        image: btn.getAttribute('data-product-image') || '',
+        size: btn.getAttribute('data-product-size') || '',
+        color: btn.getAttribute('data-product-color') || ''
       },
       1
     );
@@ -246,7 +257,9 @@
           productId: productId,
           title: btn.getAttribute('data-product-title') || '',
           price: Number(btn.getAttribute('data-product-price')) || 0,
-          image: btn.getAttribute('data-product-image') || ''
+          image: btn.getAttribute('data-product-image') || '',
+          size: btn.getAttribute('data-product-size') || '',
+          color: btn.getAttribute('data-product-color') || ''
         },
         1
       );

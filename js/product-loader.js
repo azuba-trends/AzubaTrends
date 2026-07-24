@@ -38,7 +38,11 @@ const ProductLoader = (function () {
         const q = query(collection(db, "products"), where("status", "==", "active"));
         const snapshot = await getDocs(q);
         
-        cachedProducts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Same exclusion as api/list.js: a product with hasVariants:true
+        // is only a template for the admin panel, never itself sellable.
+        cachedProducts = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter(p => !p.hasVariants);
         return cachedProducts;
       } catch (err) {
         console.error("ProductLoader Error:", err);
@@ -56,6 +60,33 @@ const ProductLoader = (function () {
   async function getProductBySlug(slug) {
     const products = await loadAllProducts();
     return products.find((p) => p.slug === slug) || null;
+  }
+
+  // A variant's public URL is /products/{parentId}/{variantSlug} — the
+  // parentId in the path is what keeps two different products' variants
+  // from ever colliding even if their size/color text is identical
+  // (e.g. two unrelated products both having a "M / Red").
+  function productUrl(product) {
+    if (!product) return "/";
+    if (product.isVariant && product.parentId && product.variantSlug) {
+      return `/products/${encodeURIComponent(product.parentId)}/${encodeURIComponent(product.variantSlug)}`;
+    }
+    return product.slug ? `/products/${encodeURIComponent(product.slug)}` : `product.html?id=${encodeURIComponent(product.id)}`;
+  }
+
+  async function getProductByParentAndVariantSlug(parentId, variantSlug) {
+    const products = await loadAllProducts();
+    return products.find((p) => p.isVariant && p.parentId === parentId && p.variantSlug === variantSlug) || null;
+  }
+
+  // Every other variant of the same product (siblings), used to build
+  // the Size/Color selector on the product page. Includes the product
+  // itself so callers don't need a separate "is this the current one"
+  // special case.
+  async function getVariantSiblings(product) {
+    if (!product || !product.isVariant || !product.parentId) return [product].filter(Boolean);
+    const products = await loadAllProducts();
+    return products.filter((p) => p.isVariant && p.parentId === product.parentId);
   }
 
   function calcDiscount(product) {
@@ -92,9 +123,12 @@ const ProductLoader = (function () {
     const safeTitle = window.Security ? window.Security.escapeHTML(product.title) : String(product.title || "");
     const safeCategory = window.Security ? window.Security.escapeHTML(product.category) : String(product.category || "");
     const safeImage = window.Security ? window.Security.escapeHTML(image) : image;
+    const variantBadge = (product.isVariant && (product.size || product.color))
+      ? `<span class="product-card__variant" style="color:var(--color-ink-soft); font-size:0.8em;"> — ${[product.size, product.color].filter(Boolean).map((s) => window.Security ? window.Security.escapeHTML(s) : s).join(" / ")}</span>`
+      : "";
 
     card.innerHTML = `
-      <a href="${product.slug ? `/products/${encodeURIComponent(product.slug)}` : `product.html?id=${encodeURIComponent(product.id)}`}" class="product-card__link">
+      <a href="${productUrl(product)}" class="product-card__link">
         <div class="product-card__media">
           ${product.stock === 0 ? `<span class="price-tag price-tag--stock">Out of Stock</span>` : ''}
           <img src="${safeImage}" alt="${safeTitle}" loading="lazy">
@@ -102,7 +136,7 @@ const ProductLoader = (function () {
       </a>
       <div class="product-card__body">
         <span class="product-card__category">${safeCategory}</span>
-        <h3 class="product-card__title">${safeTitle}</h3>
+        <h3 class="product-card__title">${safeTitle}${variantBadge}</h3>
         <div class="product-card__price-row">
           <span class="price-current">${formatPrice(product.sellingPrice)}</span>
           ${discount > 0 ? `<span class="price-mrp">${formatPrice(product.mrp)}</span>` : ''}
@@ -200,8 +234,14 @@ const ProductLoader = (function () {
    *  product first (if given), then the shopper's most-viewed categories
    *  from the interest cookie, then just newest-in-stock as a last resort —
    *  so this never comes up empty as long as *some* other product exists. */
-  function pickRelatedProducts(allProducts, { excludeId, category, limit = 8 } = {}) {
-    const pool = allProducts.filter((p) => String(p.id) !== String(excludeId));
+  function pickRelatedProducts(allProducts, { excludeId, excludeParentId, category, limit = 8 } = {}) {
+    const pool = allProducts.filter((p) => {
+      if (String(p.id) === String(excludeId)) return false;
+      // Don't recommend a product's own other sizes/colors as "related" —
+      // those belong in the variant selector, not this grid.
+      if (excludeParentId && p.isVariant && String(p.parentId) === String(excludeParentId)) return false;
+      return true;
+    });
     const buckets = [];
     if (category) buckets.push(pool.filter((p) => p.category === category));
     getTopInterestCategories().forEach((cat) => buckets.push(pool.filter((p) => p.category === cat)));
@@ -276,7 +316,7 @@ const ProductLoader = (function () {
     window.addEventListener("cart:updated", (e) => setBadge(e.detail.count));
   }
 
-  const API = { loadAllProducts, getProductById, getProductBySlug, calcDiscount, formatPrice, sortByStock, getCategories, renderProductCard, renderGrid, renderSkeletonGrid, renderCategoryChips, initHeader, trackCategoryInterest, mountRelatedProducts };
+  const API = { loadAllProducts, getProductById, getProductBySlug, getProductByParentAndVariantSlug, getVariantSiblings, productUrl, calcDiscount, formatPrice, sortByStock, getCategories, renderProductCard, renderGrid, renderSkeletonGrid, renderCategoryChips, initHeader, trackCategoryInterest, mountRelatedProducts };
   window.ProductLoader = API;
   return API;
 })();

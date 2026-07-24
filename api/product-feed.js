@@ -29,7 +29,8 @@ export default async function handler(req, res) {
 
   const columns = [
     "id", "title", "description", "link", "image_link",
-    "availability", "price", "condition", "brand", "product_type", "shipping"
+    "availability", "price", "condition", "brand", "product_type", "shipping",
+    "item_group_id", "color", "size"
   ];
 
   let rows = [];
@@ -46,6 +47,7 @@ export default async function handler(req, res) {
     productsSnap.forEach((doc) => {
       const p = doc.data();
       if (p.status !== "active") return; // don't advertise paused/unavailable products
+      if (p.hasVariants) return; // parent is a template only, never itself a real orderable item
       if (!p.title || p.sellingPrice === undefined) return; // skip incomplete records rather than submitting a bad row
 
       const stock = p.stock !== undefined && p.stock !== null ? Number(p.stock) : null;
@@ -63,18 +65,29 @@ export default async function handler(req, res) {
       const deliveryFee = p.deliveryFee ? Number(p.deliveryFee) || 0 : 0;
       const shipping = `IN::Standard:${deliveryFee.toFixed(2)} INR`;
 
+      // item_group_id / color / size: the standard Google Merchant Center
+      // + Meta Commerce Manager fields for tying size/color variants of
+      // the same product together in Shopping/Instagram catalogs — set
+      // to the parent's id for a variant, left blank for a plain product.
+      const link = (p.isVariant && p.parentId && p.variantSlug)
+        ? `${baseUrl}/products/${encodeURIComponent(p.parentId)}/${encodeURIComponent(p.variantSlug)}`
+        : (p.slug ? `${baseUrl}/products/${encodeURIComponent(p.slug)}` : `${baseUrl}/product.html?id=${encodeURIComponent(doc.id)}`);
+
       rows.push([
         doc.id,
         p.title,
         (p.description || p.shortDescription || p.title || "").slice(0, 5000),
-        p.slug ? `${baseUrl}/products/${encodeURIComponent(p.slug)}` : `${baseUrl}/product.html?id=${encodeURIComponent(doc.id)}`,
+        link,
         image,
         availability,
         `${Number(p.sellingPrice).toFixed(2)} INR`,
         "new",
         p.brand || "",
         categoryName,
-        shipping
+        shipping,
+        p.isVariant ? p.parentId : "",
+        p.color || "",
+        p.size || ""
       ]);
     });
   } catch (err) {

@@ -94,7 +94,8 @@ AzubaTrends/
 │   ├── place-order.js        Server-side price/stock/coupon re-verification + order write
 │   ├── share.js               Per-item OG tags for WhatsApp/social link previews — product AND blog, merged into one function (was product.js + blog-post.js)
 │   ├── page.js                Full server-side rendering for custom Pages (Admin -> Pages) — real content in the first response, not just OG-tag stub
-│   ├── products.js, blog-posts.js, product-feed.js, sitemap.js, manifest.js
+│   ├── list.js, product-feed.js, site-meta.js
+│   ├── admin-tools.js         Admin-only: order invoice PDF (single) + all-invoices ZIP — auth via Firebase ID token, same pattern as import-product.js
 │   ├── import-product.js     One-time product-prefill helper from a third-party URL
 │   ├── submit-review.js      Rate-limited, profanity-filtered public review submission
 │   ├── telegram.js, cron-daily-digest.js   Telegram alerts (merged into one function — see below)

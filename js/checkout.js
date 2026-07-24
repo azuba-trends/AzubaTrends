@@ -251,7 +251,8 @@
       row.style.padding = '6px 0';
 
       const label = document.createElement('span');
-      Security.setTextSafely(label, `${item.title} (x${item.quantity})`);
+      const variantSuffix = (item.size || item.color) ? ` [${[item.size, item.color].filter(Boolean).join('/')}]` : '';
+      Security.setTextSafely(label, `${item.title}${variantSuffix} (x${item.quantity})`);
 
       const amount = document.createElement('b');
       Security.setTextSafely(amount, '₹' + (item.price * item.quantity));

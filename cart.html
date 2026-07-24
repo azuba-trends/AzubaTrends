@@ -118,12 +118,16 @@
       items.forEach(item => {
         const safeTitle = Security.escapeHTML(item.title);
         const safeImage = Security.escapeHTML(item.image || 'images/logo-placeholder.svg');
+        const variantLine = (item.size || item.color)
+          ? `<p style="margin:2px 0; font-size:0.85rem; color:var(--color-ink-soft);">${Security.escapeHTML([item.size, item.color].filter(Boolean).join(" / "))}</p>`
+          : '';
         container.innerHTML += `
           <div class="cart-item">
             <img src="${safeImage}" alt="Product">
             <div class="cart-item-details">
               <div>
                 <h3 style="margin: 0; font-size: 1.2rem;">${safeTitle}</h3>
+                ${variantLine}
                 <p style="margin: 5px 0; font-weight: bold; color: var(--color-primary);">₹${item.price}</p>
               </div>
               <div class="qty-controls">
