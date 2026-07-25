@@ -462,84 +462,12 @@
       descSection.hidden = true;
     }
 
-    document.getElementById("product-price-current").textContent = ProductLoader.formatPrice(product.sellingPrice);
-    const discount = ProductLoader.calcDiscount(product);
-    if (discount > 0) {
-      const mrpEl = document.getElementById("product-price-mrp");
-      mrpEl.textContent = ProductLoader.formatPrice(product.mrp);
-      mrpEl.hidden = false;
-      const discEl = document.getElementById("product-discount");
-      discEl.textContent = `${discount}% off`;
-      discEl.hidden = false;
-    }
-
-    // ---- Variant selector (Size / Color) ---------------------------
-    if (product.isVariant) {
-      const siblings = await ProductLoader.getVariantSiblings(product);
-      // Sizes always show in the standard S/M/L/XL... order, never
-      // however they happened to be typed into the admin panel.
-      const sizes = ProductLoader.sortSizes([...new Set(siblings.map((s) => s.size).filter(Boolean))]);
-      const colors = [...new Set(siblings.map((s) => s.color).filter(Boolean))];
-
-      if (sizes.length > 0 || colors.length > 0) {
-        const wrap = document.getElementById("product-variant-selector");
-        wrap.hidden = false;
-        wrap.innerHTML = "";
-
-        function findSibling(size, color) {
-          return siblings.find((s) => (size ? s.size === size : true) && (color ? s.color === color : true)) || null;
-        }
-        function goToVariant(sibling) {
-          if (!sibling || sibling.id === product.id) return;
-          window.location.href = ProductLoader.productUrl(sibling);
-        }
-
-        if (colors.length > 0) {
-          const group = document.createElement("div");
-          group.className = "variant-selector-group";
-          group.innerHTML = `<span class="variant-selector-group__label">Color</span>`;
-          const row = document.createElement("div");
-          row.className = "variant-color-row";
-          colors.forEach((color) => {
-            const anyForColor = siblings.some((s) => s.color === color);
-            const swatch = document.createElement("button");
-            swatch.type = "button";
-            swatch.className = "variant-color-swatch" + (color === product.color ? " is-active" : "");
-            swatch.style.background = /^#|^rgb|^hsl/i.test(color) ? color : (color || "").toLowerCase();
-            swatch.title = color;
-            swatch.setAttribute("aria-label", color);
-            if (!anyForColor) swatch.disabled = true;
-            swatch.addEventListener("click", () => {
-              const target = findSibling(product.size, color) || findSibling(null, color);
-              goToVariant(target);
-            });
-            row.appendChild(swatch);
-          });
-          group.appendChild(row);
-          wrap.appendChild(group);
-        }
-
-        if (sizes.length > 0) {
-          const group = document.createElement("div");
-          group.className = "variant-selector-group";
-          group.innerHTML = `<span class="variant-selector-group__label">Size</span>`;
-          const row = document.createElement("div");
-          row.className = "variant-size-row";
-          sizes.forEach((size) => {
-            const match = findSibling(size, product.color);
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "variant-size-btn" + (size === product.size ? " is-active" : "");
-            btn.textContent = size;
-            if (!match || match.stock === 0) btn.disabled = true;
-            btn.addEventListener("click", () => goToVariant(match));
-            row.appendChild(btn);
-          });
-          group.appendChild(row);
-          wrap.appendChild(group);
-        }
-      }
-    }
+    // `product` is whatever doc the URL resolved to (a specific size, under
+    // the hood). `activeProduct` is whichever size is currently selected on
+    // screen — they start out the same, and switching Size below only moves
+    // activeProduct, never the URL/page. Switching Color is a real
+    // navigation to a different product page (color = its own product).
+    let activeProduct = product;
 
     // Delivery partner note
     const deliveryNote = document.getElementById("delivery-partner-note");
@@ -558,7 +486,12 @@
       deliveryNote.hidden = true;
     }
 
-    // ---- Stock status + actions / Notify Me ---------------------------
+    // ---- Price / Stock status / actions / Notify Me ---------------------------
+    // All of this depends on which SIZE is currently selected, so it's a
+    // function that re-runs every time the size changes, instead of a
+    // one-shot block. The Notify Me button/form listeners are wired ONCE,
+    // outside this function, so switching sizes several times never stacks
+    // duplicate listeners on them.
     const addToCartMount = document.getElementById("add-to-cart-mount");
     const buyNowBtn = document.getElementById("buy-now-btn");
     const stockStatusEl = document.getElementById("product-stock-status");
@@ -568,75 +501,183 @@
     const notifyForm = document.getElementById("notify-me-form");
     const notifyEmailInput = document.getElementById("notify-me-email");
     const notifyStatus = document.getElementById("notify-me-status");
+    const notifySubmitBtn = notifyForm.querySelector('button[type="submit"]');
 
-    stockStatusEl.innerHTML = "";
-    if (product.stock === 0) {
-      stockStatusEl.innerHTML = '<span class="oos-pill">Out of Stock</span>';
+    function renderVariantDependentUI(vp) {
+      activeProduct = vp;
 
-      // No Add to Cart / Buy Now while out of stock — Notify Me instead.
-      productActionsEl.hidden = true;
-      notifyBlock.hidden = false;
-      buyNowBtn.disabled = true;
-      buyNowBtn.setAttribute("aria-disabled", "true");
-
-      notifyBtn.addEventListener("click", () => {
-        notifyForm.classList.add("is-open");
-        notifyBtn.hidden = true;
-        notifyEmailInput.focus();
-      });
-
-      notifyForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const email = notifyEmailInput.value.trim();
-        if (!email) return;
-        const submitBtn = notifyForm.querySelector('button[type="submit"]');
-        submitBtn.disabled = true;
-        submitBtn.textContent = "Sending...";
-        notifyStatus.removeAttribute("data-tone");
-        notifyStatus.textContent = "";
-        try {
-          const res = await fetch("/api/notify-stock", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ productId: product.id, productTitle: product.title, email })
-          });
-          const data = await res.json();
-          if (!res.ok || !data.ok) throw new Error(data.error || "Couldn't save your request. Please try again.");
-          notifyForm.hidden = true;
-          notifyStatus.setAttribute("data-tone", "success");
-          notifyStatus.textContent = "You're on the list — we'll email you when this is back in stock.";
-        } catch (err) {
-          notifyStatus.setAttribute("data-tone", "error");
-          notifyStatus.textContent = err.message || "Something went wrong. Please try again.";
-          submitBtn.disabled = false;
-          submitBtn.textContent = "Notify Me";
-        }
-      });
-    } else {
-      if (product.stock <= 5) {
-        stockStatusEl.innerHTML = `<span class="low-stock-pill">Only ${product.stock} left</span>`;
+      document.getElementById("product-price-current").textContent = ProductLoader.formatPrice(vp.sellingPrice);
+      const mrpEl = document.getElementById("product-price-mrp");
+      const discEl = document.getElementById("product-discount");
+      const discount = ProductLoader.calcDiscount(vp);
+      if (discount > 0) {
+        mrpEl.textContent = ProductLoader.formatPrice(vp.mrp);
+        mrpEl.hidden = false;
+        discEl.textContent = `${discount}% off`;
+        discEl.hidden = false;
+      } else {
+        mrpEl.hidden = true;
+        discEl.hidden = true;
       }
-      productActionsEl.hidden = false;
-      notifyBlock.hidden = true;
 
-      window.CartButtonUI.mount(addToCartMount, {
-        productId: product.id,
-        title: product.title,
-        price: product.sellingPrice,
-        image: images[0],
-        stock: product.stock,
-        size: product.size || "",
-        color: product.color || ""
-      });
+      // Reset Notify Me back to its default state for the newly-selected size.
+      notifyForm.classList.remove("is-open");
+      notifyForm.hidden = false;
+      notifyBtn.hidden = false;
+      notifyStatus.textContent = "";
+      notifyStatus.removeAttribute("data-tone");
+      notifySubmitBtn.disabled = false;
+      notifySubmitBtn.textContent = "Notify Me";
 
-      buyNowBtn.setAttribute("data-buy-now", "");
-      buyNowBtn.setAttribute("data-product-id", product.id);
-      buyNowBtn.setAttribute("data-product-title", product.title);
-      buyNowBtn.setAttribute("data-product-price", String(product.sellingPrice));
-      buyNowBtn.setAttribute("data-product-image", images[0]);
-      buyNowBtn.setAttribute("data-product-size", product.size || "");
-      buyNowBtn.setAttribute("data-product-color", product.color || "");
+      stockStatusEl.innerHTML = "";
+      if (vp.stock === 0) {
+        stockStatusEl.innerHTML = '<span class="oos-pill">Out of Stock</span>';
+
+        // No Add to Cart / Buy Now while out of stock — Notify Me instead.
+        productActionsEl.hidden = true;
+        notifyBlock.hidden = false;
+        buyNowBtn.disabled = true;
+        buyNowBtn.setAttribute("aria-disabled", "true");
+      } else {
+        if (vp.stock <= 5) {
+          stockStatusEl.innerHTML = `<span class="low-stock-pill">Only ${vp.stock} left</span>`;
+        }
+        productActionsEl.hidden = false;
+        notifyBlock.hidden = true;
+        buyNowBtn.disabled = false;
+        buyNowBtn.removeAttribute("aria-disabled");
+
+        window.CartButtonUI.mount(addToCartMount, {
+          productId: vp.id,
+          title: vp.title,
+          price: vp.sellingPrice,
+          image: images[0],
+          stock: vp.stock,
+          size: vp.size || "",
+          color: vp.color || ""
+        });
+
+        buyNowBtn.setAttribute("data-buy-now", "");
+        buyNowBtn.setAttribute("data-product-id", vp.id);
+        buyNowBtn.setAttribute("data-product-title", vp.title);
+        buyNowBtn.setAttribute("data-product-price", String(vp.sellingPrice));
+        buyNowBtn.setAttribute("data-product-image", images[0]);
+        buyNowBtn.setAttribute("data-product-size", vp.size || "");
+        buyNowBtn.setAttribute("data-product-color", vp.color || "");
+      }
     }
+
+    notifyBtn.addEventListener("click", () => {
+      notifyForm.classList.add("is-open");
+      notifyBtn.hidden = true;
+      notifyEmailInput.focus();
+    });
+
+    notifyForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = notifyEmailInput.value.trim();
+      if (!email) return;
+      notifySubmitBtn.disabled = true;
+      notifySubmitBtn.textContent = "Sending...";
+      notifyStatus.removeAttribute("data-tone");
+      notifyStatus.textContent = "";
+      try {
+        const res = await fetch("/api/notify-stock", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId: activeProduct.id, productTitle: activeProduct.title, email })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || "Couldn't save your request. Please try again.");
+        notifyForm.hidden = true;
+        notifyStatus.setAttribute("data-tone", "success");
+        notifyStatus.textContent = "You're on the list — we'll email you when this is back in stock.";
+      } catch (err) {
+        notifyStatus.setAttribute("data-tone", "error");
+        notifyStatus.textContent = err.message || "Something went wrong. Please try again.";
+        notifySubmitBtn.disabled = false;
+        notifySubmitBtn.textContent = "Notify Me";
+      }
+    });
+
+    // ---- Variant selector (Color = separate product, Size = in-page) ---
+    if (product.isVariant) {
+      const siblings = await ProductLoader.getVariantSiblings(product);
+      // Sizes always show in the standard S/M/L/XL... order, never
+      // however they happened to be typed into the admin panel. Only sizes
+      // belonging to THIS color are offered — a color's sizes never leak
+      // into another color's page.
+      const sameColorSiblings = siblings.filter((s) => s.color === product.color);
+      const sizes = ProductLoader.sortSizes([...new Set(sameColorSiblings.map((s) => s.size).filter(Boolean))]);
+      const colors = [...new Set(siblings.map((s) => s.color).filter(Boolean))];
+
+      if (sizes.length > 0 || colors.length > 0) {
+        const wrap = document.getElementById("product-variant-selector");
+        wrap.hidden = false;
+        wrap.innerHTML = "";
+
+        function findSameColorSibling(size) {
+          return sameColorSiblings.find((s) => s.size === size) || null;
+        }
+        function findAnySiblingForColor(color) {
+          return siblings.find((s) => s.color === color) || null;
+        }
+        function goToVariant(sibling) {
+          if (!sibling || sibling.id === product.id) return;
+          window.location.href = ProductLoader.productUrl(sibling);
+        }
+
+        if (colors.length > 0) {
+          const group = document.createElement("div");
+          group.className = "variant-selector-group";
+          group.innerHTML = `<span class="variant-selector-group__label">Color</span>`;
+          const row = document.createElement("div");
+          row.className = "variant-color-row";
+          colors.forEach((color) => {
+            const swatch = document.createElement("button");
+            swatch.type = "button";
+            swatch.className = "variant-color-swatch" + (color === product.color ? " is-active" : "");
+            swatch.style.background = /^#|^rgb|^hsl/i.test(color) ? color : (color || "").toLowerCase();
+            swatch.title = color;
+            swatch.setAttribute("aria-label", color);
+            // Picking a different color is a different product page.
+            swatch.addEventListener("click", () => goToVariant(findAnySiblingForColor(color)));
+            row.appendChild(swatch);
+          });
+          group.appendChild(row);
+          wrap.appendChild(group);
+        }
+
+        if (sizes.length > 0) {
+          const group = document.createElement("div");
+          group.className = "variant-selector-group";
+          group.innerHTML = `<span class="variant-selector-group__label">Size</span>`;
+          const row = document.createElement("div");
+          row.className = "variant-size-row";
+          sizes.forEach((size) => {
+            const match = findSameColorSibling(size);
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "variant-size-btn" + (size === product.size ? " is-active" : "");
+            btn.textContent = size;
+            if (!match || match.stock === 0) btn.disabled = true;
+            // Picking a different size stays on THIS product page — it just
+            // swaps which underlying size's price/stock is shown.
+            btn.addEventListener("click", () => {
+              if (!match || match.id === activeProduct.id) return;
+              row.querySelectorAll(".variant-size-btn").forEach((b) => b.classList.remove("is-active"));
+              btn.classList.add("is-active");
+              renderVariantDependentUI(match);
+            });
+            row.appendChild(btn);
+          });
+          group.appendChild(row);
+          wrap.appendChild(group);
+        }
+      }
+    }
+
+    renderVariantDependentUI(product);
 
     // ---- Sold By (demo) ---------------------------------------------
     (async () => {

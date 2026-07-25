@@ -68,7 +68,7 @@
    */
   function rankedSearch(query) {
     const results = fuseIndex.search(query, { limit: MAX_SUGGESTIONS * 3 });
-    const items = results.map((r) => r.item);
+    const items = ProductLoader.dedupeVariantGroups(results.map((r) => r.item));
     return ProductLoader.sortByStock(items).slice(0, MAX_SUGGESTIONS);
   }
 
@@ -94,7 +94,7 @@
 
     const sub = document.createElement("div");
     sub.className = "search-suggestion__sub";
-    const variantLabel = (product.size || product.color) ? `${[product.size, product.color].filter(Boolean).join("/")} · ` : "";
+    const variantLabel = product.color ? `${product.color} · ` : "";
     sub.textContent = product.stock === 0
       ? `${variantLabel}${product.category || ""} · Out of stock`
       : `${variantLabel}${product.category || ""} · ${ProductLoader.formatPrice(product.sellingPrice)}`;

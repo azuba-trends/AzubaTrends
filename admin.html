@@ -518,18 +518,18 @@
 
           <div class="form-field full-width" id="variants-section" style="display:none; border:1px solid var(--color-border,#e2ddd0); border-radius:8px; padding:16px; background:#fafaf7;">
             <h3 style="margin-top:0;">Variants</h3>
-            <p class="field-hint">List every size and every color this product comes in, comma-separated, then press Add Variants — a box will be created for every size × color combination.</p>
+            <p class="field-hint">A different COLOR is a different product on the site — each color gets its own box below and its own page. Sizes are NOT separate products: every size lives inside its color's box, with its own stock and (optionally) its own price, so you can add/remove a size or change its price without touching the others.</p>
             <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
               <div class="form-field">
-                <label>Sizes <span class="field-hint" style="display:inline;">(e.g. S, M, L, XL)</span></label>
-                <input type="text" id="variant-sizes-input" placeholder="XS, S, M, L">
-              </div>
-              <div class="form-field">
-                <label>Colors <span class="field-hint" style="display:inline;">(e.g. Red, Green, Blue)</span></label>
+                <label>Colors <span class="field-hint" style="display:inline;">(e.g. Red, Green, Blue) — one box per color</span></label>
                 <input type="text" id="variant-colors-input" placeholder="Red, Green, Blue">
               </div>
+              <div class="form-field">
+                <label>Default sizes for new colors <span class="field-hint" style="display:inline;">(optional, e.g. S, M, L, XL)</span></label>
+                <input type="text" id="variant-sizes-input" placeholder="XS, S, M, L">
+              </div>
             </div>
-            <button type="button" class="btn btn-outline" id="add-variants-btn" style="margin-top:8px;">+ Add Variants</button>
+            <button type="button" class="btn btn-outline" id="add-variants-btn" style="margin-top:8px;">+ Add Color(s)</button>
 
             <div id="variant-boxes-container" style="display:flex; flex-direction:column; gap:12px; margin-top:16px;"></div>
           </div>

@@ -514,6 +514,35 @@ setTimeout(() => {
     });
   }
 
+  // A native <input type="file" multiple> REPLACES its whole FileList every
+  // time the picker is opened — so picking 1 image, then picking 1 more,
+  // silently drops the first. Gallery images aren't uploaded until Save,
+  // so we keep our own running list here and merge new picks into it
+  // instead of ever trusting input.files directly.
+  let pendingGalleryFiles = [];
+  function renderGalleryPreview() {
+    const container = document.getElementById("prod-gallery-preview");
+    container.innerHTML = "";
+    pendingGalleryFiles.forEach((file, i) => {
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "position:relative; display:inline-block;";
+      const img = document.createElement("img");
+      img.src = URL.createObjectURL(file);
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.textContent = "×";
+      removeBtn.title = "Remove this image";
+      removeBtn.style.cssText = "position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%; border:none; background:var(--color-danger,#c0392b); color:#fff; cursor:pointer; line-height:1; font-size:14px;";
+      removeBtn.addEventListener("click", () => {
+        pendingGalleryFiles.splice(i, 1);
+        renderGalleryPreview();
+      });
+      wrap.appendChild(img);
+      wrap.appendChild(removeBtn);
+      container.appendChild(wrap);
+    });
+  }
+
   function previewExistingImages(container, urls) {
     container.innerHTML = "";
     (urls || []).forEach((url) => {
@@ -1146,7 +1175,12 @@ setTimeout(() => {
   });
   document.getElementById("sd-content-visual").addEventListener("input", renderSeoChecklist);
   document.getElementById("prod-feature-img").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("prod-feature-preview"), 1));
-  document.getElementById("prod-gallery-imgs").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("prod-gallery-preview"), 5));
+  document.getElementById("prod-gallery-imgs").addEventListener("change", (e) => {
+    const newFiles = Array.from(e.target.files || []);
+    pendingGalleryFiles = pendingGalleryFiles.concat(newFiles).slice(0, 5);
+    renderGalleryPreview();
+    e.target.value = ""; // reset so picking the very same file again still fires "change"
+  });
   document.getElementById("prod-delivery-img").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("prod-delivery-preview"), 1));
 
   // ----------------------------------------------------------------
@@ -1422,6 +1456,7 @@ setTimeout(() => {
     document.getElementById("prod-existing-images").value = "";
     document.getElementById("prod-existing-delivery-img").value = "";
     document.getElementById("prod-feature-preview").innerHTML = "";
+    pendingGalleryFiles = [];
     document.getElementById("prod-gallery-preview").innerHTML = "";
     document.getElementById("prod-delivery-preview").innerHTML = "";
     document.getElementById("product-form-title").textContent = "Add New Product";
@@ -1477,7 +1512,7 @@ setTimeout(() => {
     tr.innerHTML = `
       <td><input type="checkbox" class="row-select" data-id="${p.id}"></td>
       <td><img src="${esc(img)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" alt=""></td>
-      <td>${nameCell}${missingCostPrice ? ` <span title="Cost Price not set — profit reports will show N/A for this product until you add it in Edit" style="color:var(--color-accent-dark); font-size:0.8rem; white-space:nowrap;">⚠ Cost price missing</span>` : ""}${(!opts.isChild && p.hasVariants) ? ` <span style="color:var(--color-ink-soft); font-size:0.78rem;">(${opts.childCount} variant${opts.childCount === 1 ? "" : "s"})</span>` : ""}</td>
+      <td>${nameCell}${missingCostPrice ? ` <span title="Cost Price not set — profit reports will show N/A for this product until you add it in Edit" style="color:var(--color-accent-dark); font-size:0.8rem; white-space:nowrap;">⚠ Cost price missing</span>` : ""}${(!opts.isChild && p.hasVariants) ? ` <span style="color:var(--color-ink-soft); font-size:0.78rem;">(${opts.childCount} color${opts.childCount === 1 ? "" : "s"})</span>` : ""}</td>
       <td>${esc(p.brand || "—")}</td>
       <td>${esc((p.tags || []).join(", "))}</td>
       <td>${esc(p.category)}</td>
@@ -1500,6 +1535,41 @@ setTimeout(() => {
     return tr;
   }
 
+  // A COLOR group row — one per color, no matter how many sizes it has.
+  // This is the "sub product" row the admin actually thinks of as a
+  // product; its individual sizes are only edited inside the parent's
+  // Edit form (Variants section), not as separate rows here.
+  function buildColorGroupRow(parent, color, docs) {
+    const rep = docs.find((d) => d.stock > 0) || docs[0];
+    const totalStock = docs.reduce((s, d) => s + (Number(d.stock) || 0), 0);
+    const sizesLabel = docs.map((d) => d.size).filter(Boolean).join(", ");
+    const sColor = rep.status === "active" ? "var(--color-success)" : "var(--color-accent-dark)";
+    const img = (rep.images && rep.images[0]) ? rep.images[0] : "images/logo-placeholder.svg";
+    const dateStr = rep.createdAt ? new Date(rep.createdAt).toLocaleDateString("en-IN") : "—";
+    const missingCostPrice = rep.costPrice === undefined || rep.costPrice === null || rep.costPrice === 0;
+
+    const tr = document.createElement("tr");
+    tr.style.background = "#fafaf7";
+    tr.innerHTML = `
+      <td></td>
+      <td><img src="${esc(img)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" alt=""></td>
+      <td><span style="padding-left:24px; color:var(--color-ink-soft);">↳ ${esc(color || "(no color)")} — </span>${esc(rep.title)}${missingCostPrice ? ` <span title="Cost Price not set — profit reports will show N/A for this product until you add it in Edit" style="color:var(--color-accent-dark); font-size:0.8rem; white-space:nowrap;">⚠ Cost price missing</span>` : ""} <span style="color:var(--color-ink-soft); font-size:0.78rem;">(${docs.length} size${docs.length === 1 ? "" : "s"}${sizesLabel ? ": " + esc(sizesLabel) : ""})</span></td>
+      <td>${esc(rep.brand || "—")}</td>
+      <td>${esc((rep.tags || []).join(", "))}</td>
+      <td>${esc(rep.category)}</td>
+      <td>${dateStr}</td>
+      <td style="color:${totalStock > 0 ? 'inherit' : 'var(--color-danger)'}; font-weight:bold;">${totalStock}</td>
+      <td style="color:${sColor}; font-weight:bold;">${esc((rep.status || "").toUpperCase())}</td>
+      <td>${rep.sourcePlatformUrl ? `<button class="btn btn-outline source-platform-btn" data-url="${esc(rep.sourcePlatformUrl)}" style="padding:4px 8px; font-size:0.8rem;">Source Platform</button>` : '<span style="color:var(--color-ink-soft); font-size:0.8rem;">—</span>'}</td>
+      <td><button class="btn btn-outline sync-color-btn" data-parent="${parent.id}" data-color="${esc(color)}" title="Pull Name, Description, Category, Brand, Tags, Delivery info and Images from the parent for every size in this color, then publish" style="padding:4px 8px; font-size:0.8rem;">🔄 Auto Sync</button></td>
+      <td>
+        <button class="btn btn-outline pause-color-btn" data-parent="${parent.id}" data-color="${esc(color)}" data-status="${rep.status}" style="padding:4px 8px; font-size:0.8rem;">${rep.status === 'active' ? 'Pause' : 'Live'}</button>
+        <button class="btn btn-outline edit-color-btn" data-parent="${parent.id}" data-color="${esc(color)}" style="padding:4px 8px; font-size:0.8rem;">Edit</button>
+        <button class="btn btn-outline del-color-btn" data-parent="${parent.id}" data-color="${esc(color)}" style="color:var(--color-danger); padding:4px 8px; font-size:0.8rem;">Delete</button>
+      </td>`;
+    return tr;
+  }
+
   function renderProductsTable() {
     const tbody = document.getElementById("products-table-body");
     tbody.innerHTML = "";
@@ -1507,9 +1577,15 @@ setTimeout(() => {
 
     topLevel.forEach((p) => {
       const children = p.hasVariants ? productsList.filter((c) => c.isVariant && c.parentId === p.id) : [];
-      tbody.appendChild(buildProductRow(p, { isChild: false, hasChildren: children.length > 0, childCount: children.length }));
-      if (children.length > 0 && expandedProductParents.has(p.id)) {
-        children.forEach((c) => tbody.appendChild(buildProductRow(c, { isChild: true })));
+      const byColor = new Map();
+      children.forEach((c) => {
+        const key = c.color || "";
+        if (!byColor.has(key)) byColor.set(key, []);
+        byColor.get(key).push(c);
+      });
+      tbody.appendChild(buildProductRow(p, { isChild: false, hasChildren: byColor.size > 0, childCount: byColor.size }));
+      if (byColor.size > 0 && expandedProductParents.has(p.id)) {
+        byColor.forEach((docs, color) => tbody.appendChild(buildColorGroupRow(p, color, docs)));
       }
     });
 
@@ -1524,6 +1600,46 @@ setTimeout(() => {
     tbody.querySelectorAll(".source-platform-btn").forEach((b) => b.addEventListener("click", () => window.open(b.dataset.url, "_blank", "noopener,noreferrer")));
     tbody.querySelectorAll(".sync-variant-btn").forEach((b) => b.addEventListener("click", () => syncVariantFromListRow(b.dataset.id)));
     tbody.querySelectorAll(".sync-all-btn").forEach((b) => b.addEventListener("click", () => syncAllVariantsFromListRow(b.dataset.id)));
+
+    // Color-group row actions — every one of these acts on ALL size docs
+    // sharing that (parentId, color) pair at once.
+    function colorGroupDocs(parentId, color) {
+      return productsList.filter((c) => c.isVariant && c.parentId === parentId && (c.color || "") === color);
+    }
+    tbody.querySelectorAll(".edit-color-btn").forEach((b) => b.addEventListener("click", () => {
+      const parentId = b.dataset.parent, color = b.dataset.color;
+      editProduct(parentId);
+      // Scroll to that color's box once the Variants section has rendered.
+      setTimeout(() => {
+        const box = Array.from(variantBoxesContainer.children).find((bx) => (bx.dataset.color || "") === color);
+        if (box) box.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
+    }));
+    tbody.querySelectorAll(".del-color-btn").forEach((b) => b.addEventListener("click", async () => {
+      const parentId = b.dataset.parent, color = b.dataset.color;
+      const docs = colorGroupDocs(parentId, color);
+      if (!confirm(`Delete the "${color}" color — ALL ${docs.length} size${docs.length === 1 ? "" : "s"} — permanently? This cannot be undone.`)) return;
+      for (const d of docs) await deleteDoc(doc(db, "products", d.id));
+    }));
+    tbody.querySelectorAll(".pause-color-btn").forEach((b) => b.addEventListener("click", async () => {
+      const parentId = b.dataset.parent, color = b.dataset.color, currentStatus = b.dataset.status;
+      const newStatus = currentStatus === "active" ? "draft" : "active";
+      const docs = colorGroupDocs(parentId, color);
+      for (const d of docs) await updateDoc(doc(db, "products", d.id), { status: newStatus });
+    }));
+    tbody.querySelectorAll(".sync-color-btn").forEach((b) => b.addEventListener("click", async () => {
+      const parentId = b.dataset.parent, color = b.dataset.color;
+      const docs = colorGroupDocs(parentId, color);
+      const original = b.textContent;
+      b.textContent = "Syncing..."; b.disabled = true;
+      try {
+        for (const d of docs) await syncOneVariant(d.id);
+      } catch (err) {
+        alert("Couldn't sync: " + err.message);
+      } finally {
+        b.textContent = original; b.disabled = false;
+      }
+    }));
   }
 
   // Same field-sync as the "🔄 Auto Sync from Parent" button inside Edit
@@ -1574,6 +1690,8 @@ setTimeout(() => {
   function editProduct(id) {
     const p = productsList.find((x) => x.id === id);
     if (!p) return;
+    pendingGalleryFiles = [];
+    document.getElementById("prod-gallery-preview").innerHTML = "";
     document.getElementById("prod-id").value = id;
     document.getElementById("prod-name").value = p.title || "";
     document.getElementById("prod-slug").value = p.slug || "";
@@ -1685,13 +1803,23 @@ setTimeout(() => {
 
     const isVariant = document.getElementById("prod-is-variant").value === "1";
     const hasVariants = !isVariant && variantsToggle.checked;
-    const variantBoxes = hasVariants ? Array.from(variantBoxesContainer.children) : [];
+    const colorBoxes = hasVariants ? Array.from(variantBoxesContainer.children) : [];
     if (hasVariants) {
-      if (variantBoxes.length === 0) { alert("Add at least one size/color variant, or turn off \"This product has variants\"."); return; }
-      for (const box of variantBoxes) {
-        if (box.querySelector(".vb-stock").value.trim() === "") {
-          alert(`Stock is required for the ${box.dataset.size} / ${box.dataset.color} variant.`);
-          return;
+      if (colorBoxes.length === 0) { alert("Add at least one color, or turn off \"This product has variants\"."); return; }
+      for (const box of colorBoxes) {
+        const colorVal = box.querySelector(".vc-color-input").value.trim();
+        if (!colorVal) { alert("Every color box needs a color name."); return; }
+        const rows = Array.from(box.querySelectorAll(".size-row"));
+        if (rows.length === 0) { alert(`Add at least one size for "${colorVal}", or remove that color.`); return; }
+        for (const row of rows) {
+          if (row.querySelector(".sr-size").value.trim() === "") {
+            alert(`Every size row for "${colorVal}" needs a size name.`);
+            return;
+          }
+          if (row.querySelector(".sr-stock").value.trim() === "") {
+            alert(`Stock is required for ${colorVal} / ${row.querySelector(".sr-size").value.trim()}.`);
+            return;
+          }
         }
       }
     }
@@ -1706,7 +1834,7 @@ setTimeout(() => {
       // Feature + gallery images
       let images = JSON.parse(document.getElementById("prod-existing-images").value || "[]");
       const featureFile = document.getElementById("prod-feature-img").files[0];
-      const galleryFiles = Array.from(document.getElementById("prod-gallery-imgs").files || []).slice(0, 5);
+      const galleryFiles = pendingGalleryFiles.slice(0, 5);
 
       if (featureFile) {
         const featureUrl = await uploadToImgBB(featureFile);
@@ -1783,61 +1911,75 @@ setTimeout(() => {
         docId = ref.id;
       }
 
-      // Create/update each size×color variant as its own product doc.
-      // New boxes (no data-existing-id) get a full copy of everything
-      // just saved above, EXCEPT MRP/Sale Price/HSN/Source URL/Stock —
-      // those come from the box itself if filled in, or fall back to a
-      // one-time snapshot of the parent's value if left blank (not a
-      // live link — see the "Auto Sync" button for pulling parent
-      // changes in later). Existing boxes only touch fields the admin
-      // actually typed something into, so re-saving the parent never
-      // silently wipes a variant's own already-configured price/stock.
+      // Create/update one real product doc PER SIZE, grouped by color box.
+      // A color box's `variantSlug` (based on the color name only) is what
+      // makes every size inside it land on the SAME product page — that's
+      // the whole "one product per color, sizes live inside it" behaviour.
+      // Renaming the box's Color field and saving re-patches that new
+      // color (and a fresh variantSlug) onto every size doc in the box,
+      // which is what makes "this red product is now called pink" a
+      // one-step rename instead of a rebuild.
+      // New rows (no data-existing-id) get a full copy of everything just
+      // saved above, EXCEPT MRP/Sale Price/HSN/Source URL/Stock — those
+      // come from the row itself if filled in, or fall back to a one-time
+      // snapshot of the parent's value if left blank (not a live link —
+      // see the "Auto Sync" button for pulling parent changes in later).
+      // Existing rows only touch fields the admin actually typed
+      // something into, so re-saving the parent never silently wipes a
+      // size's already-configured price/stock.
       if (hasVariants) {
-        for (const box of variantBoxes) {
-          const size = box.dataset.size, color = box.dataset.color;
-          const mrpVal = box.querySelector(".vb-mrp").value.trim();
-          const priceVal = box.querySelector(".vb-price").value.trim();
-          const hsnVal = box.querySelector(".vb-hsn").value.trim();
-          const sourceVal = box.querySelector(".vb-source").value.trim();
-          const stockVal = box.querySelector(".vb-stock").value.trim();
+        for (const box of colorBoxes) {
+          const colorVal = box.querySelector(".vc-color-input").value.trim();
+          const variantSlug = slugifyVariant(colorVal);
+          const rows = Array.from(box.querySelectorAll(".size-row"));
 
-          if (box.dataset.existingId) {
-            const patch = { size, color, stock: Number(stockVal) || 0 };
-            if (mrpVal !== "") patch.mrp = Number(mrpVal);
-            if (priceVal !== "") patch.sellingPrice = Number(priceVal);
-            if (hsnVal !== "") patch.hsnCode = hsnVal;
-            if (sourceVal !== "") patch.sourcePlatformUrl = sourceVal;
-            await updateDoc(doc(db, "products", box.dataset.existingId), patch);
-          } else {
-            const childData = {
-              ...pData,
-              isVariant: true,
-              parentId: docId,
-              size, color,
-              mrp: mrpVal !== "" ? Number(mrpVal) : pData.mrp,
-              sellingPrice: priceVal !== "" ? Number(priceVal) : pData.sellingPrice,
-              hsnCode: hsnVal !== "" ? hsnVal : pData.hsnCode,
-              sourcePlatformUrl: sourceVal !== "" ? sourceVal : pData.sourcePlatformUrl,
-              stock: Number(stockVal) || 0,
-              hasVariants: false,
-              variantAxes: null,
-              variantSlug: slugifyVariant(`${size}-${color}`),
-              createdAt: new Date().toISOString()
-            };
-            // Not `slug` — that field drives /products/:slug routing and
-            // ensureUniqueSlug()'s collision check for NORMAL products.
-            // A variant is never reached by that route (it uses parentId
-            // + variantSlug instead), so copying the parent's slug here
-            // would just sit there unused — and worse, on the parent's
-            // NEXT save, ensureUniqueSlug() would see its own slug as
-            // "already taken" by this child and needlessly append "-2".
-            delete childData.slug;
-            delete childData.updatedAt;
-            await addDoc(collection(db, "products"), childData);
+          for (const row of rows) {
+            const size = row.querySelector(".sr-size").value.trim();
+            const mrpVal = row.querySelector(".sr-mrp").value.trim();
+            const priceVal = row.querySelector(".sr-price").value.trim();
+            const hsnVal = row.querySelector(".sr-hsn").value.trim();
+            const sourceVal = row.querySelector(".sr-source").value.trim();
+            const stockVal = row.querySelector(".sr-stock").value.trim();
+
+            if (row.dataset.existingId) {
+              const patch = { size, color: colorVal, variantSlug, stock: Number(stockVal) || 0 };
+              if (mrpVal !== "") patch.mrp = Number(mrpVal);
+              if (priceVal !== "") patch.sellingPrice = Number(priceVal);
+              if (hsnVal !== "") patch.hsnCode = hsnVal;
+              if (sourceVal !== "") patch.sourcePlatformUrl = sourceVal;
+              await updateDoc(doc(db, "products", row.dataset.existingId), patch);
+            } else {
+              const childData = {
+                ...pData,
+                isVariant: true,
+                parentId: docId,
+                size, color: colorVal,
+                mrp: mrpVal !== "" ? Number(mrpVal) : pData.mrp,
+                sellingPrice: priceVal !== "" ? Number(priceVal) : pData.sellingPrice,
+                hsnCode: hsnVal !== "" ? hsnVal : pData.hsnCode,
+                sourcePlatformUrl: sourceVal !== "" ? sourceVal : pData.sourcePlatformUrl,
+                stock: Number(stockVal) || 0,
+                hasVariants: false,
+                variantAxes: null,
+                variantSlug,
+                createdAt: new Date().toISOString()
+              };
+              // Not `slug` — that field drives /products/:slug routing and
+              // ensureUniqueSlug()'s collision check for NORMAL products.
+              // A variant is never reached by that route (it uses parentId
+              // + variantSlug instead), so copying the parent's slug here
+              // would just sit there unused — and worse, on the parent's
+              // NEXT save, ensureUniqueSlug() would see its own slug as
+              // "already taken" by this child and needlessly append "-2".
+              delete childData.slug;
+              delete childData.updatedAt;
+              await addDoc(collection(db, "products"), childData);
+            }
           }
         }
       }
 
+      pendingGalleryFiles = [];
       resetProductForm();
       goToSection("store-products");
     } catch (err) {
@@ -1880,77 +2022,122 @@ setTimeout(() => {
   function slugifyVariant(text) {
     return String(text || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-+|-+$)/g, "");
   }
-  function variantBoxKey(size, color) { return `${size}::${color}`; }
 
-  function buildVariantBox(size, color, existingProduct) {
-    const box = document.createElement("div");
-    box.className = "variant-box";
-    box.dataset.size = size;
-    box.dataset.color = color;
-    box.dataset.existingId = existingProduct ? existingProduct.id : "";
-    box.style.cssText = "border:1px solid var(--color-border,#e2ddd0); border-radius:6px; padding:12px; background:#fff;";
+  // A single SIZE row inside a color box. Each row maps 1:1 to a real
+  // product doc under the hood (own stock/price/sku) — but visually and
+  // editorially it's just "a size", not "a product". `existingDoc` is that
+  // doc when editing, or null for a brand-new size being added.
+  function buildSizeRow(size, existingDoc) {
+    const row = document.createElement("div");
+    row.className = "size-row";
+    row.dataset.existingId = existingDoc ? existingDoc.id : "";
+    row.style.cssText = "display:flex; align-items:flex-end; gap:6px; flex-wrap:wrap; border-top:1px dashed var(--color-border,#e2ddd0); padding-top:8px; margin-top:8px;";
 
-    const mrp = (existingProduct && existingProduct.mrp !== undefined && existingProduct.mrp !== null) ? existingProduct.mrp : "";
-    const price = (existingProduct && existingProduct.sellingPrice !== undefined && existingProduct.sellingPrice !== null) ? existingProduct.sellingPrice : "";
-    const hsn = existingProduct ? (existingProduct.hsnCode || "") : "";
-    const sourceUrl = existingProduct ? (existingProduct.sourcePlatformUrl || "") : "";
-    const stock = (existingProduct && existingProduct.stock !== undefined) ? existingProduct.stock : "";
+    const mrp = (existingDoc && existingDoc.mrp !== undefined && existingDoc.mrp !== null) ? existingDoc.mrp : "";
+    const price = (existingDoc && existingDoc.sellingPrice !== undefined && existingDoc.sellingPrice !== null) ? existingDoc.sellingPrice : "";
+    const hsn = existingDoc ? (existingDoc.hsnCode || "") : "";
+    const sourceUrl = existingDoc ? (existingDoc.sourcePlatformUrl || "") : "";
+    const stock = (existingDoc && existingDoc.stock !== undefined) ? existingDoc.stock : "";
 
-    box.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
-        <strong>${esc(size)} / ${esc(color)}</strong>
-        ${existingProduct
-          ? `<div style="display:flex; gap:6px;">
-               <button type="button" class="btn btn-outline variant-edit-btn" style="padding:2px 8px; font-size:0.78rem;">Edit as Product</button>
-               <button type="button" class="btn btn-outline variant-delete-btn" style="padding:2px 8px; font-size:0.78rem; color:var(--color-danger); border-color:var(--color-danger);">🗑 Delete</button>
-             </div>`
-          : `<button type="button" class="btn btn-outline variant-remove-btn" style="padding:2px 8px; font-size:0.78rem; color:var(--color-danger); border-color:var(--color-danger);">Remove</button>`
-        }
-      </div>
-      <div class="form-grid" style="grid-template-columns: repeat(5, minmax(90px,1fr)); gap:8px;">
-        <div class="form-field"><label style="font-size:0.78rem;">MRP ₹ <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="number" class="vb-mrp" min="0" value="${mrp}" placeholder="parent's"></div>
-        <div class="form-field"><label style="font-size:0.78rem;">Sale Price ₹ <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="number" class="vb-price" min="0" value="${price}" placeholder="parent's"></div>
-        <div class="form-field"><label style="font-size:0.78rem;">HSN <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="text" class="vb-hsn" value="${esc(hsn)}" placeholder="parent's"></div>
-        <div class="form-field"><label style="font-size:0.78rem;">Source URL <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="url" class="vb-source" value="${esc(sourceUrl)}" placeholder="parent's"></div>
-        <div class="form-field"><label style="font-size:0.78rem;">Stock <span class="required-star">*</span></label><input type="number" class="vb-stock" min="0" value="${stock}"></div>
+    row.innerHTML = `
+      <div class="form-field" style="flex:0 0 90px; margin:0;"><label style="font-size:0.78rem;">Size <span class="required-star">*</span></label><input type="text" class="sr-size" value="${esc(size || "")}" placeholder="S"></div>
+      <div class="form-field" style="flex:1 1 80px; margin:0;"><label style="font-size:0.78rem;">MRP ₹ <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="number" class="sr-mrp" min="0" value="${mrp}" placeholder="parent's"></div>
+      <div class="form-field" style="flex:1 1 80px; margin:0;"><label style="font-size:0.78rem;">Sale Price ₹ <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="number" class="sr-price" min="0" value="${price}" placeholder="parent's"></div>
+      <div class="form-field" style="flex:1 1 90px; margin:0;"><label style="font-size:0.78rem;">HSN <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="text" class="sr-hsn" value="${esc(hsn)}" placeholder="parent's"></div>
+      <div class="form-field" style="flex:1 1 110px; margin:0;"><label style="font-size:0.78rem;">Source URL <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="url" class="sr-source" value="${esc(sourceUrl)}" placeholder="parent's"></div>
+      <div class="form-field" style="flex:0 0 70px; margin:0;"><label style="font-size:0.78rem;">Stock <span class="required-star">*</span></label><input type="number" class="sr-stock" min="0" value="${stock}"></div>
+      <div style="display:flex; gap:4px; margin-bottom:2px;">
+        ${existingDoc ? `<button type="button" class="btn btn-outline sr-advanced-btn" title="Open this size's own full product record (images, SEO, etc.)" style="padding:2px 6px; font-size:0.75rem;">⚙</button>` : ""}
+        <button type="button" class="btn btn-outline sr-delete-btn" style="padding:2px 6px; font-size:0.75rem; color:var(--color-danger); border-color:var(--color-danger);">🗑</button>
       </div>
     `;
 
-    if (existingProduct) {
-      box.querySelector(".variant-edit-btn").addEventListener("click", () => editProduct(existingProduct.id));
-      box.querySelector(".variant-delete-btn").addEventListener("click", async () => {
-        if (!confirm(`Delete the ${size} / ${color} variant permanently? This cannot be undone.`)) return;
-        await deleteDoc(doc(db, "products", existingProduct.id));
-        box.remove();
+    if (existingDoc) {
+      row.querySelector(".sr-advanced-btn").addEventListener("click", () => editProduct(existingDoc.id));
+      row.querySelector(".sr-delete-btn").addEventListener("click", async () => {
+        if (!confirm(`Delete the "${size}" size permanently? This cannot be undone.`)) return;
+        await deleteDoc(doc(db, "products", existingDoc.id));
+        row.remove();
       });
     } else {
-      box.querySelector(".variant-remove-btn").addEventListener("click", () => box.remove());
+      row.querySelector(".sr-delete-btn").addEventListener("click", () => row.remove());
     }
+    return row;
+  }
+
+  // A COLOR box — this is the real "sub-product" from the shopper's point
+  // of view: one color = one product page. It holds an editable list of
+  // size rows (add/remove/rename/reprice) and a writable Color name, so
+  // renaming "Red" to "Pink" and saving just relabels this whole group —
+  // no need to recreate anything.
+  function buildColorBox(color, existingDocs, defaultSizes) {
+    existingDocs = existingDocs || [];
+    const box = document.createElement("div");
+    box.className = "variant-box";
+    box.dataset.color = color;
+    box.style.cssText = "border:1px solid var(--color-border,#e2ddd0); border-radius:6px; padding:12px; background:#fff;";
+
+    box.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:4px; flex-wrap:wrap; gap:6px;">
+        <div class="form-field" style="margin:0; flex:1 1 200px;">
+          <label style="font-size:0.78rem;">Color <span class="required-star">*</span> <span class="field-hint" style="display:inline;">— editable; renaming updates every size below</span></label>
+          <input type="text" class="vc-color-input" value="${esc(color || "")}" placeholder="Red">
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button type="button" class="btn btn-outline vc-add-size-btn" style="padding:2px 8px; font-size:0.78rem;">+ Add Size</button>
+          <button type="button" class="btn btn-outline vc-remove-color-btn" style="padding:2px 8px; font-size:0.78rem; color:var(--color-danger); border-color:var(--color-danger);">${existingDocs.length ? "🗑 Delete Color" : "Remove"}</button>
+        </div>
+      </div>
+      <div class="vc-size-rows"></div>
+    `;
+
+    const rowsWrap = box.querySelector(".vc-size-rows");
+    if (existingDocs.length > 0) {
+      existingDocs.forEach((d) => rowsWrap.appendChild(buildSizeRow(d.size, d)));
+    } else {
+      (defaultSizes && defaultSizes.length ? defaultSizes : [""]).forEach((s) => rowsWrap.appendChild(buildSizeRow(s, null)));
+    }
+
+    box.querySelector(".vc-add-size-btn").addEventListener("click", () => {
+      rowsWrap.appendChild(buildSizeRow("", null));
+    });
+
+    box.querySelector(".vc-remove-color-btn").addEventListener("click", async () => {
+      if (existingDocs.length > 0) {
+        if (!confirm(`Delete the "${color}" color — ALL ${existingDocs.length} of its sizes — permanently? This cannot be undone.`)) return;
+        for (const d of existingDocs) await deleteDoc(doc(db, "products", d.id));
+      }
+      box.remove();
+    });
+
     return box;
   }
 
   document.getElementById("add-variants-btn").addEventListener("click", () => {
-    const sizes = document.getElementById("variant-sizes-input").value.split(",").map((s) => s.trim()).filter(Boolean);
     const colors = document.getElementById("variant-colors-input").value.split(",").map((c) => c.trim()).filter(Boolean);
-    if (!sizes.length || !colors.length) { alert("Enter at least one size and one color, comma-separated."); return; }
+    const defaultSizes = document.getElementById("variant-sizes-input").value.split(",").map((s) => s.trim()).filter(Boolean);
+    if (!colors.length) { alert("Enter at least one color, comma-separated (e.g. Red, Blue)."); return; }
 
-    const existingKeys = new Set(
-      Array.from(variantBoxesContainer.children).map((box) => variantBoxKey(box.dataset.size, box.dataset.color))
+    const existingColors = new Set(
+      Array.from(variantBoxesContainer.children).map((box) => (box.dataset.color || "").toLowerCase())
     );
-    sizes.forEach((size) => {
-      colors.forEach((color) => {
-        const key = variantBoxKey(size, color);
-        if (existingKeys.has(key)) return; // already have a box for this combo — don't duplicate
-        variantBoxesContainer.appendChild(buildVariantBox(size, color, null));
-        existingKeys.add(key);
-      });
+    colors.forEach((color) => {
+      if (existingColors.has(color.toLowerCase())) return; // already have a box for this color — don't duplicate
+      variantBoxesContainer.appendChild(buildColorBox(color, [], defaultSizes));
+      existingColors.add(color.toLowerCase());
     });
   });
 
   function populateVariantBoxesForParent(parentId) {
     variantBoxesContainer.innerHTML = "";
-    productsList.filter((p) => p.isVariant && p.parentId === parentId)
-      .forEach((child) => variantBoxesContainer.appendChild(buildVariantBox(child.size, child.color, child)));
+    const children = productsList.filter((p) => p.isVariant && p.parentId === parentId);
+    const byColor = new Map();
+    children.forEach((c) => {
+      const key = c.color || "";
+      if (!byColor.has(key)) byColor.set(key, []);
+      byColor.get(key).push(c);
+    });
+    byColor.forEach((docs, color) => variantBoxesContainer.appendChild(buildColorBox(color, docs)));
   }
 
   // Shared by the "🔄 Auto Sync from Parent" button inside Edit (below)

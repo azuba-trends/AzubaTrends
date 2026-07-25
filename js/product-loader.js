@@ -74,9 +74,36 @@ const ProductLoader = (function () {
     return product.slug ? `/products/${encodeURIComponent(product.slug)}` : `product.html?id=${encodeURIComponent(product.id)}`;
   }
 
+  // A color can have several sizes, and every size is still its own real
+  // product doc (own stock/price/sku) — but they all share ONE variantSlug
+  // (the color's slug), because a color is ONE product page, not one per
+  // size. Several docs can therefore match here; pick an in-stock one to
+  // land on by default, falling back to the first if all are out of stock.
   async function getProductByParentAndVariantSlug(parentId, variantSlug) {
     const products = await loadAllProducts();
-    return products.find((p) => p.isVariant && p.parentId === parentId && p.variantSlug === variantSlug) || null;
+    const matches = products.filter((p) => p.isVariant && p.parentId === parentId && p.variantSlug === variantSlug);
+    if (matches.length === 0) return null;
+    return matches.find((p) => p.stock > 0) || matches[0];
+  }
+
+  // Collapses same-color sibling docs (one per size) down to a single
+  // representative for grid/listing display, so a color with 5 sizes shows
+  // as ONE card, not 5. Non-variant products and each distinct color still
+  // get their own card. Prefers an in-stock size as the representative.
+  function dedupeVariantGroups(products) {
+    const bestByKey = new Map();
+    const order = [];
+    (products || []).forEach((p) => {
+      const key = (p.isVariant && p.parentId && p.variantSlug) ? `${p.parentId}::${p.variantSlug}` : `single::${p.id}`;
+      const cur = bestByKey.get(key);
+      if (!cur) {
+        bestByKey.set(key, p);
+        order.push(key);
+      } else if (cur.stock === 0 && p.stock > 0) {
+        bestByKey.set(key, p);
+      }
+    });
+    return order.map((k) => bestByKey.get(k));
   }
 
   // Every other variant of the same product (siblings), used to build
@@ -156,8 +183,11 @@ const ProductLoader = (function () {
     const safeTitle = window.Security ? window.Security.escapeHTML(product.title) : String(product.title || "");
     const safeCategory = window.Security ? window.Security.escapeHTML(product.category) : String(product.category || "");
     const safeImage = window.Security ? window.Security.escapeHTML(image) : image;
-    const variantBadge = (product.isVariant && (product.size || product.color))
-      ? `<span class="product-card__variant" style="color:var(--color-ink-soft); font-size:0.8em;"> — ${[product.size, product.color].filter(Boolean).map((s) => window.Security ? window.Security.escapeHTML(s) : s).join(" / ")}</span>`
+    // This card represents the whole color (every size of it), not one
+    // specific size, so only the color is shown here — the size itself is
+    // picked on the product page, not implied by which card was clicked.
+    const variantBadge = (product.isVariant && product.color)
+      ? `<span class="product-card__variant" style="color:var(--color-ink-soft); font-size:0.8em;"> — ${window.Security ? window.Security.escapeHTML(product.color) : product.color}</span>`
       : "";
 
     card.innerHTML = `
@@ -215,6 +245,7 @@ const ProductLoader = (function () {
   function renderGrid(container, products, emptyMessage) {
     if (!container) return;
     container.innerHTML = "";
+    products = dedupeVariantGroups(products);
     if (!products || products.length === 0) {
       container.innerHTML = `<div class="empty-state"><h2>No products found</h2><p>${emptyMessage || "Try another category."}</p></div>`;
       return;
@@ -268,13 +299,13 @@ const ProductLoader = (function () {
    *  from the interest cookie, then just newest-in-stock as a last resort —
    *  so this never comes up empty as long as *some* other product exists. */
   function pickRelatedProducts(allProducts, { excludeId, excludeParentId, category, limit = 8 } = {}) {
-    const pool = allProducts.filter((p) => {
+    const pool = dedupeVariantGroups(allProducts.filter((p) => {
       if (String(p.id) === String(excludeId)) return false;
       // Don't recommend a product's own other sizes/colors as "related" —
       // those belong in the variant selector, not this grid.
       if (excludeParentId && p.isVariant && String(p.parentId) === String(excludeParentId)) return false;
       return true;
-    });
+    }));
     const buckets = [];
     if (category) buckets.push(pool.filter((p) => p.category === category));
     getTopInterestCategories().forEach((cat) => buckets.push(pool.filter((p) => p.category === cat)));
@@ -349,7 +380,7 @@ const ProductLoader = (function () {
     window.addEventListener("cart:updated", (e) => setBadge(e.detail.count));
   }
 
-  const API = { loadAllProducts, getProductById, getProductBySlug, getProductByParentAndVariantSlug, getVariantSiblings, productUrl, calcDiscount, formatPrice, sortByStock, sortSizes, getCategories, renderProductCard, renderGrid, renderSkeletonGrid, renderCategoryChips, initHeader, trackCategoryInterest, mountRelatedProducts };
+  const API = { loadAllProducts, getProductById, getProductBySlug, getProductByParentAndVariantSlug, getVariantSiblings, dedupeVariantGroups, productUrl, calcDiscount, formatPrice, sortByStock, sortSizes, getCategories, renderProductCard, renderGrid, renderSkeletonGrid, renderCategoryChips, initHeader, trackCategoryInterest, mountRelatedProducts };
   window.ProductLoader = API;
   return API;
 })();
