@@ -545,15 +545,100 @@
           </div>
           <div class="form-field full-width">
             <label>Source Platform URL <span class="field-hint" style="display:inline;">(link only — the third-party page you're reselling this from, e.g. Meesho/IndiaMART/AliExpress product link. Shown as a quick-open button on the products list and inside orders.)</span></label>
-            <input type="url" id="prod-source-url" placeholder="https://...">
+            <div style="display:flex; gap:8px; align-items:flex-start;">
+              <input type="url" id="prod-source-url" placeholder="https://..." style="flex:1;">
+              <button type="button" class="btn btn-outline" id="auto-fetch-btn" style="white-space:nowrap;">🔄 Auto Fetch</button>
+            </div>
+            <p class="field-hint" id="auto-fetch-status" style="margin-top:6px;">Pulls the title, description and main photo from that page automatically — price and stock are never auto-filled, you'll always set those yourself.</p>
           </div>
           <div class="form-field full-width">
-            <label>Short Description <span class="required-star">*</span></label>
-            <textarea id="prod-short-desc" rows="2" required></textarea>
+            <label>Short Description <span class="required-star">*</span> <span class="field-hint" style="display:inline;">(shown right above Add to Cart / Buy Now on the product page)</span></label>
+            <div class="rte-wrap">
+              <div class="rte-toolbar" id="sd-rte-toolbar">
+                <button type="button" class="rte-btn" data-sdcmd="bold" title="Bold"><b>B</b></button>
+                <button type="button" class="rte-btn" data-sdcmd="italic" title="Italic"><i>I</i></button>
+                <button type="button" class="rte-btn" data-sdcmd="underline" title="Underline"><u>U</u></button>
+                <button type="button" class="rte-btn" data-sdcmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+                <span class="rte-sep"></span>
+                <button type="button" class="rte-btn" data-sdcmd="insertUnorderedList" title="Bullet list">• ≡</button>
+                <button type="button" class="rte-btn" data-sdcmd="insertOrderedList" title="Numbered list">1. ≡</button>
+                <span class="rte-sep"></span>
+                <button type="button" class="rte-btn" data-sdcmd="justifyLeft" title="Align left">⇤</button>
+                <button type="button" class="rte-btn" data-sdcmd="justifyCenter" title="Align center">↔</button>
+                <span class="rte-sep"></span>
+                <button type="button" class="rte-btn" id="sd-rte-link-btn" title="Insert link">🔗</button>
+                <span class="rte-sep"></span>
+                <button type="button" class="rte-btn" data-sdcmd="undo" title="Undo">↺</button>
+                <button type="button" class="rte-btn" data-sdcmd="redo" title="Redo">↻</button>
+              </div>
+              <div class="rte-tabs">
+                <button type="button" class="rte-tab-btn active" data-sdrte-tab="visual">Visual</button>
+                <button type="button" class="rte-tab-btn" data-sdrte-tab="code">Code</button>
+              </div>
+              <div id="sd-content-visual" class="rte-editor rte-editor--compact" contenteditable="true" data-placeholder="One or two lines about this product…"></div>
+              <textarea id="sd-content-code" class="rte-code rte-code--compact" spellcheck="false" hidden></textarea>
+            </div>
           </div>
           <div class="form-field full-width">
-            <label>Long Description</label>
-            <textarea id="prod-long-desc" rows="4"></textarea>
+            <label>Long Description <span class="field-hint" style="display:inline;">(full product page — shown as its own section above Reviews, with Show more/less)</span></label>
+            <div class="rte-wrap">
+              <div class="rte-toolbar" id="ld-rte-toolbar">
+                <button type="button" class="rte-btn" data-ldcmd="bold" title="Bold"><b>B</b></button>
+                <button type="button" class="rte-btn" data-ldcmd="italic" title="Italic"><i>I</i></button>
+                <button type="button" class="rte-btn" data-ldcmd="underline" title="Underline"><u>U</u></button>
+                <button type="button" class="rte-btn" data-ldcmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+                <span class="rte-sep"></span>
+                <select class="rte-select" id="ld-rte-block-select" title="Paragraph / Heading">
+                  <option value="" selected disabled>Format ▾</option>
+                  <option value="p">Paragraph</option>
+                  <option value="h2">Heading 2</option>
+                  <option value="h3">Heading 3</option>
+                  <option value="h4">Heading 4</option>
+                  <option value="blockquote">Quote</option>
+                </select>
+                <select class="rte-select" id="ld-rte-fontsize-select" title="Text size">
+                  <option value="" selected disabled>Size ▾</option>
+                  <option value="rte-fs-sm">Small</option>
+                  <option value="rte-fs-normal">Normal</option>
+                  <option value="rte-fs-lg">Large</option>
+                  <option value="rte-fs-xl">Huge</option>
+                </select>
+                <span class="rte-sep"></span>
+                <button type="button" class="rte-btn" data-ldcmd="insertUnorderedList" title="Bullet list">• ≡</button>
+                <button type="button" class="rte-btn" data-ldcmd="insertOrderedList" title="Numbered list">1. ≡</button>
+                <span class="rte-sep"></span>
+                <button type="button" class="rte-btn" data-ldcmd="justifyLeft" title="Align left">⇤</button>
+                <button type="button" class="rte-btn" data-ldcmd="justifyCenter" title="Align center">↔</button>
+                <button type="button" class="rte-btn" data-ldcmd="justifyRight" title="Align right">⇥</button>
+                <span class="rte-sep"></span>
+                <button type="button" class="rte-btn" id="ld-rte-link-btn" title="Insert link">🔗</button>
+                <button type="button" class="rte-btn" id="ld-rte-image-btn" title="Insert image">🖼️</button>
+                <span class="rte-sep"></span>
+                <button type="button" class="rte-btn" data-ldcmd="undo" title="Undo">↺</button>
+                <button type="button" class="rte-btn" data-ldcmd="redo" title="Redo">↻</button>
+                <input type="file" id="ld-rte-image-file" accept="image/*" style="display:none;">
+              </div>
+              <div class="rte-img-toolbar" id="ld-rte-img-toolbar" hidden>
+                <span class="rte-img-toolbar__label">Image:</span>
+                <button type="button" class="rte-btn" data-ldimgsize="small">S</button>
+                <button type="button" class="rte-btn" data-ldimgsize="medium">M</button>
+                <button type="button" class="rte-btn" data-ldimgsize="large">L</button>
+                <button type="button" class="rte-btn" data-ldimgsize="full">Full</button>
+                <span class="rte-sep"></span>
+                <button type="button" class="rte-btn" data-ldimgalign="left">⇤</button>
+                <button type="button" class="rte-btn" data-ldimgalign="center">↔</button>
+                <button type="button" class="rte-btn" data-ldimgalign="right">⇥</button>
+                <span class="rte-sep"></span>
+                <input type="text" id="ld-rte-img-caption" placeholder="Caption (optional)" class="rte-img-toolbar__caption">
+                <button type="button" class="rte-btn rte-btn--danger" id="ld-rte-img-remove">Remove</button>
+              </div>
+              <div class="rte-tabs">
+                <button type="button" class="rte-tab-btn active" data-ldrte-tab="visual">Visual</button>
+                <button type="button" class="rte-tab-btn" data-ldrte-tab="code">Code</button>
+              </div>
+              <div id="ld-content-visual" class="rte-editor" contenteditable="true" data-placeholder="Full product description…"></div>
+              <textarea id="ld-content-code" class="rte-code" spellcheck="false" hidden></textarea>
+            </div>
           </div>
 
           <div class="form-field full-width upload-box">
@@ -1468,6 +1553,7 @@
 
 <script type="module" src="js/firebase-config.js"></script>
 <script src="js/security.js"></script>
+<script src="js/loading-overlay.js"></script>
 <script type="module" src="js/admin.js"></script>
 </body>
 </html>

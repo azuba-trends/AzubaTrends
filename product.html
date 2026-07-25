@@ -69,26 +69,30 @@
             <strong id="delivery-partner-name"></strong>
           </div>
 
-          <p class="product-info__short" id="product-short-desc"></p>
-
           <div id="product-stock-pill"></div>
 
           <div class="product-info__actions">
             <div id="add-to-cart-mount" style="flex: 1; min-width: 140px;"></div>
-            <button type="button" id="buy-now-btn" class="btn btn-outline">Buy Now</button>
+            <button type="button" id="buy-now-btn" class="btn btn-primary">Buy Now</button>
           </div>
+
+          <p class="product-info__short" id="product-short-desc"></p>
 
           <div class="product-info__meta">
             <span id="product-sku"></span>
             <span id="product-stock-count"></span>
           </div>
-
-          <div class="product-tabs">
-            <h3>Description</h3>
-            <p class="product-tabs__desc" id="product-description"></p>
-          </div>
         </div>
       </div>
+
+      <!-- Long Description — full width, collapsible. Reviews follow
+           directly after (see below), in the narrower column the
+           description used to occupy. -->
+      <section class="product-description-section" id="product-description-section" hidden>
+        <h2>Description</h2>
+        <div class="product-description-section__body" id="product-description"></div>
+        <button type="button" class="product-description-section__toggle" id="product-description-toggle" hidden>Show more</button>
+      </section>
 
       <!-- Reviews -->
       <section aria-labelledby="reviews-heading" style="max-width:760px;">
@@ -160,6 +164,7 @@
 <script src="/js/tracking.js"></script>
 <script src="/js/security.js"></script>
 <script src="/js/layout.js"></script>
+<script src="/js/loading-overlay.js"></script>
 <script src="/js/a2hs.js"></script>
     <script src="/js/cart.js"></script>
     <script src="/js/cart-button-ui.js"></script>
@@ -171,6 +176,7 @@
   window.addEventListener("layout:ready", () => ProductLoader.initHeader());
 
   document.addEventListener("DOMContentLoaded", async () => {
+    if (window.LoadingOverlay) window.LoadingOverlay.show();
 
     // ---- Back button ---------------------------------------------
     // Internal navigation (Home/Category -> this product): document.referrer
@@ -226,10 +232,12 @@
     }
 
     if (!product) {
+      if (window.LoadingOverlay) window.LoadingOverlay.hide();
       document.getElementById("product-not-found").hidden = false;
       return;
     }
     document.getElementById("product-root").hidden = false;
+    if (window.LoadingOverlay) window.LoadingOverlay.hide();
 
     // Interest tracking for "You might also like" / home page recommendations
     window.ProductLoader.trackCategoryInterest(product.category);
@@ -417,9 +425,34 @@
 
     Security.setTextSafely(document.getElementById("product-category"), product.category || "");
     Security.setTextSafely(document.getElementById("product-title"), product.title || "");
-    Security.setTextSafely(document.getElementById("product-short-desc"), product.shortDescription || "");
-    Security.setTextSafely(document.getElementById("product-description"), product.description || "");
+    // shortDescription/description come from the admin's rich-text editor
+    // (admin.html), the same trust model as blog post content — only the
+    // store admin can write these, so rendering as HTML here is intended,
+    // not user-generated content that would need sanitizing.
+    document.getElementById("product-short-desc").innerHTML = product.shortDescription || "";
     Security.setTextSafely(document.getElementById("product-sku"), `SKU: ${product.sku || "—"}`);
+
+    const descSection = document.getElementById("product-description-section");
+    const descBody = document.getElementById("product-description");
+    const descToggle = document.getElementById("product-description-toggle");
+    if (product.description && product.description.trim()) {
+      descBody.innerHTML = product.description;
+      descSection.hidden = false;
+      // Only bother with the collapse/toggle affordance if the content
+      // actually overflows the collapsed height — a short description
+      // doesn't need a "Show more" that reveals nothing new.
+      requestAnimationFrame(() => {
+        if (descBody.scrollHeight > descBody.clientHeight + 4) {
+          descToggle.hidden = false;
+          descToggle.addEventListener("click", () => {
+            const expanded = descBody.classList.toggle("is-expanded");
+            descToggle.textContent = expanded ? "Show less" : "Show more";
+          });
+        }
+      });
+    } else {
+      descSection.hidden = true;
+    }
 
     document.getElementById("product-price-current").textContent = ProductLoader.formatPrice(product.sellingPrice);
     const discount = ProductLoader.calcDiscount(product);

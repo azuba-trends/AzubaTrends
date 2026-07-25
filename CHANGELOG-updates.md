@@ -1,5 +1,62 @@
 # AzubaTrends — Update Changelog
 
+## 2026-07-25 (2) — Rich-text product descriptions, product page reorder, Auto Fetch on the form, global loading overlay
+
+**1. Short/Long Description are now real rich-text editors.**
+Were plain `<textarea>`s (the "drag the corner to resize" complaint). Both
+now use the same Visual/Code editor pattern as Blog/Pages — built as a
+new reusable `createRTE()` factory in `js/admin.js` rather than a third
+hand-copy of the blog editor's wiring. Short Description gets a compact
+toolbar (bold/italic/underline/strike, lists, align, link); Long
+Description gets the full toolbar including headings, text size, and
+image insert. Auto-grows with content instead of a fixed box size.
+Rendered on the product page as real HTML now (previously forced through
+`textContent`, which would have shown literal `<b>` tags instead of bold
+text).
+
+**2. Product page reordered.**
+Add to Cart / Buy Now now sit above Short Description (were below it).
+Long Description moved OUT of the right column entirely — it's now its
+own full-width section, positioned above Reviews, with a "Show more /
+Show less" toggle that only appears if the content actually overflows
+the collapsed height. Reviews now sit in the narrower column where
+Description used to be.
+
+**3. Buttons had no color.**
+Both Add to Cart and Buy Now were `.btn-outline` (transparent, no fill) —
+that's the "buttons look bad" issue. Buy Now is now `.btn-primary`
+(solid), Add to Cart is `.btn-accent` (solid), matching the color
+language used everywhere else on the site.
+
+**4. "Auto Fetch" is now on the actual Add/Edit Product form.**
+Was previously only reachable via a separate, unlinked
+`product-import-tester.html`. Added a button next to Source Platform URL
+on the real product form — pulls title/description/main image from that
+URL via the existing `api/import-product.js` (same og:title/og:description/
+og:image approach), same admin-token auth pattern as the invoice
+download. Price and stock are still never auto-filled, by design.
+
+**5. New: global loading overlay (`js/loading-overlay.js`).**
+A subtle, low-opacity white veil (page stays visible underneath) with an
+orange spinner, included on every page. The spin animation is an
+**infinite CSS loop with no fixed length** — it's `LoadingOverlay.show()`/
+`.hide()` (reference-counted) that controls whether it's on screen, not
+a timer. Wired into: product page's initial load, admin product save
+(image uploads + Firestore write), CSV/invoice downloads, and Auto Fetch.
+**Left checkout's existing order-processing overlay alone** — it already
+ties its "processing" phase to real completion (not a fixed timer), it
+just uses a branded GIF instead of the new spinner style; only its
+post-success celebration animation has a fixed duration, which is a
+different thing (a deliberate confirmation animation, not a loading
+indicator pretending to be done early).
+
+**Files changed:** `admin.html`, `js/admin.js`, `css/components.css`,
+`product.html`, `js/cart-button-ui.js`, new `js/loading-overlay.js`, and
+the loading-overlay `<script>` tag added to every page (customer-facing
++ admin.html). Zero new `/api` files.
+
+---
+
 ## 2026-07-25 — Product Variants (Size × Color), explicit GST toggle
 
 **1. Explicit "GST-registered" toggle in Settings.**

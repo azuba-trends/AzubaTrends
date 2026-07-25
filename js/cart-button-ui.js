@@ -41,7 +41,7 @@ const CartButtonUI = (function () {
         </div>`;
     } else {
       container.innerHTML = `
-        <button class="btn btn-outline btn-block"
+        <button class="btn btn-accent btn-block"
           data-add-to-cart
           data-product-id="${product.productId}"
           data-product-title="${product.title}"

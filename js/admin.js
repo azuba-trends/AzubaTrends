@@ -1124,7 +1124,7 @@ setTimeout(() => {
     if (!list) return;
     const kp = (document.getElementById("prod-keyphrase").value || "").trim().toLowerCase();
     const seoTitle = (document.getElementById("prod-seo-title").value || document.getElementById("prod-name").value || "").toLowerCase();
-    const seoDesc = (document.getElementById("prod-seo-desc").value || document.getElementById("prod-short-desc")?.value || "").toLowerCase();
+    const seoDesc = (document.getElementById("prod-seo-desc").value || (typeof sdRTE !== "undefined" ? sdRTE.getText() : "") || "").toLowerCase();
     const slug = (document.getElementById("prod-slug").value || "").toLowerCase();
 
     if (!kp) { list.innerHTML = '<li style="color:#888;">Add a focus keyphrase to see SEO checks.</li>'; return; }
@@ -1140,13 +1140,281 @@ setTimeout(() => {
       `<li style="color:${c.ok ? 'var(--color-success, #1a7f37)' : 'var(--color-danger, #c0392b)'};">${c.ok ? '✓' : '✗'} ${c.label}</li>`
     ).join("");
   }
-  ["prod-keyphrase", "prod-seo-title", "prod-seo-desc", "prod-slug", "prod-short-desc"].forEach((id) => {
+  ["prod-keyphrase", "prod-seo-title", "prod-seo-desc", "prod-slug"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.addEventListener("input", renderSeoChecklist);
   });
+  document.getElementById("sd-content-visual").addEventListener("input", renderSeoChecklist);
   document.getElementById("prod-feature-img").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("prod-feature-preview"), 1));
   document.getElementById("prod-gallery-imgs").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("prod-gallery-preview"), 5));
   document.getElementById("prod-delivery-img").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("prod-delivery-preview"), 1));
+
+  // ----------------------------------------------------------------
+  // Generic rich-text editor factory — same Visual/Code, execCommand-
+  // driven approach as the Blog/Page editors elsewhere in this file,
+  // but built as a reusable function instead of hand-wired a third time.
+  // Everything is scoped to the passed-in elements (querySelector calls
+  // run WITHIN toolbarEl, not document-wide), so this can safely coexist
+  // with the blog/page editors even though they share the same
+  // `.rte-btn` class names.
+  // ----------------------------------------------------------------
+  function createRTE({ cmdAttr, toolbarEl, visualEl, codeEl, tabButtons, linkBtnId,
+    blockSelectId, fontSizeSelectId, imageBtnId, imageFileId, imgToolbarEl, imgSizeAttr, imgAlignAttr, imgCaptionId, imgRemoveId }) {
+    let activeTab = "visual";
+    let syncTimer = null;
+    let selectedImage = null;
+
+    function syncCodeFromVisual() { codeEl.value = visualEl.innerHTML; }
+    function syncVisualFromCode() { visualEl.innerHTML = codeEl.value; }
+    function scheduleSync(from) {
+      clearTimeout(syncTimer);
+      syncTimer = setTimeout(() => { from === "visual" ? syncCodeFromVisual() : syncVisualFromCode(); }, 400);
+    }
+    visualEl.addEventListener("input", () => scheduleSync("visual"));
+    codeEl.addEventListener("input", () => scheduleSync("code"));
+
+    tabButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tab = btn.dataset.sdrteTab || btn.dataset.ldrteTab;
+        if (tab === activeTab) return;
+        clearTimeout(syncTimer);
+        activeTab === "visual" ? syncCodeFromVisual() : syncVisualFromCode();
+        activeTab = tab;
+        tabButtons.forEach((b) => b.classList.toggle("active", b === btn));
+        visualEl.hidden = tab !== "visual";
+        codeEl.hidden = tab !== "code";
+        if (tab === "visual") { hideImageToolbar(); visualEl.focus(); } else { codeEl.focus(); }
+      });
+    });
+
+    toolbarEl.querySelectorAll(`.rte-btn[${cmdAttr}]`).forEach((btn) => {
+      btn.addEventListener("click", () => {
+        visualEl.focus();
+        document.execCommand(btn.getAttribute(cmdAttr), false, null);
+        syncCodeFromVisual();
+      });
+    });
+
+    if (blockSelectId) {
+      const sel = document.getElementById(blockSelectId);
+      sel.addEventListener("change", (e) => {
+        const val = e.target.value;
+        e.target.selectedIndex = 0;
+        if (!val) return;
+        visualEl.focus();
+        document.execCommand("formatBlock", false, val);
+        syncCodeFromVisual();
+      });
+    }
+
+    const FONT_SIZE_MAP = { "rte-fs-sm": "2", "rte-fs-normal": "3", "rte-fs-lg": "5", "rte-fs-xl": "7" };
+    if (fontSizeSelectId) {
+      const sel = document.getElementById(fontSizeSelectId);
+      sel.addEventListener("change", (e) => {
+        const cls = e.target.value;
+        e.target.selectedIndex = 0;
+        if (!cls) return;
+        visualEl.focus();
+        document.execCommand("fontSize", false, FONT_SIZE_MAP[cls] || "3");
+        visualEl.querySelectorAll("font[size]").forEach((f) => {
+          const span = document.createElement("span");
+          span.className = cls;
+          while (f.firstChild) span.appendChild(f.firstChild);
+          f.replaceWith(span);
+        });
+        syncCodeFromVisual();
+      });
+    }
+
+    if (linkBtnId) {
+      document.getElementById(linkBtnId).addEventListener("click", () => {
+        const url = prompt("Link URL:", "https://");
+        if (!url) return;
+        visualEl.focus();
+        document.execCommand("createLink", false, url);
+        syncCodeFromVisual();
+      });
+    }
+
+    function hideImageToolbar() {
+      if (selectedImage) selectedImage.classList.remove("rte-img--selected");
+      selectedImage = null;
+      if (imgToolbarEl) imgToolbarEl.hidden = true;
+    }
+
+    if (imageBtnId) {
+      const fileInput = document.getElementById(imageFileId);
+      document.getElementById(imageBtnId).addEventListener("click", () => fileInput.click());
+      fileInput.addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        e.target.value = "";
+        if (!file) return;
+        try {
+          const url = await uploadToImgBB(file);
+          visualEl.focus();
+          const html = `<img src="${esc(url)}" class="rte-img--medium rte-img--center" alt="">`;
+          if (!document.execCommand("insertHTML", false, html)) visualEl.insertAdjacentHTML("beforeend", html);
+          syncCodeFromVisual();
+        } catch (err) {
+          alert("Image upload failed: " + err.message);
+        }
+      });
+
+      function showImageToolbar(img) {
+        selectedImage = img;
+        visualEl.querySelectorAll("img").forEach((el) => el.classList.remove("rte-img--selected"));
+        img.classList.add("rte-img--selected");
+        imgToolbarEl.hidden = false;
+        document.getElementById(imgCaptionId).value = img.closest("figure")?.querySelector("figcaption")?.textContent || "";
+      }
+      visualEl.addEventListener("click", (e) => { e.target.tagName === "IMG" ? showImageToolbar(e.target) : hideImageToolbar(); });
+
+      imgToolbarEl.querySelectorAll(`[${imgSizeAttr}]`).forEach((btn) => {
+        btn.addEventListener("click", () => {
+          if (!selectedImage) return;
+          selectedImage.classList.remove("rte-img--small", "rte-img--medium", "rte-img--large", "rte-img--full");
+          selectedImage.classList.add(`rte-img--${btn.getAttribute(imgSizeAttr)}`);
+          syncCodeFromVisual();
+        });
+      });
+      imgToolbarEl.querySelectorAll(`[${imgAlignAttr}]`).forEach((btn) => {
+        btn.addEventListener("click", () => {
+          if (!selectedImage) return;
+          selectedImage.classList.remove("rte-img--left", "rte-img--center", "rte-img--right");
+          selectedImage.classList.add(`rte-img--${btn.getAttribute(imgAlignAttr)}`);
+          syncCodeFromVisual();
+        });
+      });
+      document.getElementById(imgCaptionId).addEventListener("change", (e) => {
+        if (!selectedImage) return;
+        let figure = selectedImage.closest("figure");
+        if (!e.target.value) {
+          if (figure) { figure.replaceWith(selectedImage); }
+        } else {
+          if (!figure) {
+            figure = document.createElement("figure");
+            selectedImage.replaceWith(figure);
+            figure.appendChild(selectedImage);
+          }
+          let cap = figure.querySelector("figcaption");
+          if (!cap) { cap = document.createElement("figcaption"); figure.appendChild(cap); }
+          cap.textContent = e.target.value;
+        }
+        syncCodeFromVisual();
+      });
+      document.getElementById(imgRemoveId).addEventListener("click", () => {
+        if (!selectedImage) return;
+        (selectedImage.closest("figure") || selectedImage).remove();
+        hideImageToolbar();
+        syncCodeFromVisual();
+      });
+    }
+
+    return {
+      getHTML() { return activeTab === "visual" ? visualEl.innerHTML : codeEl.value; },
+      setHTML(html) { visualEl.innerHTML = html || ""; codeEl.value = html || ""; },
+      getText() { return visualEl.textContent || ""; }
+    };
+  }
+
+  const sdRTE = createRTE({
+    cmdAttr: "data-sdcmd",
+    toolbarEl: document.getElementById("sd-rte-toolbar"),
+    visualEl: document.getElementById("sd-content-visual"),
+    codeEl: document.getElementById("sd-content-code"),
+    tabButtons: Array.from(document.querySelectorAll('[data-sdrte-tab]')),
+    linkBtnId: "sd-rte-link-btn"
+  });
+
+  const ldRTE = createRTE({
+    cmdAttr: "data-ldcmd",
+    toolbarEl: document.getElementById("ld-rte-toolbar"),
+    visualEl: document.getElementById("ld-content-visual"),
+    codeEl: document.getElementById("ld-content-code"),
+    tabButtons: Array.from(document.querySelectorAll('[data-ldrte-tab]')),
+    linkBtnId: "ld-rte-link-btn",
+    blockSelectId: "ld-rte-block-select",
+    fontSizeSelectId: "ld-rte-fontsize-select",
+    imageBtnId: "ld-rte-image-btn",
+    imageFileId: "ld-rte-image-file",
+    imgToolbarEl: document.getElementById("ld-rte-img-toolbar"),
+    imgSizeAttr: "data-ldimgsize",
+    imgAlignAttr: "data-ldimgalign",
+    imgCaptionId: "ld-rte-img-caption",
+    imgRemoveId: "ld-rte-img-remove"
+  });
+
+  sdRTE.setHTML("");
+  ldRTE.setHTML("");
+
+  // ----------------------------------------------------------------
+  // Auto Fetch — pulls title/description/main image from the pasted
+  // Source Platform URL via api/import-product.js (og:title/og:description/
+  // og:image, the same way a WhatsApp link preview is built). One-time
+  // prefill, not a live sync — price/stock are never touched, the admin
+  // always sets those. Was previously only reachable via the separate
+  // product-import-tester.html; now available directly on the form.
+  // ----------------------------------------------------------------
+  function dataURLtoFile(dataUrl, filename) {
+    const [header, base64] = dataUrl.split(",");
+    const mime = /data:(.*?);base64/.exec(header)?.[1] || "image/jpeg";
+    const bin = atob(base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new File([bytes], filename, { type: mime });
+  }
+
+  document.getElementById("auto-fetch-btn").addEventListener("click", async () => {
+    const url = document.getElementById("prod-source-url").value.trim();
+    const status = document.getElementById("auto-fetch-status");
+    const btn = document.getElementById("auto-fetch-btn");
+    if (!url) { alert("Paste a Source Platform URL first."); return; }
+
+    const titleFilled = document.getElementById("prod-name").value.trim();
+    const descFilled = sdRTE.getText().trim();
+    if ((titleFilled || descFilled) && !confirm("This will overwrite the Name/Short Description/Feature Image already in this form with what's fetched from that URL. Continue?")) return;
+
+    const originalText = btn.textContent;
+    btn.disabled = true; btn.textContent = "Fetching...";
+    status.textContent = "Fetching that page and reading its tags...";
+    status.style.color = "var(--color-ink-soft)";
+    if (window.LoadingOverlay) window.LoadingOverlay.show();
+
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+      const res = await fetch(`/api/import-product?url=${encodeURIComponent(url)}`, {
+        headers: { Authorization: `Bearer ${idToken}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+
+      if (data.title) {
+        document.getElementById("prod-name").value = data.title;
+        document.getElementById("prod-slug").value = generateSlug(data.title);
+      }
+      if (data.description) sdRTE.setHTML(data.description);
+
+      if (data.imageDataUrl) {
+        const file = dataURLtoFile(data.imageDataUrl, "auto-fetch-image.jpg");
+        status.textContent = "Uploading fetched image...";
+        const hostedUrl = await uploadToImgBB(file);
+        const existing = JSON.parse(document.getElementById("prod-existing-images").value || "[]");
+        existing[0] = hostedUrl; // replace feature image, keep any gallery images already there
+        document.getElementById("prod-existing-images").value = JSON.stringify(existing);
+        previewExistingImages(document.getElementById("prod-feature-preview"), [hostedUrl]);
+      }
+
+      renderSeoChecklist();
+      status.textContent = "✓ Fetched — review the Name/Short Description/Image above, then set your own price, stock and category.";
+      status.style.color = "var(--color-success, #1a7f37)";
+    } catch (err) {
+      status.textContent = "Couldn't auto-fetch: " + err.message;
+      status.style.color = "var(--color-danger)";
+    } finally {
+      btn.disabled = false; btn.textContent = originalText;
+      if (window.LoadingOverlay) window.LoadingOverlay.hide();
+    }
+  });
 
   function resetProductForm() {
     document.getElementById("product-form").reset();
@@ -1157,6 +1425,8 @@ setTimeout(() => {
     document.getElementById("prod-gallery-preview").innerHTML = "";
     document.getElementById("prod-delivery-preview").innerHTML = "";
     document.getElementById("product-form-title").textContent = "Add New Product";
+    sdRTE.setHTML("");
+    ldRTE.setHTML("");
     // Variant state
     document.getElementById("prod-is-variant").value = "";
     document.getElementById("prod-parent-id").value = "";
@@ -1267,8 +1537,8 @@ setTimeout(() => {
     document.getElementById("prod-sku").value = p.sku || "";
     document.getElementById("prod-hsn").value = p.hsnCode || "";
     document.getElementById("prod-source-url").value = p.sourcePlatformUrl || "";
-    document.getElementById("prod-short-desc").value = p.shortDescription || "";
-    document.getElementById("prod-long-desc").value = p.description || "";
+    sdRTE.setHTML(p.shortDescription || "");
+    ldRTE.setHTML(p.description || "");
     document.getElementById("prod-delivery-fee").value = p.deliveryFee ?? 0;
     document.getElementById("prod-delivery-partner-name").value = p.deliveryPartnerName || "";
     document.getElementById("prod-existing-images").value = JSON.stringify(p.images || []);
@@ -1357,6 +1627,7 @@ setTimeout(() => {
     if (document.getElementById("prod-cost-price").value.trim() === "") {
       return alert("Cost Price is required — it's what you pay for this product, used to calculate profit in reports. It's never shown to customers.");
     }
+    if (!sdRTE.getText().trim()) return alert("Short Description is required");
 
     const isVariant = document.getElementById("prod-is-variant").value === "1";
     const hasVariants = !isVariant && variantsToggle.checked;
@@ -1375,6 +1646,7 @@ setTimeout(() => {
     const originalText = saveBtn.textContent;
     saveBtn.textContent = "Uploading..."; saveBtn.disabled = true;
     document.getElementById("product-save-status").textContent = "";
+    if (window.LoadingOverlay) window.LoadingOverlay.show();
 
     try {
       // Feature + gallery images
@@ -1420,8 +1692,8 @@ setTimeout(() => {
         hsnCode: document.getElementById("prod-hsn").value.trim(),
         sourcePlatformUrl: document.getElementById("prod-source-url").value.trim(),
         tags: document.getElementById("prod-tags").value.split(",").map((t) => t.trim()).filter(Boolean),
-        shortDescription: document.getElementById("prod-short-desc").value,
-        description: document.getElementById("prod-long-desc").value,
+        shortDescription: sdRTE.getHTML(),
+        description: ldRTE.getHTML(),
         deliveryFee: Number(document.getElementById("prod-delivery-fee").value) || 0,
         deliveryPartnerName: document.getElementById("prod-delivery-partner-name").value,
         deliveryPartnerImage,
@@ -1519,6 +1791,7 @@ setTimeout(() => {
       document.getElementById("product-save-status").style.color = "var(--color-danger)";
     } finally {
       saveBtn.textContent = originalText; saveBtn.disabled = false;
+      if (window.LoadingOverlay) window.LoadingOverlay.hide();
     }
   }
 
@@ -2632,6 +2905,7 @@ setTimeout(() => {
   async function downloadAdminFile(url, fallbackFilename, btn, busyLabel) {
     const originalText = btn ? btn.textContent : null;
     if (btn) { btn.disabled = true; btn.textContent = busyLabel; }
+    if (window.LoadingOverlay) window.LoadingOverlay.show();
     try {
       const idToken = await auth.currentUser.getIdToken();
       const res = await fetch(url, { headers: { Authorization: `Bearer ${idToken}` } });
@@ -2653,6 +2927,7 @@ setTimeout(() => {
       alert("Couldn't download: " + err.message);
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = originalText; }
+      if (window.LoadingOverlay) window.LoadingOverlay.hide();
     }
   }
 

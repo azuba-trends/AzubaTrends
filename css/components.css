@@ -1198,3 +1198,73 @@
   color: var(--color-ink-soft);
   white-space: nowrap;
 }
+
+/* Compact variant of .rte-editor for Product > Short Description — same
+   auto-grows-with-content behavior, just a smaller starting/max height
+   since it's meant to stay to a line or two, not a full article. */
+.rte-editor--compact { min-height: 90px; max-height: 260px; }
+.rte-code--compact { min-height: 90px; max-height: 260px; }
+
+/* ---------- Product page: full-width Description section ---------- */
+.product-description-section {
+  max-width: 900px;
+  margin: 0 0 var(--space-6);
+}
+.product-description-section__body {
+  position: relative;
+  max-height: 220px;
+  overflow: hidden;
+  line-height: 1.7;
+  color: var(--color-ink);
+}
+.product-description-section__body.is-expanded { max-height: none; }
+.product-description-section__body:not(.is-expanded)::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 56px;
+  background: linear-gradient(to bottom, transparent, var(--color-bg, #fff));
+  pointer-events: none;
+}
+.product-description-section__body p { margin: 0 0 12px; }
+.product-description-section__body img { max-width: 100%; }
+.product-description-section__toggle {
+  margin-top: var(--space-3);
+  background: none;
+  border: none;
+  padding: 0;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+.product-description-section__toggle:hover { text-decoration: underline; }
+
+/* ---------- Global loading overlay (js/loading-overlay.js) ---------- */
+#global-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Subtle white veil — the page stays visible/readable underneath,
+     this is a "something's happening" cue, not a blocking splash. */
+  background: rgba(255, 255, 255, 0.08);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+#global-loading-overlay.is-visible { opacity: 1; pointer-events: auto; }
+
+.global-loading-spinner {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 4px solid rgba(232, 163, 61, 0.22); /* var(--color-accent) at low alpha */
+  border-top-color: var(--color-accent, #E8A33D);
+  /* Infinite, constant-rate loop — see loading-overlay.js: this never
+     "completes" on its own, only hide() removing the overlay does. */
+  animation: global-loading-spin 0.75s linear infinite;
+}
+@keyframes global-loading-spin { to { transform: rotate(360deg); } }
