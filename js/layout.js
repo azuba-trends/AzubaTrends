@@ -70,6 +70,40 @@
       accountModalClose.addEventListener("click", () => { accountModal.hidden = true; });
     }
 
+    // "Policies" nav dropdown — opens on hover (desktop mouse) via CSS
+    // already, but also needs a click/tap toggle for keyboard and
+    // touch/trackpad users where :hover doesn't reliably fire. Closes on
+    // outside click, on Escape, and after picking a link.
+    const policiesDropdown = document.getElementById("policies-dropdown");
+    const policiesTrigger = document.getElementById("policies-dropdown-trigger");
+    if (policiesDropdown && policiesTrigger) {
+      const setOpen = (open) => {
+        policiesDropdown.classList.toggle("is-open", open);
+        policiesTrigger.setAttribute("aria-expanded", open ? "true" : "false");
+      };
+      policiesTrigger.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setOpen(!policiesDropdown.classList.contains("is-open"));
+      });
+      document.addEventListener("click", (e) => {
+        if (!policiesDropdown.contains(e.target)) setOpen(false);
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") setOpen(false);
+      });
+      policiesDropdown.querySelectorAll(".site-nav__dropdown-panel a").forEach((a) => {
+        a.addEventListener("click", () => setOpen(false));
+      });
+    }
+
+    // "Become a Seller" — intentionally does nothing yet (feature is
+    // planned for a future update). Prevent the "#" href from jumping
+    // the page to the top rather than leaving it a dead "#" link.
+    const becomeSellerLink = document.getElementById("become-seller-link");
+    if (becomeSellerLink) {
+      becomeSellerLink.addEventListener("click", (e) => { e.preventDefault(); });
+    }
+
     window.dispatchEvent(new CustomEvent("layout:ready"));
   }
 

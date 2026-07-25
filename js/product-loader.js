@@ -94,6 +94,39 @@ const ProductLoader = (function () {
     return Math.round(((product.mrp - product.sellingPrice) / product.mrp) * 100);
   }
 
+  // ------------------------------------------------------------------
+  // Size ordering — clothing sizes must show XS, S, M, L, XL... in that
+  // logical order, never however they happened to be added in the admin
+  // panel or however Set/array order came out. Anything not in this
+  // known list (e.g. numeric sizes like "30", "32", "6", "7", or free
+  // -text sizes like "Free Size") sorts numerically if it looks like a
+  // number, then alphabetically, and always AFTER the known apparel
+  // sizes above so a stray "Free Size" doesn't jump to the front.
+  // ------------------------------------------------------------------
+  const SIZE_ORDER = [
+    "xxxs", "xxs", "xs", "s", "m", "l", "xl", "xxl", "xxxl", "2xl", "3xl", "4xl", "5xl", "6xl"
+  ];
+  function sizeSortRank(size) {
+    const key = String(size || "").trim().toLowerCase();
+    const idx = SIZE_ORDER.indexOf(key);
+    return idx === -1 ? null : idx;
+  }
+  function sortSizes(sizes) {
+    return [...(sizes || [])].sort((a, b) => {
+      const ra = sizeSortRank(a), rb = sizeSortRank(b);
+      if (ra !== null && rb !== null) return ra - rb;
+      if (ra !== null) return -1; // known apparel sizes always come first
+      if (rb !== null) return 1;
+      const na = parseFloat(a), nb = parseFloat(b);
+      const aIsNum = !isNaN(na) && /^\s*[\d.]+\s*$/.test(String(a));
+      const bIsNum = !isNaN(nb) && /^\s*[\d.]+\s*$/.test(String(b));
+      if (aIsNum && bIsNum) return na - nb;
+      if (aIsNum) return -1;
+      if (bIsNum) return 1;
+      return String(a).localeCompare(String(b));
+    });
+  }
+
   function formatPrice(amount) {
     return currency + Number(amount || 0).toLocaleString("en-IN");
   }
@@ -260,35 +293,35 @@ const ProductLoader = (function () {
     return result;
   }
 
-  /** Lazy-loads a related-products row into `container` only once it
-   *  scrolls into view (shopper isn't looking at it yet, so there's no
-   *  reason to render/fetch before that) — shows the same skeleton
-   *  shimmer while it "arrives", and a clean empty-state if there's
-   *  genuinely nothing else to show. */
+  /** Renders the related-products row into `container`. Previously this
+   *  waited for an IntersectionObserver to report the (often 0-height,
+   *  not-yet-populated) container as "intersecting" before rendering
+   *  anything — on some layouts/browsers that observer callback never
+   *  fired, so the whole "You might also like" section silently stayed
+   *  empty. Now it just renders straight away (this is a small catalog,
+   *  so there's no real performance cost to not lazy-loading it), and
+   *  any error is caught so a data hiccup shows the empty-state instead
+   *  of leaving a blank gap on the page. */
   function mountRelatedProducts(container, opts) {
-    if (!container || !("IntersectionObserver" in window)) {
-      renderRelatedProductsNow(container, opts);
-      return;
-    }
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) {
-        observer.disconnect();
-        renderRelatedProductsNow(container, opts);
-      }
-    }, { rootMargin: "200px" });
-    observer.observe(container);
+    if (!container) return;
+    renderRelatedProductsNow(container, opts);
   }
 
   async function renderRelatedProductsNow(container, opts) {
     renderSkeletonGrid(container, 4);
-    const all = await loadAllProducts();
-    const related = pickRelatedProducts(all, opts);
-    if (related.length === 0) {
+    try {
+      const all = await loadAllProducts();
+      const related = pickRelatedProducts(all, opts);
+      if (related.length === 0) {
+        container.innerHTML = `<div class="empty-state"><h2>No related products yet</h2><p>Check back soon as more products are added.</p></div>`;
+        return;
+      }
+      container.innerHTML = "";
+      related.forEach((p) => container.appendChild(renderProductCard(p)));
+    } catch (err) {
+      console.error("ProductLoader: could not load related products", err);
       container.innerHTML = `<div class="empty-state"><h2>No related products yet</h2><p>Check back soon as more products are added.</p></div>`;
-      return;
     }
-    container.innerHTML = "";
-    related.forEach((p) => container.appendChild(renderProductCard(p)));
   }
 
   function initHeader() {
@@ -316,7 +349,7 @@ const ProductLoader = (function () {
     window.addEventListener("cart:updated", (e) => setBadge(e.detail.count));
   }
 
-  const API = { loadAllProducts, getProductById, getProductBySlug, getProductByParentAndVariantSlug, getVariantSiblings, productUrl, calcDiscount, formatPrice, sortByStock, getCategories, renderProductCard, renderGrid, renderSkeletonGrid, renderCategoryChips, initHeader, trackCategoryInterest, mountRelatedProducts };
+  const API = { loadAllProducts, getProductById, getProductBySlug, getProductByParentAndVariantSlug, getVariantSiblings, productUrl, calcDiscount, formatPrice, sortByStock, sortSizes, getCategories, renderProductCard, renderGrid, renderSkeletonGrid, renderCategoryChips, initHeader, trackCategoryInterest, mountRelatedProducts };
   window.ProductLoader = API;
   return API;
 })();

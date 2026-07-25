@@ -49,7 +49,10 @@
           <div class="gallery__thumbs" id="gallery-thumbs"></div>
         </div>
 
-        <!-- Info -->
+        <!-- Info (right column) — everything Meesho stacks on the right:
+             title/price, stock status, variant picker, buy actions,
+             short description, Sold By, delivery checker, and finally
+             Ratings & Reviews. -->
         <div>
           <div class="product-info__brand" id="product-brand" hidden></div>
           <div class="product-info__category" id="product-category"></div>
@@ -61,6 +64,11 @@
             <span class="discount-pill" id="product-discount" hidden></span>
           </div>
 
+          <!-- Stock status — hidden entirely when there's healthy stock;
+               shows a low-stock or out-of-stock pill right under the
+               price otherwise. No "SKU:" / "In stock" text anymore. -->
+          <div id="product-stock-status" class="stock-status-row"></div>
+
           <div id="product-variant-selector" hidden></div>
 
           <div class="delivery-partner-note" id="delivery-partner-note" hidden>
@@ -69,74 +77,104 @@
             <strong id="delivery-partner-name"></strong>
           </div>
 
-          <div id="product-stock-pill"></div>
-
-          <div class="product-info__actions">
+          <div class="product-info__actions" id="product-actions">
             <div id="add-to-cart-mount" style="flex: 1; min-width: 140px;"></div>
             <button type="button" id="buy-now-btn" class="btn btn-primary">Buy Now</button>
           </div>
 
+          <!-- Out-of-stock replacement for the actions row above. -->
+          <div class="notify-me-block" id="notify-me-block" hidden>
+            <button type="button" class="btn btn-outline btn-block" id="notify-me-btn">🔔 Notify Me</button>
+            <form class="notify-me-form" id="notify-me-form" novalidate>
+              <input type="email" id="notify-me-email" placeholder="Your email address" required autocomplete="email">
+              <button type="submit" class="btn btn-primary">Notify Me</button>
+            </form>
+            <p class="notify-me-status" id="notify-me-status"></p>
+          </div>
+
           <p class="product-info__short" id="product-short-desc"></p>
 
-          <div class="product-info__meta">
-            <span id="product-sku"></span>
-            <span id="product-stock-count"></span>
+          <!-- Sold By (demo — a real seller-profile page can replace this
+               later; for now it just names the store). -->
+          <div class="pdp-sidebar-card" id="sold-by-card">
+            <div class="pdp-sidebar-card__title">Sold By</div>
+            <div class="sold-by-row">
+              <span class="sold-by-row__icon" id="sold-by-initial">A</span>
+              <div>
+                <div class="sold-by-row__name" id="sold-by-name">AzubaTrends</div>
+                <div class="sold-by-row__note">Seller profile page coming soon.</div>
+              </div>
+            </div>
           </div>
+
+          <!-- Check Delivery Date & Availability -->
+          <div class="pdp-sidebar-card" id="delivery-checker-card">
+            <div class="pdp-sidebar-card__title">Check Delivery Date &amp; Availability</div>
+            <div class="delivery-checker__row">
+              <input type="text" id="delivery-pincode-input" placeholder="Enter delivery pincode" inputmode="numeric" maxlength="6" aria-label="Delivery pincode">
+              <button type="button" class="btn btn-outline" id="delivery-pincode-check-btn">Check</button>
+            </div>
+            <p class="form-hint">This is just a quick check — your address is confirmed again at checkout.</p>
+            <div class="delivery-checker__result" id="delivery-checker-result"></div>
+          </div>
+
+          <!-- Reviews — moved into the right column, Meesho-style. -->
+          <section aria-labelledby="reviews-heading" class="pdp-reviews">
+            <h2 id="reviews-heading">Ratings &amp; Reviews</h2>
+
+            <div class="reviews-summary">
+              <div class="reviews-summary__score-block">
+                <span class="reviews-summary__score" id="review-avg-score">—</span>
+                <span id="review-avg-stars"></span>
+                <p class="reviews-summary__note" id="review-count-note">No reviews yet</p>
+              </div>
+              <div class="reviews-summary__bars" id="review-bars"></div>
+            </div>
+
+            <form class="review-form" id="review-form" novalidate>
+              <!-- Honeypot field — real users never see or fill this in -->
+              <div style="position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden;" aria-hidden="true">
+                <label for="review-website">Website</label>
+                <input type="text" id="review-website" name="website" tabindex="-1" autocomplete="off">
+              </div>
+              <div class="form-field">
+                <label>Your rating</label>
+                <div class="star-input" id="review-star-input"></div>
+              </div>
+              <div class="form-field">
+                <label for="review-comment">Your review</label>
+                <div class="review-comment-box">
+                  <textarea id="review-comment" placeholder="What did you think? (min 10 characters)" required maxlength="1000"></textarea>
+                  <button type="button" class="review-comment-box__add-btn" id="review-add-image-btn" aria-label="Add photos" aria-haspopup="true" aria-expanded="false">+</button>
+                  <div class="review-image-popover" id="review-image-popover">
+                    <button type="button" id="review-add-image-option">📷 Add images</button>
+                  </div>
+                </div>
+                <span class="form-hint" id="review-char-count">0 / 1000</span>
+                <input type="file" id="review-image" accept="image/jpeg,image/png,image/webp" multiple hidden>
+                <div class="review-photo-previews" id="review-photo-previews"></div>
+              </div>
+              <p class="form-error" id="review-error"></p>
+              <p class="review-toast" id="review-toast">Thanks — your review is now live for everyone to see.</p>
+              <button type="submit" class="btn btn-accent" style="align-self:flex-start;">Submit review</button>
+            </form>
+
+            <div class="review-list" id="review-list"></div>
+            <button type="button" class="review-view-all-btn" id="review-view-all-btn" hidden>View all reviews →</button>
+          </section>
         </div>
       </div>
 
-      <!-- Long Description — full width, collapsible. Reviews follow
-           directly after (see below), in the narrower column the
-           description used to occupy. -->
+      <!-- Long Description — full width, collapsible. -->
       <section class="product-description-section" id="product-description-section" hidden>
         <h2>Description</h2>
         <div class="product-description-section__body" id="product-description"></div>
         <button type="button" class="product-description-section__toggle" id="product-description-toggle" hidden>Show more</button>
       </section>
 
-      <!-- Reviews -->
-      <section aria-labelledby="reviews-heading" style="max-width:760px;">
-        <h2 id="reviews-heading">Ratings &amp; Reviews</h2>
-
-        <div class="reviews-summary">
-          <span class="reviews-summary__score" id="review-avg-score">—</span>
-          <div>
-            <span id="review-avg-stars"></span>
-            <p class="reviews-summary__note" id="review-count-note">No reviews yet</p>
-          </div>
-        </div>
-
-        <form class="review-form" id="review-form" novalidate>
-          <!-- Honeypot field — real users never see or fill this in -->
-          <div style="position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden;" aria-hidden="true">
-            <label for="review-website">Website</label>
-            <input type="text" id="review-website" name="website" tabindex="-1" autocomplete="off">
-          </div>
-          <div class="form-field">
-            <label>Your rating</label>
-            <div class="star-input" id="review-star-input"></div>
-          </div>
-          <div class="form-field">
-            <label for="review-comment">Your review</label>
-            <textarea id="review-comment" placeholder="What did you think? (min 10 characters)" required maxlength="1000"></textarea>
-            <span class="form-hint" id="review-char-count">0 / 1000</span>
-          </div>
-          <div class="form-field">
-            <label for="review-image">Add a photo (optional)</label>
-            <input type="file" id="review-image" accept="image/jpeg,image/png,image/webp">
-            <span class="form-hint">JPG, PNG, or WEBP · up to 2MB</span>
-          </div>
-          <p class="form-error" id="review-error"></p>
-          <p class="review-toast" id="review-toast">Thanks — your review is now live for everyone to see.</p>
-          <button type="submit" class="btn btn-accent" style="align-self:flex-start;">Submit review</button>
-        </form>
-
-        <div class="review-list" id="review-list"></div>
-      </section>
-
-      <!-- Related products — loads only once scrolled into view, ranked by
-           this product's category first, then the shopper's own browsing
-           interest (cookie), see ProductLoader.mountRelatedProducts -->
+      <!-- Related products — loads immediately, ranked by this product's
+           category first, then the shopper's own browsing interest
+           (cookie), see ProductLoader.mountRelatedProducts -->
       <section aria-labelledby="related-heading" style="margin-top: var(--space-8);">
         <h2 id="related-heading">You might also like</h2>
         <div class="product-grid" id="related-products-grid"></div>
@@ -145,6 +183,20 @@
 
   </div>
 </main>
+
+<!-- "View all reviews" drawer — right-side panel on desktop, near
+     full-width sheet on small screens. Scrollable body; loads a batch
+     of reviews at a time with a "View more" button rather than
+     dumping every review in at once. -->
+<div class="review-drawer-overlay" id="review-drawer-overlay" hidden>
+  <div class="review-drawer" role="dialog" aria-modal="true" aria-labelledby="review-drawer-title">
+    <div class="review-drawer__head">
+      <span class="review-drawer__title" id="review-drawer-title">All Reviews</span>
+      <button type="button" class="review-drawer__close" id="review-drawer-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="review-drawer__body" id="review-drawer-body"></div>
+  </div>
+</div>
 
 <div class="lightbox" id="lightbox" hidden>
   <button class="lightbox__close" id="lightbox-close" aria-label="Close image">&times;</button>
@@ -171,6 +223,7 @@
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
 <script src="/js/product-loader.js"></script>
 <script src="/js/search.js"></script>
+<script src="/js/geo-restriction.js"></script>
 <script src="/js/reviews.js"></script>
 <script>
   window.addEventListener("layout:ready", () => ProductLoader.initHeader());
@@ -179,13 +232,6 @@
     if (window.LoadingOverlay) window.LoadingOverlay.show();
 
     // ---- Back button ---------------------------------------------
-    // Internal navigation (Home/Category -> this product): document.referrer
-    // is same-origin AND this tab has real history to go back to, so use
-    // the actual browser back — it returns to the exact scroll position /
-    // filter state the shopper left, not just a fresh reload of the list.
-    // External link or a fresh tab/bookmark straight to this product: there
-    // is no same-site place to go "back" to, so go Home instead of exiting
-    // to the third-party referrer (or doing nothing).
     const backBtn = document.getElementById("product-back-btn");
     if (backBtn) {
       backBtn.addEventListener("click", (e) => {
@@ -203,15 +249,7 @@
       });
     }
 
-    // New clean URLs look like /products/terracotta-diya-set (path-based).
-    // Old links look like /product.html?id=abc123 or /product?id=abc123 —
-    // people may already have these saved/shared/bookmarked, so instead of
-    // breaking them we look the product up by id, then swap the browser to
-    // the new slug URL. This keeps old WhatsApp/Google links working while
-    // steering everyone (and search engines) onto the canonical slug URL.
     const pathParts = window.location.pathname.split("/").filter(Boolean);
-    // /products/{slug} -> normal product. /products/{parentId}/{variantSlug}
-    // -> a specific size/color variant of that parent.
     const slugFromPath = (pathParts[0] === "products" && pathParts.length === 2) ? pathParts[1] : null;
     const variantParentId = (pathParts[0] === "products" && pathParts.length === 3) ? pathParts[1] : null;
     const variantSlugFromPath = variantParentId ? pathParts[2] : null;
@@ -243,15 +281,6 @@
     window.ProductLoader.trackCategoryInterest(product.category);
 
     // ---- SEO meta tags ---------------------------------------------
-    // This is a client-rendered page: there is no server templating,
-    // so document.title/meta description only exist once this script
-    // runs. That means crawlers/bots that DON'T execute JavaScript —
-    // e.g. WhatsApp or Facebook's link-unfurling bots — will see the
-    // generic fallback title/description from the static <head>
-    // above, not this product's real title/description. Google's own
-    // crawler does execute JS and will see this. Fixing this fully
-    // would need server-side rendering or a prerendering step, which
-    // is out of scope for a plain static multi-page site like this one.
     document.title = product.seoTitle || `${product.title} — ${SITE_CONFIG.siteName}`;
     document.getElementById("page-description").setAttribute("content", product.seoDesc || product.shortDescription || product.title);
     document.getElementById("page-canonical").setAttribute("href", `https://azuba-trends.vercel.app${ProductLoader.productUrl(product)}`);
@@ -314,7 +343,6 @@
         thumbsWrap.appendChild(thumb);
       });
 
-      // Prev/Next arrow buttons (desktop-friendly; also work on mobile).
       const prevBtn = document.createElement("button");
       prevBtn.type = "button";
       prevBtn.className = "gallery__nav gallery__nav--prev";
@@ -332,7 +360,6 @@
       galleryMain.appendChild(prevBtn);
       galleryMain.appendChild(nextBtn);
 
-      // Dot indicator
       const dots = document.createElement("div");
       dots.className = "gallery__dots";
       dots.id = "gallery-dots";
@@ -343,11 +370,6 @@
       });
       galleryMain.appendChild(dots);
 
-      // ---- Swipe / drag gesture (Pointer Events = works for touch AND
-      // mouse in one code path, no separate touchstart/mousedown handling
-      // needed). A horizontal drag past a small threshold changes image;
-      // small movements (taps, or accidental jitter) are ignored so a
-      // normal click-to-zoom still works.
       let dragStartX = null;
       let dragStartY = null;
       let dragging = false;
@@ -364,7 +386,6 @@
           const dx = e.clientX - dragStartX;
           const dy = e.clientY - dragStartY;
           dragging = false;
-          // Ignore mostly-vertical drags (that's scrolling, not swiping).
           if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
             if (dx < 0) onSwipeLeft(); else onSwipeRight();
           }
@@ -372,7 +393,7 @@
           dragStartY = null;
         });
         el.addEventListener("pointercancel", () => { dragging = false; dragStartX = null; });
-        el.style.touchAction = "pan-y"; // allow vertical page scroll, but let us capture horizontal drags
+        el.style.touchAction = "pan-y";
       }
 
       attachSwipe(galleryMain, () => showImage(currentImageIndex + 1), () => showImage(currentImageIndex - 1));
@@ -381,17 +402,12 @@
     const lightbox = document.getElementById("lightbox");
     const lightboxImg = document.getElementById("lightbox-img");
     galleryMain.addEventListener("click", (e) => {
-      // Don't open the lightbox if the click was really the tail end of a
-      // swipe drag, or landed on the nav arrows (those have their own
-      // stopPropagation already, but this is an extra safety net).
       if (e.target.closest(".gallery__nav")) return;
       lightboxImg.src = mainImg.src;
       lightboxImg.alt = mainImg.alt;
       document.getElementById("lightbox-caption").hidden = true;
       lightbox.hidden = false;
     });
-    // Swipe inside the lightbox too, so a zoomed-in view can also be
-    // swiped through without closing and reopening it.
     if (images.length > 1) {
       let lbDragStartX = null;
       lightbox.addEventListener("pointerdown", (e) => { lbDragStartX = e.clientX; });
@@ -425,12 +441,7 @@
 
     Security.setTextSafely(document.getElementById("product-category"), product.category || "");
     Security.setTextSafely(document.getElementById("product-title"), product.title || "");
-    // shortDescription/description come from the admin's rich-text editor
-    // (admin.html), the same trust model as blog post content — only the
-    // store admin can write these, so rendering as HTML here is intended,
-    // not user-generated content that would need sanitizing.
     document.getElementById("product-short-desc").innerHTML = product.shortDescription || "";
-    Security.setTextSafely(document.getElementById("product-sku"), `SKU: ${product.sku || "—"}`);
 
     const descSection = document.getElementById("product-description-section");
     const descBody = document.getElementById("product-description");
@@ -438,9 +449,6 @@
     if (product.description && product.description.trim()) {
       descBody.innerHTML = product.description;
       descSection.hidden = false;
-      // Only bother with the collapse/toggle affordance if the content
-      // actually overflows the collapsed height — a short description
-      // doesn't need a "Show more" that reveals nothing new.
       requestAnimationFrame(() => {
         if (descBody.scrollHeight > descBody.clientHeight + 4) {
           descToggle.hidden = false;
@@ -466,15 +474,11 @@
     }
 
     // ---- Variant selector (Size / Color) ---------------------------
-    // Two INDEPENDENT rows, not one combined dropdown — picking a color
-    // keeps the current size selected if that combo exists, otherwise
-    // falls back to the first size available in that color. Either way,
-    // choosing something navigates straight to that variant's own URL
-    // (matches how Amazon/Myntra behave), rather than swapping data in
-    // place under the same URL.
     if (product.isVariant) {
       const siblings = await ProductLoader.getVariantSiblings(product);
-      const sizes = [...new Set(siblings.map((s) => s.size).filter(Boolean))];
+      // Sizes always show in the standard S/M/L/XL... order, never
+      // however they happened to be typed into the admin panel.
+      const sizes = ProductLoader.sortSizes([...new Set(siblings.map((s) => s.size).filter(Boolean))]);
       const colors = [...new Set(siblings.map((s) => s.color).filter(Boolean))];
 
       if (sizes.length > 0 || colors.length > 0) {
@@ -497,9 +501,6 @@
           const row = document.createElement("div");
           row.className = "variant-color-row";
           colors.forEach((color) => {
-            // "Available" here means at least one size exists for this
-            // color at all — the Size row below is what narrows further
-            // once a color is picked.
             const anyForColor = siblings.some((s) => s.color === color);
             const swatch = document.createElement("button");
             swatch.type = "button";
@@ -509,8 +510,6 @@
             swatch.setAttribute("aria-label", color);
             if (!anyForColor) swatch.disabled = true;
             swatch.addEventListener("click", () => {
-              // Keep the current size if this color has it, else the
-              // first size this color does have.
               const target = findSibling(product.size, color) || findSibling(null, color);
               goToVariant(target);
             });
@@ -527,8 +526,6 @@
           const row = document.createElement("div");
           row.className = "variant-size-row";
           sizes.forEach((size) => {
-            // Enabled only if this exact size+currentColor combo exists
-            // as a real variant (and, ideally, has stock).
             const match = findSibling(size, product.color);
             const btn = document.createElement("button");
             btn.type = "button";
@@ -544,9 +541,7 @@
       }
     }
 
-    // Delivery partner note — only shown when the admin actually set a
-    // name or logo for this product; otherwise the whole row stays hidden
-    // rather than showing an empty/half-filled line.
+    // Delivery partner note
     const deliveryNote = document.getElementById("delivery-partner-note");
     const deliveryLogo = document.getElementById("delivery-partner-logo");
     const deliveryNameEl = document.getElementById("delivery-partner-name");
@@ -563,25 +558,67 @@
       deliveryNote.hidden = true;
     }
 
+    // ---- Stock status + actions / Notify Me ---------------------------
     const addToCartMount = document.getElementById("add-to-cart-mount");
     const buyNowBtn = document.getElementById("buy-now-btn");
-    const stockPill = document.getElementById("product-stock-pill");
-    const stockCount = document.getElementById("product-stock-count");
+    const stockStatusEl = document.getElementById("product-stock-status");
+    const productActionsEl = document.getElementById("product-actions");
+    const notifyBlock = document.getElementById("notify-me-block");
+    const notifyBtn = document.getElementById("notify-me-btn");
+    const notifyForm = document.getElementById("notify-me-form");
+    const notifyEmailInput = document.getElementById("notify-me-email");
+    const notifyStatus = document.getElementById("notify-me-status");
 
+    stockStatusEl.innerHTML = "";
     if (product.stock === 0) {
-      stockPill.innerHTML = '<span class="oos-pill">Out of Stock</span>';
-      Security.setTextSafely(stockCount, "");
-      addToCartMount.innerHTML = '<button class="btn btn-outline btn-block" disabled>Out of Stock</button>';
+      stockStatusEl.innerHTML = '<span class="oos-pill">Out of Stock</span>';
+
+      // No Add to Cart / Buy Now while out of stock — Notify Me instead.
+      productActionsEl.hidden = true;
+      notifyBlock.hidden = false;
       buyNowBtn.disabled = true;
       buyNowBtn.setAttribute("aria-disabled", "true");
-    } else {
-      Security.setTextSafely(stockCount, product.stock <= 5 ? `Only ${product.stock} left` : "In stock");
 
-      // The Add to Cart button lives inside #add-to-cart-mount and morphs
-      // into a −/qty/+ stepper the instant this product is in the cart
-      // (including immediately on page load if it already was) — see
-      // js/cart-button-ui.js. It self-syncs on every cart change from here
-      // on, no further wiring needed.
+      notifyBtn.addEventListener("click", () => {
+        notifyForm.classList.add("is-open");
+        notifyBtn.hidden = true;
+        notifyEmailInput.focus();
+      });
+
+      notifyForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const email = notifyEmailInput.value.trim();
+        if (!email) return;
+        const submitBtn = notifyForm.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Sending...";
+        notifyStatus.removeAttribute("data-tone");
+        notifyStatus.textContent = "";
+        try {
+          const res = await fetch("/api/notify-stock", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ productId: product.id, productTitle: product.title, email })
+          });
+          const data = await res.json();
+          if (!res.ok || !data.ok) throw new Error(data.error || "Couldn't save your request. Please try again.");
+          notifyForm.hidden = true;
+          notifyStatus.setAttribute("data-tone", "success");
+          notifyStatus.textContent = "You're on the list — we'll email you when this is back in stock.";
+        } catch (err) {
+          notifyStatus.setAttribute("data-tone", "error");
+          notifyStatus.textContent = err.message || "Something went wrong. Please try again.";
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Notify Me";
+        }
+      });
+    } else {
+      if (product.stock <= 5) {
+        stockStatusEl.innerHTML = `<span class="low-stock-pill">Only ${product.stock} left</span>`;
+      }
+      productActionsEl.hidden = false;
+      notifyBlock.hidden = true;
+
       window.CartButtonUI.mount(addToCartMount, {
         productId: product.id,
         title: product.title,
@@ -592,9 +629,6 @@
         color: product.color || ""
       });
 
-      // "Buy Now" — see cart.js: uses the item's existing cart quantity if
-      // it's already there (e.g. bumped up via the stepper), otherwise
-      // adds 1, then jumps straight to checkout.
       buyNowBtn.setAttribute("data-buy-now", "");
       buyNowBtn.setAttribute("data-product-id", product.id);
       buyNowBtn.setAttribute("data-product-title", product.title);
@@ -604,12 +638,104 @@
       buyNowBtn.setAttribute("data-product-color", product.color || "");
     }
 
+    // ---- Sold By (demo) ---------------------------------------------
+    (async () => {
+      if (window.SITE_CONFIG_READY) { try { await window.SITE_CONFIG_READY; } catch (err) { /* ignore */ } }
+      const storeName = (window.SITE_CONFIG && window.SITE_CONFIG.siteName) || "AzubaTrends";
+      Security.setTextSafely(document.getElementById("sold-by-name"), storeName);
+      Security.setTextSafely(document.getElementById("sold-by-initial"), storeName.trim().charAt(0).toUpperCase() || "A");
+    })();
+
+    // ---- Check Delivery Date & Availability ---------------------------
+    (function initDeliveryChecker() {
+      const input = document.getElementById("delivery-pincode-input");
+      const btn = document.getElementById("delivery-pincode-check-btn");
+      const resultEl = document.getElementById("delivery-checker-result");
+
+      // Rough district -> dispatch/transit estimate. This store only
+      // ships within West Bengal (see config/geo-config.json) — Kolkata
+      // metro-area pincodes go out fast, other WB districts take a bit
+      // longer. This is an ESTIMATE for browsing, not a courier-verified
+      // promise — checkout does the real, final validation.
+      const METRO_DISTRICTS = ["kolkata", "howrah", "north 24 parganas", "south 24 parganas", "hooghly"];
+      function estimateWindow(district) {
+        const dispatchDays = 1;
+        const isMetro = METRO_DISTRICTS.includes(String(district || "").toLowerCase());
+        const transitMin = isMetro ? 2 : 3;
+        const transitMax = isMetro ? 3 : 6;
+        const fmt = (d) => d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+        const from = new Date(); from.setDate(from.getDate() + dispatchDays + transitMin);
+        const to = new Date(); to.setDate(to.getDate() + dispatchDays + transitMax);
+        return { dispatchDays, from: fmt(from), to: fmt(to) };
+      }
+
+      async function runCheck() {
+        const pin = (input.value || "").replace(/\D/g, "");
+        resultEl.classList.remove("is-visible");
+        resultEl.removeAttribute("data-status");
+        if (pin.length !== 6) {
+          resultEl.dataset.status = "error";
+          resultEl.innerHTML = `<p class="delivery-checker__headline">Please enter a valid 6-digit pincode.</p>`;
+          resultEl.classList.add("is-visible");
+          return;
+        }
+
+        btn.disabled = true;
+        const originalLabel = btn.textContent;
+        btn.textContent = "Checking...";
+
+        let verify = { checked: false, valid: null };
+        try {
+          if (window.GeoRestriction) verify = await window.GeoRestriction.verifyPincodeRealtime(pin);
+        } catch (err) { /* fall through to static config check below */ }
+
+        let serviceable = verify.valid;
+        let district = verify.district || null;
+        if (serviceable === null || serviceable === undefined) {
+          // India Post lookup failed/timed out — fall back to the
+          // site's static pincode-range config instead of blocking.
+          try {
+            const config = await window.GeoRestriction.loadConfig();
+            const pinNum = parseInt(pin, 10);
+            serviceable = (config.pincodeRanges || []).some((r) => pinNum >= r.min && pinNum <= r.max);
+          } catch (err) {
+            serviceable = false;
+          }
+        }
+
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+
+        if (!serviceable) {
+          resultEl.dataset.status = "error";
+          resultEl.innerHTML = `<p class="delivery-checker__headline">Sorry, we don't deliver to this pincode yet.</p>`;
+          resultEl.classList.add("is-visible");
+          return;
+        }
+
+        if (product.stock === 0) {
+          resultEl.dataset.status = "error";
+          resultEl.innerHTML = `
+            <p class="delivery-checker__result-row"><span class="delivery-checker__icon">✅</span><span>We deliver to <strong>${district ? Security.escapeHTML(district) : pin}</strong>.</span></p>
+            <p class="delivery-checker__headline">This product is currently out of stock at this location.</p>`;
+          resultEl.classList.add("is-visible");
+          return;
+        }
+
+        const est = estimateWindow(district);
+        resultEl.dataset.status = "ok";
+        resultEl.innerHTML = `
+          <p class="delivery-checker__result-row"><span class="delivery-checker__icon">✅</span><span class="delivery-checker__headline">Delivers to ${district ? Security.escapeHTML(district) : "pincode " + pin}</span></p>
+          <p class="delivery-checker__result-row"><span class="delivery-checker__icon">📦</span><span>Dispatch in ${est.dispatchDays} day${est.dispatchDays > 1 ? "s" : ""}</span></p>
+          <p class="delivery-checker__result-row"><span class="delivery-checker__icon">🚚</span><span>Estimated delivery: <strong>${est.from} – ${est.to}</strong></span></p>`;
+        resultEl.classList.add("is-visible");
+      }
+
+      btn.addEventListener("click", runCheck);
+      input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); runCheck(); } });
+    })();
+
     // ---- SEO: Structured Data (Schema.org Product) -------------------
-    // Lets Google show price/availability/star-rating directly in search
-    // results ("rich results"). aggregateRating is added/updated once
-    // Reviews.init below reports the real average — omitted entirely if
-    // there are zero reviews, since Google's guidelines say not to show a
-    // rating with no reviews behind it.
     function buildProductSchema(ratingInfo) {
       const schema = {
         "@context": "https://schema.org",
@@ -655,21 +781,35 @@
       form: document.getElementById("review-form"),
       starInput: document.getElementById("review-star-input"),
       commentInput: document.getElementById("review-comment"),
+      addImageBtn: document.getElementById("review-add-image-btn"),
+      imagePopover: document.getElementById("review-image-popover"),
+      addImageOption: document.getElementById("review-add-image-option"),
       imageInput: document.getElementById("review-image"),
+      imagePreviews: document.getElementById("review-photo-previews"),
       imageError: document.getElementById("review-error"),
       summaryScore: document.getElementById("review-avg-score"),
       summaryStars: document.getElementById("review-avg-stars"),
       summaryCount: document.getElementById("review-count-note"),
+      summaryBars: document.getElementById("review-bars"),
       list: document.getElementById("review-list"),
+      viewAllBtn: document.getElementById("review-view-all-btn"),
+      drawerOverlay: document.getElementById("review-drawer-overlay"),
+      drawerBody: document.getElementById("review-drawer-body"),
+      drawerClose: document.getElementById("review-drawer-close"),
+      drawerTitle: document.getElementById("review-drawer-title"),
       toast: document.getElementById("review-toast"),
       onSummary: setProductSchema
     });
 
     // ---- Related / recommended products -----------------------
-    window.ProductLoader.mountRelatedProducts(
-      document.getElementById("related-products-grid"),
-      { excludeId: product.id, excludeParentId: product.parentId, category: product.category }
-    );
+    try {
+      window.ProductLoader.mountRelatedProducts(
+        document.getElementById("related-products-grid"),
+        { excludeId: product.id, excludeParentId: product.parentId, category: product.category }
+      );
+    } catch (err) {
+      console.error("Could not load related products", err);
+    }
   });
 </script>
 </body>

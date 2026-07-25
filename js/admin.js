@@ -1485,6 +1485,13 @@ setTimeout(() => {
       <td style="color:${p.stock > 0 ? 'inherit' : 'var(--color-danger)'}; font-weight:bold;">${(!opts.isChild && p.hasVariants) ? "—" : p.stock}</td>
       <td style="color:${sColor}; font-weight:bold;">${esc((p.status || "").toUpperCase())}</td>
       <td>${p.sourcePlatformUrl ? `<button class="btn btn-outline source-platform-btn" data-url="${esc(p.sourcePlatformUrl)}" style="padding:4px 8px; font-size:0.8rem;">Source Platform</button>` : '<span style="color:var(--color-ink-soft); font-size:0.8rem;">—</span>'}</td>
+      <td>${
+        opts.isChild
+          ? `<button class="btn btn-outline sync-variant-btn" data-id="${p.id}" title="Pull Name, Description, Category, Brand, Tags, Delivery info and Images from the parent, then publish" style="padding:4px 8px; font-size:0.8rem;">🔄 Auto Sync</button>`
+          : (opts.hasChildren
+              ? `<button class="btn btn-outline sync-all-btn" data-id="${p.id}" title="Auto Sync every variant of this product from the parent, then publish them all" style="padding:4px 8px; font-size:0.8rem;">🔄 Sync All</button>`
+              : '<span style="color:var(--color-ink-soft); font-size:0.8rem;">—</span>')
+      }</td>
       <td>
         <button class="btn btn-outline pause-prod-btn" data-id="${p.id}" data-status="${p.status}" style="padding:4px 8px; font-size:0.8rem;">${p.status === 'active' ? 'Pause' : 'Live'}</button>
         <button class="btn btn-outline edit-prod-btn" data-id="${p.id}" style="padding:4px 8px; font-size:0.8rem;">Edit</button>
@@ -1515,6 +1522,53 @@ setTimeout(() => {
     tbody.querySelectorAll(".edit-prod-btn").forEach((b) => b.addEventListener("click", () => editProduct(b.dataset.id)));
     tbody.querySelectorAll(".del-prod-btn").forEach((b) => b.addEventListener("click", () => deleteProduct(b.dataset.id)));
     tbody.querySelectorAll(".source-platform-btn").forEach((b) => b.addEventListener("click", () => window.open(b.dataset.url, "_blank", "noopener,noreferrer")));
+    tbody.querySelectorAll(".sync-variant-btn").forEach((b) => b.addEventListener("click", () => syncVariantFromListRow(b.dataset.id)));
+    tbody.querySelectorAll(".sync-all-btn").forEach((b) => b.addEventListener("click", () => syncAllVariantsFromListRow(b.dataset.id)));
+  }
+
+  // Same field-sync as the "🔄 Auto Sync from Parent" button inside Edit
+  // (buildVariantSyncPatch above), but callable straight from the All
+  // Products table without opening Edit first — and this version also
+  // publishes the variant (status: "active") once synced, per the
+  // "sync + save + publish in one click" request.
+  async function syncOneVariant(variantId) {
+    const variant = productsList.find((p) => p.id === variantId);
+    if (!variant || !variant.isVariant || !variant.parentId) {
+      throw new Error("This isn't a variant product.");
+    }
+    const parent = productsList.find((p) => p.id === variant.parentId);
+    if (!parent) throw new Error("Can't find the parent product — it may have been deleted.");
+    const syncPatch = { ...buildVariantSyncPatch(parent), status: "active" };
+    await updateDoc(doc(db, "products", variantId), syncPatch);
+  }
+
+  async function syncVariantFromListRow(variantId) {
+    const btn = document.querySelector(`.sync-variant-btn[data-id="${variantId}"]`);
+    if (btn) { btn.disabled = true; btn.textContent = "Syncing..."; }
+    try {
+      await syncOneVariant(variantId);
+      if (btn) { btn.textContent = "Synced ✓"; }
+      setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = "🔄 Auto Sync"; } }, 1200);
+    } catch (err) {
+      alert("Couldn't sync: " + err.message);
+      if (btn) { btn.disabled = false; btn.textContent = "🔄 Auto Sync"; }
+    }
+  }
+
+  async function syncAllVariantsFromListRow(parentId) {
+    const children = productsList.filter((p) => p.isVariant && p.parentId === parentId);
+    if (children.length === 0) return;
+    if (!confirm(`Auto Sync all ${children.length} variant(s) of this product from the parent's current Name, Description, Category, Brand, Tags, Delivery info and Images, then publish them all?`)) return;
+    const btn = document.querySelector(`.sync-all-btn[data-id="${parentId}"]`);
+    if (btn) { btn.disabled = true; btn.textContent = "Syncing..."; }
+    try {
+      for (const child of children) await syncOneVariant(child.id);
+      if (btn) { btn.textContent = "Synced ✓"; }
+      setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = "🔄 Sync All"; } }, 1200);
+    } catch (err) {
+      alert("Couldn't sync all variants: " + err.message);
+      if (btn) { btn.disabled = false; btn.textContent = "🔄 Sync All"; }
+    }
   }
 
   function editProduct(id) {
@@ -1899,6 +1953,20 @@ setTimeout(() => {
       .forEach((child) => variantBoxesContainer.appendChild(buildVariantBox(child.size, child.color, child)));
   }
 
+  // Shared by the "🔄 Auto Sync from Parent" button inside Edit (below)
+  // and the "Auto Sync" / "Sync All" buttons in the All Products table
+  // (see buildProductRow / renderProductsTable) — same fields every time,
+  // so the two entry points can never quietly drift apart.
+  function buildVariantSyncPatch(parent) {
+    return {
+      title: parent.title, slug: parent.slug, keyphrase: parent.keyphrase, seoTitle: parent.seoTitle, seoDesc: parent.seoDesc,
+      category: parent.category, brand: parent.brand, tags: parent.tags || [],
+      shortDescription: parent.shortDescription, description: parent.description,
+      deliveryFee: parent.deliveryFee, deliveryPartnerName: parent.deliveryPartnerName, deliveryPartnerImage: parent.deliveryPartnerImage,
+      images: parent.images || []
+    };
+  }
+
   document.getElementById("variant-auto-sync-btn").addEventListener("click", async () => {
     const parentId = document.getElementById("prod-parent-id").value;
     const parent = productsList.find((p) => p.id === parentId);
@@ -1906,17 +1974,10 @@ setTimeout(() => {
     if (!confirm("Overwrite this variant's Name, Description, Category, Brand, Tags, Delivery info and Images with the parent's current data? Size, Color, MRP, Sale Price, HSN and Source URL are kept as-is.")) return;
 
     const variantId = document.getElementById("prod-id").value;
-    const syncPatch = {
-      title: parent.title, slug: parent.slug, keyphrase: parent.keyphrase, seoTitle: parent.seoTitle, seoDesc: parent.seoDesc,
-      category: parent.category, brand: parent.brand, tags: parent.tags || [],
-      shortDescription: parent.shortDescription, description: parent.description,
-      deliveryFee: parent.deliveryFee, deliveryPartnerName: parent.deliveryPartnerName, deliveryPartnerImage: parent.deliveryPartnerImage,
-      images: parent.images || []
-    };
+    const syncPatch = buildVariantSyncPatch(parent);
     try {
       if (variantId) await updateDoc(doc(db, "products", variantId), syncPatch);
       // Refresh the open form so the admin sees the synced values immediately.
-      Object.entries(syncPatch).forEach(() => {}); // no-op, real refresh below
       editProduct(variantId);
       alert("Synced from parent.");
     } catch (err) {
