@@ -1465,13 +1465,15 @@ setTimeout(() => {
     // Variant state
     document.getElementById("prod-is-variant").value = "";
     document.getElementById("prod-parent-id").value = "";
-    document.getElementById("prod-variant-size").value = "";
     document.getElementById("prod-variant-color").value = "";
-    document.getElementById("variant-size-wrap").style.display = "none";
-    document.getElementById("variant-color-wrap").style.display = "none";
+    document.getElementById("variant-top-pricing-wrap").style.display = "";
+    document.getElementById("prod-mrp").required = true;
+    document.getElementById("prod-price").required = true;
+    document.getElementById("prod-stock").required = true;
     document.getElementById("variants-toggle-wrap").style.display = "";
     document.getElementById("prod-has-variants").checked = false;
     document.getElementById("variants-section").style.display = "none";
+    document.getElementById("variant-add-color-wrap").style.display = "";
     document.getElementById("variant-boxes-container").innerHTML = "";
     document.getElementById("variant-sizes-input").value = "";
     document.getElementById("variant-colors-input").value = "";
@@ -1608,12 +1610,8 @@ setTimeout(() => {
     }
     tbody.querySelectorAll(".edit-color-btn").forEach((b) => b.addEventListener("click", () => {
       const parentId = b.dataset.parent, color = b.dataset.color;
-      editProduct(parentId);
-      // Scroll to that color's box once the Variants section has rendered.
-      setTimeout(() => {
-        const box = Array.from(variantBoxesContainer.children).find((bx) => (bx.dataset.color || "") === color);
-        if (box) box.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 300);
+      const rep = colorGroupDocs(parentId, color)[0];
+      if (rep) editProduct(rep.id);
     }));
     tbody.querySelectorAll(".del-color-btn").forEach((b) => b.addEventListener("click", async () => {
       const parentId = b.dataset.parent, color = b.dataset.color;
@@ -1723,33 +1721,56 @@ setTimeout(() => {
       document.getElementById("prod-brand").value = p.brand || "";
     }, 100);
 
-    // Variant-related form state — three cases: a variant itself, a
-    // parent with variants, or a plain product with neither.
+    // Variant-related form state — two cases: editing one COLOR of a
+    // variant family (isVariant), or a plain product / the parent
+    // template of a variant family (hasVariants, possibly false).
     document.getElementById("prod-is-variant").value = p.isVariant ? "1" : "";
     document.getElementById("prod-parent-id").value = p.parentId || "";
     if (p.isVariant) {
-      document.getElementById("variant-size-wrap").style.display = "";
-      document.getElementById("variant-color-wrap").style.display = "";
-      document.getElementById("prod-variant-size").value = p.size || "";
-      document.getElementById("prod-variant-color").value = p.color || "";
-      // A variant can't itself have variants — that section is parent-only.
+      // Per-doc pricing fields are meaningless here — every size in this
+      // color has its OWN price/stock/HSN/etc, edited in the box below —
+      // so hide them and drop their `required` (they're not part of the
+      // form being submitted in this mode).
+      document.getElementById("variant-top-pricing-wrap").style.display = "none";
+      document.getElementById("prod-mrp").required = false;
+      document.getElementById("prod-price").required = false;
+      document.getElementById("prod-stock").required = false;
+
+      // A color can't itself have other colors — that's parent-only.
       document.getElementById("variants-toggle-wrap").style.display = "none";
-      document.getElementById("variants-section").style.display = "none";
+      document.getElementById("prod-has-variants").checked = false;
+
       document.getElementById("variant-sync-wrap").style.display = p.parentId ? "" : "none";
+
+      // Show the box UI, but scoped to ONLY this one color — no "add a
+      // different color" controls here (that's a parent-level action).
+      document.getElementById("variants-section").style.display = "";
+      document.getElementById("variant-add-color-wrap").style.display = "none";
+      document.getElementById("variants-section-title").textContent = `Sizes for "${p.color || ""}"`;
+      document.getElementById("variants-section-hint").textContent = `Every size below belongs ONLY to "${p.color || ""}" — add, remove, or reprice a size here without touching any other color. Renaming the Color field and saving relabels this whole product (all its sizes) to the new name.`;
+      document.getElementById("prod-variant-color").value = p.color || "";
+      document.getElementById("variant-boxes-container").innerHTML = "";
+      const sameColorDocs = productsList.filter((c) => c.isVariant && c.parentId === p.parentId && (c.color || "") === (p.color || ""));
+      document.getElementById("variant-boxes-container").appendChild(buildColorBox(p.color || "", sameColorDocs));
     } else {
-      document.getElementById("variant-size-wrap").style.display = "none";
-      document.getElementById("variant-color-wrap").style.display = "none";
+      document.getElementById("variant-top-pricing-wrap").style.display = "";
+      document.getElementById("prod-mrp").required = true;
+      document.getElementById("prod-price").required = true;
+      document.getElementById("prod-stock").required = true;
       document.getElementById("variant-sync-wrap").style.display = "none";
       document.getElementById("variants-toggle-wrap").style.display = "";
       document.getElementById("prod-has-variants").checked = !!p.hasVariants;
       document.getElementById("variants-section").style.display = p.hasVariants ? "" : "none";
-      document.getElementById("variant-sizes-input").value = (p.variantAxes && p.variantAxes.sizes) ? p.variantAxes.sizes.join(", ") : "";
-      document.getElementById("variant-colors-input").value = (p.variantAxes && p.variantAxes.colors) ? p.variantAxes.colors.join(", ") : "";
+      document.getElementById("variant-add-color-wrap").style.display = "";
+      document.getElementById("variants-section-title").textContent = "Variants";
+      document.getElementById("variants-section-hint").textContent = "A different COLOR is a different product on the site — each color gets its own box below and its own page. Sizes are NOT separate products: every size lives inside its color's box, with its own stock and (optionally) its own price, so you can add/remove a size or change its price without touching the others.";
+      document.getElementById("variant-sizes-input").value = "";
+      document.getElementById("variant-colors-input").value = "";
       document.getElementById("variant-boxes-container").innerHTML = "";
       if (p.hasVariants) populateVariantBoxesForParent(id);
     }
 
-    document.getElementById("product-form-title").textContent = p.isVariant ? `Edit Variant (${p.size || ""} / ${p.color || ""})` : "Edit Product";
+    document.getElementById("product-form-title").textContent = p.isVariant ? `Edit "${p.color || ""}"` : "Edit Product";
     renderSeoChecklist();
     goToSection("store-add-product");
   }
@@ -1803,9 +1824,16 @@ setTimeout(() => {
 
     const isVariant = document.getElementById("prod-is-variant").value === "1";
     const hasVariants = !isVariant && variantsToggle.checked;
-    const colorBoxes = hasVariants ? Array.from(variantBoxesContainer.children) : [];
-    if (hasVariants) {
-      if (colorBoxes.length === 0) { alert("Add at least one color, or turn off \"This product has variants\"."); return; }
+    // A single color's scoped edit uses the exact same box UI as the
+    // parent's — just with one box in it — so both paths process
+    // `variantBoxesContainer` the same way.
+    const usesColorBoxes = hasVariants || isVariant;
+    const colorBoxes = usesColorBoxes ? Array.from(variantBoxesContainer.children) : [];
+    if (usesColorBoxes) {
+      if (colorBoxes.length === 0) {
+        alert(isVariant ? "Add at least one size, or use Delete Color on the products list to remove this color entirely." : "Add at least one color, or turn off \"This product has variants\".");
+        return;
+      }
       for (const box of colorBoxes) {
         const colorVal = box.querySelector(".vc-color-input").value.trim();
         if (!colorVal) { alert("Every color box needs a color name."); return; }
@@ -1891,24 +1919,31 @@ setTimeout(() => {
         updatedAt: new Date().toISOString()
       };
 
+      const trueParentId = document.getElementById("prod-parent-id").value;
       if (isVariant) {
-        // A variant is a normal product doc PLUS these three fields —
-        // never has its own hasVariants/variantAxes.
+        // A scoped color edit never touches a top-level "products" doc of
+        // its own (pId is just one of several sibling size docs) — the
+        // box loop below handles every size doc directly instead. These
+        // per-doc pricing fields are hidden/unused in this mode; zeroed
+        // here only as a safe fallback if a brand-new size row is left
+        // blank (its own box fields are what actually get saved).
         pData.isVariant = true;
-        pData.parentId = document.getElementById("prod-parent-id").value;
-        pData.size = document.getElementById("prod-variant-size").value.trim();
-        pData.color = document.getElementById("prod-variant-color").value.trim();
+        pData.parentId = trueParentId;
+        pData.mrp = 0; pData.sellingPrice = 0; pData.stock = 0;
+        pData.hsnCode = ""; pData.sourcePlatformUrl = ""; pData.sku = "";
         delete pData.hasVariants;
         delete pData.variantAxes;
       }
 
       let docId = pId;
-      if (pId) {
-        await updateDoc(doc(db, "products", pId), pData);
-      } else {
-        pData.createdAt = new Date().toISOString();
-        const ref = await addDoc(collection(db, "products"), pData);
-        docId = ref.id;
+      if (!isVariant) {
+        if (pId) {
+          await updateDoc(doc(db, "products", pId), pData);
+        } else {
+          pData.createdAt = new Date().toISOString();
+          const ref = await addDoc(collection(db, "products"), pData);
+          docId = ref.id;
+        }
       }
 
       // Create/update one real product doc PER SIZE, grouped by color box.
@@ -1919,15 +1954,26 @@ setTimeout(() => {
       // color (and a fresh variantSlug) onto every size doc in the box,
       // which is what makes "this red product is now called pink" a
       // one-step rename instead of a rebuild.
-      // New rows (no data-existing-id) get a full copy of everything just
-      // saved above, EXCEPT MRP/Sale Price/HSN/Source URL/Stock — those
-      // come from the row itself if filled in, or fall back to a one-time
-      // snapshot of the parent's value if left blank (not a live link —
-      // see the "Auto Sync" button for pulling parent changes in later).
-      // Existing rows only touch fields the admin actually typed
-      // something into, so re-saving the parent never silently wipes a
-      // size's already-configured price/stock.
-      if (hasVariants) {
+      if (usesColorBoxes) {
+        // Shared (non-per-size) fields — applied to every EXISTING size
+        // doc only in "scoped" mode (editing one color directly IS
+        // editing that product's own live fields). In "parent" mode,
+        // existing children are left alone on a plain re-save — that's
+        // what the "Auto Sync" button is for — so a parent edit never
+        // silently overwrites a live child's content.
+        const sharedFields = { ...pData };
+        delete sharedFields.slug;
+        delete sharedFields.hasVariants;
+        delete sharedFields.variantAxes;
+        delete sharedFields.mrp;
+        delete sharedFields.sellingPrice;
+        delete sharedFields.stock;
+        delete sharedFields.hsnCode;
+        delete sharedFields.sourcePlatformUrl;
+        delete sharedFields.sku;
+        delete sharedFields.isVariant;
+        delete sharedFields.parentId;
+
         for (const box of colorBoxes) {
           const colorVal = box.querySelector(".vc-color-input").value.trim();
           const variantSlug = slugifyVariant(colorVal);
@@ -1947,12 +1993,18 @@ setTimeout(() => {
               if (priceVal !== "") patch.sellingPrice = Number(priceVal);
               if (hsnVal !== "") patch.hsnCode = hsnVal;
               if (sourceVal !== "") patch.sourcePlatformUrl = sourceVal;
+              if (isVariant) Object.assign(patch, sharedFields);
               await updateDoc(doc(db, "products", row.dataset.existingId), patch);
             } else {
+              // New rows (no data-existing-id) get a full copy of
+              // everything just saved above, EXCEPT MRP/Sale
+              // Price/HSN/Source URL/Stock — those come from the row
+              // itself if filled in, or fall back to a one-time snapshot
+              // of the shared value if left blank.
               const childData = {
                 ...pData,
                 isVariant: true,
-                parentId: docId,
+                parentId: isVariant ? trueParentId : docId,
                 size, color: colorVal,
                 mrp: mrpVal !== "" ? Number(mrpVal) : pData.mrp,
                 sellingPrice: priceVal !== "" ? Number(priceVal) : pData.sellingPrice,
@@ -2047,13 +2099,11 @@ setTimeout(() => {
       <div class="form-field" style="flex:1 1 110px; margin:0;"><label style="font-size:0.78rem;">Source URL <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="url" class="sr-source" value="${esc(sourceUrl)}" placeholder="parent's"></div>
       <div class="form-field" style="flex:0 0 70px; margin:0;"><label style="font-size:0.78rem;">Stock <span class="required-star">*</span></label><input type="number" class="sr-stock" min="0" value="${stock}"></div>
       <div style="display:flex; gap:4px; margin-bottom:2px;">
-        ${existingDoc ? `<button type="button" class="btn btn-outline sr-advanced-btn" title="Open this size's own full product record (images, SEO, etc.)" style="padding:2px 6px; font-size:0.75rem;">⚙</button>` : ""}
         <button type="button" class="btn btn-outline sr-delete-btn" style="padding:2px 6px; font-size:0.75rem; color:var(--color-danger); border-color:var(--color-danger);">🗑</button>
       </div>
     `;
 
     if (existingDoc) {
-      row.querySelector(".sr-advanced-btn").addEventListener("click", () => editProduct(existingDoc.id));
       row.querySelector(".sr-delete-btn").addEventListener("click", async () => {
         if (!confirm(`Delete the "${size}" size permanently? This cannot be undone.`)) return;
         await deleteDoc(doc(db, "products", existingDoc.id));
@@ -2146,7 +2196,7 @@ setTimeout(() => {
   // so the two entry points can never quietly drift apart.
   function buildVariantSyncPatch(parent) {
     return {
-      title: parent.title, slug: parent.slug, keyphrase: parent.keyphrase, seoTitle: parent.seoTitle, seoDesc: parent.seoDesc,
+      title: parent.title, keyphrase: parent.keyphrase, seoTitle: parent.seoTitle, seoDesc: parent.seoDesc,
       category: parent.category, brand: parent.brand, tags: parent.tags || [],
       shortDescription: parent.shortDescription, description: parent.description,
       deliveryFee: parent.deliveryFee, deliveryPartnerName: parent.deliveryPartnerName, deliveryPartnerImage: parent.deliveryPartnerImage,
@@ -2158,12 +2208,14 @@ setTimeout(() => {
     const parentId = document.getElementById("prod-parent-id").value;
     const parent = productsList.find((p) => p.id === parentId);
     if (!parent) { alert("Can't find the parent product — it may have been deleted."); return; }
-    if (!confirm("Overwrite this variant's Name, Description, Category, Brand, Tags, Delivery info and Images with the parent's current data? Size, Color, MRP, Sale Price, HSN and Source URL are kept as-is.")) return;
+    const color = document.getElementById("prod-variant-color").value;
+    const groupDocs = productsList.filter((c) => c.isVariant && c.parentId === parentId && (c.color || "") === color);
+    if (!confirm(`Overwrite Name, Description, Category, Brand, Tags, Delivery info and Images for ALL ${groupDocs.length} size(s) of "${color}" with the parent's current data? Sizes, prices, HSN and Source URL are kept as-is.`)) return;
 
     const variantId = document.getElementById("prod-id").value;
     const syncPatch = buildVariantSyncPatch(parent);
     try {
-      if (variantId) await updateDoc(doc(db, "products", variantId), syncPatch);
+      for (const d of groupDocs) await updateDoc(doc(db, "products", d.id), syncPatch);
       // Refresh the open form so the admin sees the synced values immediately.
       editProduct(variantId);
       alert("Synced from parent.");

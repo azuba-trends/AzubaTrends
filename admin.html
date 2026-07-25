@@ -461,31 +461,33 @@
             <select id="prod-brand"><option value="">Select Brand</option></select>
           </div>
 
-          <div class="form-field">
-            <label>Regular Price (MRP) ₹ <span class="required-star">*</span></label>
-            <input type="number" id="prod-mrp" min="0" required>
-          </div>
-          <div class="form-field">
-            <label>Sale Price ₹ <span class="required-star">*</span></label>
-            <input type="number" id="prod-price" min="0" required>
-          </div>
+          <div id="variant-top-pricing-wrap">
+            <div class="form-field">
+              <label>Regular Price (MRP) ₹ <span class="required-star">*</span></label>
+              <input type="number" id="prod-mrp" min="0" required>
+            </div>
+            <div class="form-field">
+              <label>Sale Price ₹ <span class="required-star">*</span></label>
+              <input type="number" id="prod-price" min="0" required>
+            </div>
 
-          <div class="form-field">
-            <label>Cost Price ₹ <span class="required-star">*</span> <span class="field-hint" style="display:inline;">(what YOU pay for this — never shown to customers, used to calculate profit in reports)</span></label>
-            <input type="number" id="prod-cost-price" min="0" required>
-          </div>
+            <div class="form-field">
+              <label>Cost Price ₹ <span class="required-star">*</span> <span class="field-hint" style="display:inline;">(what YOU pay for this — never shown to customers, used to calculate profit in reports)</span></label>
+              <input type="number" id="prod-cost-price" min="0" required>
+            </div>
 
-          <div class="form-field">
-            <label>Stock Quantity <span class="required-star">*</span></label>
-            <input type="number" id="prod-stock" min="0" required>
-          </div>
-          <div class="form-field">
-            <label>SKU</label>
-            <input type="text" id="prod-sku">
-          </div>
-          <div class="form-field">
-            <label>HSN Code <span class="field-hint" style="display:inline;">(optional — shown on invoices, GST classification)</span></label>
-            <input type="text" id="prod-hsn">
+            <div class="form-field">
+              <label>Stock Quantity <span class="required-star">*</span></label>
+              <input type="number" id="prod-stock" min="0" required>
+            </div>
+            <div class="form-field">
+              <label>SKU</label>
+              <input type="text" id="prod-sku">
+            </div>
+            <div class="form-field">
+              <label>HSN Code <span class="field-hint" style="display:inline;">(optional — shown on invoices, GST classification)</span></label>
+              <input type="text" id="prod-hsn">
+            </div>
           </div>
 
           <div class="form-field">
@@ -499,15 +501,7 @@
 
           <input type="hidden" id="prod-is-variant" value="">
           <input type="hidden" id="prod-parent-id" value="">
-
-          <div class="form-field" id="variant-size-wrap" style="display:none;">
-            <label>Size</label>
-            <input type="text" id="prod-variant-size">
-          </div>
-          <div class="form-field" id="variant-color-wrap" style="display:none;">
-            <label>Color</label>
-            <input type="text" id="prod-variant-color">
-          </div>
+          <input type="hidden" id="prod-variant-color" value="">
 
           <div class="form-field full-width" id="variants-toggle-wrap">
             <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
@@ -517,9 +511,9 @@
           </div>
 
           <div class="form-field full-width" id="variants-section" style="display:none; border:1px solid var(--color-border,#e2ddd0); border-radius:8px; padding:16px; background:#fafaf7;">
-            <h3 style="margin-top:0;">Variants</h3>
-            <p class="field-hint">A different COLOR is a different product on the site — each color gets its own box below and its own page. Sizes are NOT separate products: every size lives inside its color's box, with its own stock and (optionally) its own price, so you can add/remove a size or change its price without touching the others.</p>
-            <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+            <h3 style="margin-top:0;" id="variants-section-title">Variants</h3>
+            <p class="field-hint" id="variants-section-hint">A different COLOR is a different product on the site — each color gets its own box below and its own page. Sizes are NOT separate products: every size lives inside its color's box, with its own stock and (optionally) its own price, so you can add/remove a size or change its price without touching the others.</p>
+            <div class="form-grid" id="variant-add-color-wrap" style="grid-template-columns: 1fr 1fr; gap: 12px;">
               <div class="form-field">
                 <label>Colors <span class="field-hint" style="display:inline;">(e.g. Red, Green, Blue) — one box per color</span></label>
                 <input type="text" id="variant-colors-input" placeholder="Red, Green, Blue">
@@ -536,7 +530,7 @@
 
           <div class="form-field full-width" id="variant-sync-wrap" style="display:none;">
             <button type="button" class="btn btn-outline" id="variant-auto-sync-btn">🔄 Auto Sync from Parent</button>
-            <p class="field-hint" style="margin-top:6px;">Overwrites this variant's Name, Description, Category, Brand, Tags, Delivery info and Images with whatever the parent product currently has. Its own Size, Color, MRP, Sale Price, HSN and Source URL are left untouched.</p>
+            <p class="field-hint" style="margin-top:6px;">Overwrites this color's Name, Description, Category, Brand, Tags, Delivery info and Images with whatever the parent product currently has. Its own Sizes, prices, HSN and Source URL (all in the Variants box above) are left untouched.</p>
           </div>
 
           <div class="form-field full-width">
