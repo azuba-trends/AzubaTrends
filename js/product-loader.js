@@ -14,7 +14,7 @@ const ProductLoader = (function () {
     const value = Number(margin.value) || 0;
     if (value <= 0) return price;
     const marked = margin.type === "flat" ? price + value : price + (price * value) / 100;
-    return Math.round(marked * 100) / 100;
+    return Math.round(marked);
   }
 
   async function loadAllProducts() {

@@ -3779,7 +3779,7 @@ setTimeout(() => {
     const { type, value } = currentMarginSettings();
     if (!value || value <= 0) return p;
     const marked = type === "flat" ? p + value : p + (p * value) / 100;
-    return Math.round(marked * 100) / 100;
+    return Math.round(marked);
   }
 
   function updateMarginExampleHint() {
