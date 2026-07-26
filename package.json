@@ -3,10 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "AzubaTrends storefront serverless functions",
-  "dependencies": {
-    "firebase-admin": "^12.1.0",
-    "pdfkit": "^0.15.0",
-    "archiver": "^7.0.1"
-  }
+  "description": "AzubaTrends storefront — Cloudflare Pages Functions + Firestore REST",
+  "comment_dependencies": "firebase-admin, pdfkit, and archiver were removed here — none of the migrated code imports them anymore (lib/firestore-rest.js fully replaces firebase-admin; admin-tools.js's invoice/invoice-bulk return 501 pending a rewrite against pdf-lib + fflate, per Worker 3's REPORT.md). Add pdf-lib and fflate as dependencies when that rewrite happens.",
+  "dependencies": {}
 }

@@ -1,4 +1,11 @@
-// api/product-feed.js
+// functions/api/product-feed.js
+//
+// CLOUDFLARE PAGES FUNCTIONS PORT of api/product-feed.js.
+// Output CSV, headers, and behavior are unchanged from the Vercel version
+// — only the data-access layer and request/response plumbing have been
+// swapped. lib/pricing.js itself needed NO changes — applyStoreMargin()
+// is a pure function with no Node/Firebase APIs, so it's carried over
+// as-is.
 //
 // One CSV feed, two destinations: Google Merchant Center (for Google
 // Shopping) and Meta Commerce Manager (for Instagram/Facebook Shop +
@@ -10,11 +17,11 @@
 // price/stock/availability changes show up automatically without anyone
 // having to re-export or re-upload a file manually.
 //
-// Exposed at the clean URL /product-feed.csv via the rewrite in
-// vercel.json.
+// Exposed at the clean URL /product-feed.csv via a rewrite (routing
+// config outside this worker's scope — see the note in api/page.js).
 
-import { getDb } from "../lib/firebase-admin.js";
-import { applyStoreMargin } from "../lib/pricing.js";
+import { getDocs, getDoc } from "../../lib/firestore-rest.js";
+import { applyStoreMargin } from "../../lib/pricing.js";
 
 function csvEscape(value) {
   const str = String(value ?? "");
@@ -24,9 +31,10 @@ function csvEscape(value) {
   return str;
 }
 
-export default async function handler(req, res) {
-  const host = req.headers.host;
-  const baseUrl = `https://${host}`;
+export async function onRequestGet(context) {
+  const { request, env } = context;
+  const url = new URL(request.url);
+  const baseUrl = `${url.protocol}//${url.host}`;
 
   const columns = [
     "id", "title", "description", "link", "image_link",
@@ -36,19 +44,17 @@ export default async function handler(req, res) {
 
   let rows = [];
   try {
-    const db = getDb();
-    const [productsSnap, categoriesSnap, settingsDoc] = await Promise.all([
-      db.collection("products").get(),
-      db.collection("categories").get(),
-      db.collection("settings").doc("store_config").get()
+    const [products, categories, settingsDoc] = await Promise.all([
+      getDocs(env, "products", {}),
+      getDocs(env, "categories", {}),
+      getDoc(env, "settings/store_config")
     ]);
-    const feedSettings = settingsDoc.exists ? settingsDoc.data() : {};
+    const feedSettings = settingsDoc || {};
 
     const categoryNameById = {};
-    categoriesSnap.forEach((doc) => { categoryNameById[doc.id] = doc.data().name || doc.id; });
+    categories.forEach((c) => { categoryNameById[c.id] = c.name || c.id; });
 
-    productsSnap.forEach((doc) => {
-      const p = doc.data();
+    products.forEach((p) => {
       if (p.status !== "active") return; // don't advertise paused/unavailable products
       if (p.hasVariants) return; // parent is a template only, never itself a real orderable item
       if (!p.title || p.sellingPrice === undefined) return; // skip incomplete records rather than submitting a bad row
@@ -74,10 +80,10 @@ export default async function handler(req, res) {
       // to the parent's id for a variant, left blank for a plain product.
       const link = (p.isVariant && p.parentId && p.variantSlug)
         ? `${baseUrl}/products/${encodeURIComponent(p.parentId)}/${encodeURIComponent(p.variantSlug)}`
-        : (p.slug ? `${baseUrl}/products/${encodeURIComponent(p.slug)}` : `${baseUrl}/product.html?id=${encodeURIComponent(doc.id)}`);
+        : (p.slug ? `${baseUrl}/products/${encodeURIComponent(p.slug)}` : `${baseUrl}/product.html?id=${encodeURIComponent(p.id)}`);
 
       rows.push([
-        doc.id,
+        p.id,
         p.title,
         (p.description || p.shortDescription || p.title || "").slice(0, 5000),
         link,
@@ -106,7 +112,11 @@ export default async function handler(req, res) {
     ...rows.map((row) => row.map(csvEscape).join(","))
   ].join("\n");
 
-  res.setHeader("Content-Type", "text/csv; charset=utf-8");
-  res.setHeader("Cache-Control", "public, max-age=3600");
-  return res.status(200).send(csv);
+  return new Response(csv, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Cache-Control": "public, max-age=3600"
+    }
+  });
 }

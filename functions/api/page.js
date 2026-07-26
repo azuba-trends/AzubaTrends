@@ -1,4 +1,9 @@
-// api/page.js
+// functions/api/page.js
+//
+// CLOUDFLARE PAGES FUNCTIONS PORT of api/page.js.
+// Response HTML, headers, and behavior are unchanged from the Vercel
+// version — only the data-access layer (firebase-admin -> firestore-rest)
+// and the request/response plumbing have been swapped.
 //
 // Full server-side rendering for custom Pages (Admin -> Pages -> Add Page).
 // Unlike product.html/blog-post.html (which are static files that fetch
@@ -11,14 +16,21 @@
 // actual page content. No "wait for JS to fill it in" step, no separate
 // preview-only route needed.
 //
-// vercel.json's catch-all rewrite ("/:slug" -> "/api/page") sends any URL
-// that isn't a real file and isn't a more specific route (products/blog/
-// category/etc.) here. Header/footer are still filled in client-side via
-// layout.js's #header-mount/#footer-mount, same as every other page on the
-// site — that keeps the nav in exactly one place (partials/header.html)
-// instead of a second server-side copy that could drift out of sync.
+// ROUTING NOTE FOR THE MANAGER: on Vercel, vercel.json's catch-all rewrite
+// ("/:slug" -> "/api/page") sent any unmatched URL here as a ?slug= query
+// param, which this file still reads the same way. Cloudflare Pages needs
+// an equivalent rewrite (a _routes.json / _redirects entry, or a catch-all
+// functions/[[slug]].js that forwards to this handler) — that routing
+// config is outside lib/firestore-rest.js's contract and outside this
+// worker's assigned files, so it isn't included here; flagging so whoever
+// owns _redirects/_routes.json wires it up.
+//
+// Header/footer are still filled in client-side via layout.js's
+// #header-mount/#footer-mount, same as every other page on the site —
+// that keeps the nav in exactly one place (partials/header.html) instead
+// of a second server-side copy that could drift out of sync.
 
-import { getDb } from "../lib/firebase-admin.js";
+import { getDocs } from "../../lib/firestore-rest.js";
 
 function escapeHtml(str) {
   return String(str ?? "")
@@ -64,30 +76,40 @@ function notFoundHtml() {
   `;
 }
 
-export default async function handler(req, res) {
-  const slugParam = req.query.slug;
-  const slug = Array.isArray(slugParam) ? slugParam[0] : slugParam;
+function htmlResponse(html, status, cacheControl) {
+  const headers = { "Content-Type": "text/html; charset=utf-8" };
+  if (cacheControl) headers["Cache-Control"] = cacheControl;
+  return new Response(html, { status, headers });
+}
+
+export async function onRequestGet(context) {
+  const { request, env } = context;
+  const url = new URL(request.url);
+  const slug = url.searchParams.get("slug");
 
   if (!slug) {
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    return res.status(404).send(notFoundHtml());
+    return htmlResponse(notFoundHtml(), 404);
   }
 
   try {
-    const db = getDb();
-    const snap = await db.collection("pages").where("slug", "==", slug).limit(1).get();
+    // NOTE: the shared contract's getDocs(opts.where) has no `limit`
+    // option, so unlike the original db.collection(...).limit(1).get(),
+    // this fetches every "pages" doc matching slug==slug (normally just
+    // one, since slugs are meant to be unique) and takes the first.
+    // Flagging for the Manager in case a `limit` option gets added to
+    // firestore-rest.js later — worth using here once it exists.
+    const matches = await getDocs(env, "pages", { where: [["slug", "==", slug]] });
+    const page = matches[0];
 
-    if (snap.empty || snap.docs[0].data().status !== "published") {
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-      return res.status(404).send(notFoundHtml());
+    if (!page || page.status !== "published") {
+      return htmlResponse(notFoundHtml(), 404);
     }
 
-    const page = snap.docs[0].data();
     const title = escapeHtml(page.metaTitle || page.heading);
     const description = escapeHtml(page.metaDesc || "");
     const heading = escapeHtml(page.heading || "");
     const image = page.image || "";
-    const url = `https://azuba-trends.vercel.app/${encodeURIComponent(slug)}`;
+    const pageUrl = `https://azuba-trends.vercel.app/${encodeURIComponent(slug)}`;
     // page.content comes only from the admin's own rich-text editor
     // (Admin -> Pages), never from public/user input, so it's trusted the
     // same way product/blog HTML content already is elsewhere in this app.
@@ -98,7 +120,7 @@ export default async function handler(req, res) {
       "@type": "WebPage",
       name: page.heading,
       description: page.metaDesc || undefined,
-      url,
+      url: pageUrl,
       isPartOf: { "@type": "WebSite", name: "AzubaTrends", url: "https://azuba-trends.vercel.app/" }
     };
 
@@ -113,12 +135,12 @@ export default async function handler(req, res) {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>${title} — AzubaTrends</title>
       <meta name="description" content="${description}">
-      <link rel="canonical" href="${url}">
+      <link rel="canonical" href="${pageUrl}">
       <meta property="og:type" content="website">
       <meta property="og:title" content="${title}">
       <meta property="og:description" content="${description}">
       ${image ? `<meta property="og:image" content="${escapeHtml(image)}">` : ""}
-      <meta property="og:url" content="${url}">
+      <meta property="og:url" content="${pageUrl}">
       <meta property="og:site_name" content="AzubaTrends">
       <meta name="twitter:card" content="summary_large_image">
       <meta name="twitter:title" content="${title}">
@@ -157,14 +179,11 @@ export default async function handler(req, res) {
       </html>
     `;
 
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
     // Short cache — an admin's SEO/content edit shows up within about a
     // minute, without needing a redeploy (same reasoning as api/share.js).
-    res.setHeader("Cache-Control", "public, s-maxage=60, stale-while-revalidate=30");
-    return res.status(200).send(html);
+    return htmlResponse(html, 200, "public, s-maxage=60, stale-while-revalidate=30");
   } catch (error) {
     console.error("api/page failed:", error);
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    return res.status(500).send(notFoundHtml());
+    return htmlResponse(notFoundHtml(), 500);
   }
 }

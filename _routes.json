@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "include": ["/*"],
+  "exclude": [
+    "/css/*",
+    "/js/*",
+    "/images/*",
+    "/config/*",
+    "/partials/*",
+    "/favicon.ico",
+    "/robots.txt",
+    "/firestore.rules"
+  ]
+}

@@ -1,4 +1,4 @@
-// api/telegram.js
+// functions/api/telegram.js
 //
 // MERGED FILE (2026-07-22) — this used to be two separate files,
 // api/telegram-notify.js and api/telegram-test.js. Vercel's Hobby (free)
@@ -8,6 +8,13 @@
 // the Hobby plan." Merging these two into one file (they already shared
 // the same auth check and are both small) brings the count back to 12
 // without losing any feature or changing behavior. See CHANGELOG-updates.md.
+//
+// NOTE ON CLOUDFLARE MIGRATION: Cloudflare Pages Functions don't have the
+// Vercel Hobby 12-function cap that motivated this merge in the first
+// place, so the merge is no longer strictly necessary for that reason —
+// but it's kept as-is here since splitting it back into two files is a
+// separate, non-urgent cleanup the Manager can decide on later. Both
+// behaviors still dispatch off the same POST /api/telegram route.
 //
 // Both original responsibilities are preserved below, dispatched by which
 // field is present in the request body:
@@ -37,61 +44,66 @@
 //   - "Test": sends a real test message to a given chat ID right now.
 //
 // This operates ONLY on whatever token/chatId the admin has typed into the
-// form (not yet saved to Firestore), so it does NOT need the service
-// account — it's a thin, direct proxy to the Telegram Bot API. It's
-// server-side (not a direct browser fetch to api.telegram.org) so it isn't
-// at the mercy of Telegram's CORS behavior, and to avoid putting the bot
-// token in a client-side network request the browser's dev tools would log
-// under a third-party domain.
+// form (not yet saved to Firestore), so it does NOT need Firestore at all —
+// it's a thin, direct proxy to the Telegram Bot API. It's server-side (not
+// a direct browser fetch to api.telegram.org) so it isn't at the mercy of
+// Telegram's CORS behavior, and to avoid putting the bot token in a
+// client-side network request the browser's dev tools would log under a
+// third-party domain.
 
-import { getDb } from "../lib/firebase-admin.js";
-import { dispatchTelegramEvent } from "../lib/telegram.js";
+import { dispatchTelegramEvent } from "../../lib/telegram.js";
 
-async function handleNotify(req, res) {
-  const { event, data } = req.body || {};
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json" }
+  });
+}
+
+async function handleNotify(env, body) {
+  const { event, data } = body || {};
   if (!event || typeof event !== "string") {
-    return res.status(400).json({ error: "Missing 'event' field." });
+    return json({ error: "Missing 'event' field." }, 400);
   }
 
   try {
-    const db = getDb();
-    const results = await dispatchTelegramEvent(db, event, data || {});
-    return res.status(200).json({ ok: true, results });
+    const results = await dispatchTelegramEvent(env, event, data || {});
+    return json({ ok: true, results });
   } catch (err) {
     // Telegram/Firestore trouble should never look like a hard failure to
     // whatever called this (reviews.js, admin.js) — they don't need to
     // handle this as an error, just note it didn't send.
     console.error("telegram notify failed:", err.message);
-    return res.status(200).json({ ok: false, error: err.message });
+    return json({ ok: false, error: err.message });
   }
 }
 
-async function handleTest(req, res) {
-  const { action, token, chatId, storeName } = req.body || {};
-  if (!token) return res.status(400).json({ error: "Missing bot token." });
+async function handleTest(body) {
+  const { action, token, chatId, storeName } = body || {};
+  if (!token) return json({ error: "Missing bot token." }, 400);
 
   try {
     if (action === "fetchChatId") {
       const r = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=5`);
       const data = await r.json();
       if (!data.ok) {
-        return res.status(400).json({ error: data.description || "Telegram rejected this token." });
+        return json({ error: data.description || "Telegram rejected this token." }, 400);
       }
       const updates = data.result || [];
       if (updates.length === 0) {
-        return res.status(200).json({
+        return json({
           ok: false,
           error: "No recent messages found. Add the bot to your group/chat, send any message there, then try Fetch again."
         });
       }
       const last = updates[updates.length - 1];
       const chat = (last.message && last.message.chat) || (last.channel_post && last.channel_post.chat);
-      if (!chat) return res.status(200).json({ ok: false, error: "Couldn't find a chat in the recent messages." });
-      return res.status(200).json({ ok: true, chatId: chat.id, chatTitle: chat.title || chat.username || chat.first_name || "" });
+      if (!chat) return json({ ok: false, error: "Couldn't find a chat in the recent messages." });
+      return json({ ok: true, chatId: chat.id, chatTitle: chat.title || chat.username || chat.first_name || "" });
     }
 
     if (action === "test") {
-      if (!chatId) return res.status(400).json({ error: "Missing chat ID to send the test message to." });
+      if (!chatId) return json({ error: "Missing chat ID to send the test message to." }, 400);
       const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -102,30 +114,39 @@ async function handleTest(req, res) {
         })
       });
       const data = await r.json();
-      if (!data.ok) return res.status(400).json({ error: data.description || "Telegram rejected this request." });
-      return res.status(200).json({ ok: true });
+      if (!data.ok) return json({ error: data.description || "Telegram rejected this request." }, 400);
+      return json({ ok: true });
     }
 
-    return res.status(400).json({ error: "Unknown action — expected 'fetchChatId' or 'test'." });
+    return json({ error: "Unknown action — expected 'fetchChatId' or 'test'." }, 400);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: "Could not reach Telegram. Please try again." });
+    return json({ error: "Could not reach Telegram. Please try again." }, 500);
   }
 }
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
-    return res.status(405).json({ error: "Method not allowed" });
+export async function onRequestPost(context) {
+  const { request, env } = context;
+
+  const apiKey = request.headers.get("x-api-key");
+  if (!env.TELEGRAM_NOTIFY_API_KEY || apiKey !== env.TELEGRAM_NOTIFY_API_KEY) {
+    return json({ error: "Invalid or missing API key." }, 401);
   }
 
-  const apiKey = req.headers["x-api-key"];
-  if (!process.env.TELEGRAM_NOTIFY_API_KEY || apiKey !== process.env.TELEGRAM_NOTIFY_API_KEY) {
-    return res.status(401).json({ error: "Invalid or missing API key." });
+  let body;
+  try {
+    body = await request.json();
+  } catch (err) {
+    return json({ error: "Invalid JSON body." }, 400);
   }
 
-  const body = req.body || {};
-  if (body.event) return handleNotify(req, res);
-  if (body.action) return handleTest(req, res);
-  return res.status(400).json({ error: "Request body must include either 'event' (notify) or 'action' (fetchChatId/test)." });
+  if (body.event) return handleNotify(env, body);
+  if (body.action) return handleTest(body);
+  return json({ error: "Request body must include either 'event' (notify) or 'action' (fetchChatId/test)." }, 400);
 }
+
+// Only onRequestPost is exported. Cloudflare Pages Functions automatically
+// return 405 Method Not Allowed for any HTTP method that doesn't have a
+// matching onRequest* export on this route, which reproduces the Vercel
+// handler's explicit `res.status(405)` for non-POST requests without extra
+// code here.
