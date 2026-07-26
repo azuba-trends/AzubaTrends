@@ -9,6 +9,18 @@
     "/partials/*",
     "/favicon.ico",
     "/robots.txt",
-    "/firestore.rules"
+    "/firestore.rules",
+    "/about",
+    "/admin",
+    "/blog",
+    "/blog-post",
+    "/cart",
+    "/category",
+    "/checkout",
+    "/product",
+    "/search",
+    "/terms",
+    "/product-import-tester",
+    "/share-preview-tester"
   ]
 }
