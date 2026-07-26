@@ -1195,6 +1195,7 @@ setTimeout(() => {
   document.getElementById("prod-name").addEventListener("input", (e) => {
     document.getElementById("prod-slug").value = generateSlug(e.target.value);
     renderSeoChecklist();
+    refreshVariantSlugPreviews();
   });
 
   // Lightweight Yoast-style checklist: purely a writing aid for the admin —
@@ -1745,7 +1746,10 @@ setTimeout(() => {
     document.getElementById("prod-gallery-preview").innerHTML = "";
     document.getElementById("prod-id").value = id;
     document.getElementById("prod-name").value = p.title || "";
-    document.getElementById("prod-slug").value = p.slug || "";
+    // Variants never store `slug` (only `variantSlug` — see save logic
+    // below), so show that instead here, or the field would just look
+    // blank/broken while editing a color.
+    document.getElementById("prod-slug").value = p.isVariant ? (p.variantSlug || "") : (p.slug || "");
     document.getElementById("prod-keyphrase").value = p.keyphrase || "";
     document.getElementById("prod-seo-title").value = p.seoTitle || "";
     document.getElementById("prod-seo-desc").value = p.seoDesc || "";
@@ -1829,6 +1833,7 @@ setTimeout(() => {
       document.getElementById("variant-boxes-container").innerHTML = "";
       const sameColorDocs = productsList.filter((c) => c.isVariant && c.parentId === p.parentId && (c.color || "") === (p.color || ""));
       document.getElementById("variant-boxes-container").appendChild(buildColorBox(p.color || "", sameColorDocs));
+      refreshVariantSlugPreviews();
     } else {
       document.getElementById("variant-top-pricing-wrap").style.display = "";
       document.getElementById("prod-mrp").required = false;
@@ -1865,6 +1870,42 @@ setTimeout(() => {
     let n = 2;
     while (taken.has(`${baseSlug}-${n}`)) n++;
     return `${baseSlug}-${n}`;
+  }
+
+  // Picks a variant's URL slug. Same idea as ensureUniqueSlug() above, but
+  // in three steps instead of two:
+  //   1) the product's own title-slug, unchanged — so the FIRST color saved
+  //      for a product gets the exact same clean URL a normal product would.
+  //   2) title-slug + "-" + color-slug — used for every color after that,
+  //      since they'd otherwise all collide on the same title-slug.
+  //   3) title-slug + "-" + color-slug + "-2", "-3"... — only needed if two
+  //      boxes resolve to the literal same color name, which should be rare
+  //      since color names are normally distinct within one product.
+  function pickVariantSlug(titleSlug, colorSlug, usedSlugs) {
+    if (titleSlug && !usedSlugs.has(titleSlug)) return titleSlug;
+    const withColor = colorSlug ? `${titleSlug}-${colorSlug}` : titleSlug;
+    if (!usedSlugs.has(withColor)) return withColor;
+    let n = 2;
+    while (usedSlugs.has(`${withColor}-${n}`)) n++;
+    return `${withColor}-${n}`;
+  }
+
+  // Live preview only — recomputes what each open color box's slug WOULD
+  // be right now, using only what's on screen (title field + every color
+  // box currently open), so the admin sees the real URL shape as they
+  // type. The actual save (handleProductSave) re-derives this for real
+  // against Firestore siblings, which is the authoritative version.
+  function refreshVariantSlugPreviews() {
+    const titleSlug = generateSlug(document.getElementById("prod-name").value || "");
+    const boxes = Array.from(variantBoxesContainer.children);
+    const usedSlugs = new Set();
+    boxes.forEach((box) => {
+      const colorVal = (box.querySelector(".vc-color-input") || {}).value || "";
+      const preview = pickVariantSlug(titleSlug, generateSlug(colorVal), usedSlugs);
+      usedSlugs.add(preview);
+      const previewEl = box.querySelector(".vc-slug-preview");
+      if (previewEl) previewEl.textContent = "URL: /products/" + (document.getElementById("prod-parent-id").value || "…") + "/" + (preview || "…");
+    });
   }
 
   async function toggleProductStatus(id, currentStatus) {
@@ -2051,9 +2092,33 @@ setTimeout(() => {
         delete sharedFields.isVariant;
         delete sharedFields.parentId;
 
+        // Every variant's slug STARTS as the product's own title-slug —
+        // exactly the same URL a normal product would get. Only once
+        // that's already taken by a sibling (i.e. every color after the
+        // first one saved for this product) does the color name get
+        // appended, and only if THAT still collides (two boxes with the
+        // literal same color name) does a "-2" / "-3" counter kick in.
+        // See pickVariantSlug()/ensureUniqueSlug() above for the same
+        // pattern used by normal product slugs.
+        const actualParentId = isVariant ? trueParentId : docId;
+        const titleSlug = generateSlug(title);
+        const excludeIds = new Set();
+        for (const box of colorBoxes) {
+          for (const row of Array.from(box.querySelectorAll(".size-row"))) {
+            if (row.dataset.existingId) excludeIds.add(row.dataset.existingId);
+          }
+        }
+        const usedVariantSlugs = new Set(
+          productsList
+            .filter((p) => p.isVariant && p.parentId === actualParentId && !excludeIds.has(p.id))
+            .map((p) => p.variantSlug)
+            .filter(Boolean)
+        );
+
         for (const box of colorBoxes) {
           const colorVal = box.querySelector(".vc-color-input").value.trim();
-          const variantSlug = slugifyVariant(colorVal);
+          const variantSlug = pickVariantSlug(titleSlug, generateSlug(colorVal), usedVariantSlugs);
+          usedVariantSlugs.add(variantSlug);
           const rows = Array.from(box.querySelectorAll(".size-row"));
 
           for (const row of rows) {
@@ -2244,6 +2309,7 @@ setTimeout(() => {
           <button type="button" class="btn btn-outline vc-remove-color-btn" style="padding:2px 8px; font-size:0.78rem; color:var(--color-danger); border-color:var(--color-danger);">${existingDocs.length ? "🗑 Delete Color" : "Remove"}</button>
         </div>
       </div>
+      <div class="vc-slug-preview field-hint" style="margin:2px 0 8px; font-family:monospace; font-size:0.75rem; color:var(--color-text-muted,#888); word-break:break-all;"></div>
       <div class="vc-size-rows"></div>
     `;
 
@@ -2253,6 +2319,16 @@ setTimeout(() => {
     } else {
       (defaultSizes && defaultSizes.length ? defaultSizes : [""]).forEach((s) => rowsWrap.appendChild(buildSizeRow(s, null)));
     }
+
+    // If this box already belongs to a saved variant, show its REAL
+    // stored slug immediately (not a guess) until the admin edits
+    // something — then it switches to the live-computed preview, same
+    // as every other box.
+    const savedSlug = existingDocs.length && existingDocs[0].variantSlug;
+    const previewEl = box.querySelector(".vc-slug-preview");
+    if (savedSlug) previewEl.textContent = "Current URL: /products/" + (existingDocs[0].parentId || "…") + "/" + savedSlug;
+
+    box.querySelector(".vc-color-input").addEventListener("input", refreshVariantSlugPreviews);
 
     box.querySelector(".vc-add-size-btn").addEventListener("click", () => {
       rowsWrap.appendChild(buildSizeRow("", null));
@@ -2264,6 +2340,7 @@ setTimeout(() => {
         for (const d of existingDocs) await deleteDoc(doc(db, "products", d.id));
       }
       box.remove();
+      refreshVariantSlugPreviews();
     });
 
     return box;
@@ -2282,6 +2359,7 @@ setTimeout(() => {
       variantBoxesContainer.appendChild(buildColorBox(color, [], defaultSizes));
       existingColors.add(color.toLowerCase());
     });
+    refreshVariantSlugPreviews();
   });
 
   function populateVariantBoxesForParent(parentId) {
@@ -2294,6 +2372,7 @@ setTimeout(() => {
       byColor.get(key).push(c);
     });
     byColor.forEach((docs, color) => variantBoxesContainer.appendChild(buildColorBox(color, docs)));
+    refreshVariantSlugPreviews();
   }
 
   // Shared by the "🔄 Auto Sync from Parent" button inside Edit (below)
