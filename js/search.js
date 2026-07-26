@@ -42,16 +42,33 @@
     return escapedTitle.replace(re, "<mark>$1</mark>");
   }
 
+  function stripHtml(html) {
+    if (!html) return "";
+    // Plain string strip (no DOM parser needed) — good enough for search
+    // indexing purposes, doesn't need to be perfect HTML parsing.
+    return String(html).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  }
+
   async function ensureIndex() {
     if (fuseIndex) return fuseIndex;
     allProducts = await ProductLoader.loadAllProducts();
-    fuseIndex = new Fuse(allProducts, {
+    // Precompute plain-text search fields once (not stored back onto the
+    // product objects used elsewhere — just for this index) so Fuse never
+    // has to match against raw HTML tags from the rich-text editor.
+    const indexable = allProducts.map((p) => ({
+      ...p,
+      searchDescription: stripHtml(p.description) + " " + stripHtml(p.shortDescription)
+    }));
+    fuseIndex = new Fuse(indexable, {
       keys: [
-        { name: "title", weight: 0.5 },
-        { name: "tags", weight: 0.3 },
-        { name: "category", weight: 0.2 },
-        { name: "color", weight: 0.15 },
-        { name: "size", weight: 0.1 }
+        { name: "title", weight: 0.4 },
+        { name: "brand", weight: 0.25 },
+        { name: "tags", weight: 0.2 },
+        { name: "category", weight: 0.15 },
+        { name: "keyphrase", weight: 0.15 },
+        { name: "searchDescription", weight: 0.1 },
+        { name: "color", weight: 0.1 },
+        { name: "size", weight: 0.05 }
       ],
       threshold: 0.38, // permissive enough for real typos, not so loose it's noisy
       ignoreLocation: true,
@@ -67,9 +84,9 @@
    * Fuse's own ranking is preserved within each of those two groups.
    */
   function rankedSearch(query) {
-    const results = fuseIndex.search(query, { limit: MAX_SUGGESTIONS * 3 });
-    const items = results.map((r) => r.item);
-    return ProductLoader.sortByStock(items).slice(0, MAX_SUGGESTIONS);
+    const results = fuseIndex.search(query);
+    const items = ProductLoader.sortByStock(ProductLoader.dedupeVariantGroups(results.map((r) => r.item)));
+    return { top: items.slice(0, MAX_SUGGESTIONS), total: items.length };
   }
 
   function buildSuggestionRow(product, rawQuery) {
@@ -94,7 +111,7 @@
 
     const sub = document.createElement("div");
     sub.className = "search-suggestion__sub";
-    const variantLabel = (product.size || product.color) ? `${[product.size, product.color].filter(Boolean).join("/")} · ` : "";
+    const variantLabel = product.color ? `${product.color} · ` : "";
     sub.textContent = product.stock === 0
       ? `${variantLabel}${product.category || ""} · Out of stock`
       : `${variantLabel}${product.category || ""} · ${ProductLoader.formatPrice(product.sellingPrice)}`;
@@ -113,7 +130,13 @@
     if (!input || !dropdown) return;
 
     let currentMatches = [];
+    let currentTotal = 0;
+    let currentQuery = "";
     let highlightedIndex = -1;
+
+    function goToResultsPage(query) {
+      window.location.href = `/search.html?q=${encodeURIComponent(query)}`;
+    }
 
     function closeDropdown() {
       dropdown.hidden = true;
@@ -133,6 +156,13 @@
       currentMatches.forEach((product) => {
         dropdown.appendChild(buildSuggestionRow(product, query));
       });
+      if (currentTotal > 0) {
+        const seeAll = document.createElement("a");
+        seeAll.href = `/search.html?q=${encodeURIComponent(query)}`;
+        seeAll.className = "search-see-all";
+        seeAll.textContent = `See all ${currentTotal} result${currentTotal === 1 ? "" : "s"} for "${query}"`;
+        dropdown.appendChild(seeAll);
+      }
       dropdown.hidden = false;
     }
 
@@ -142,8 +172,11 @@
         return;
       }
       await ensureIndex();
-      currentMatches = rankedSearch(query.trim());
-      renderDropdown(query.trim());
+      currentQuery = query.trim();
+      const { top, total } = rankedSearch(currentQuery);
+      currentMatches = top;
+      currentTotal = total;
+      renderDropdown(currentQuery);
     }, DEBOUNCE_MS);
 
     input.addEventListener("input", (e) => runSearch(e.target.value));
@@ -154,7 +187,9 @@
       }
     });
 
-    // Keyboard navigation through suggestions
+    // Keyboard navigation through suggestions (product rows only — the
+    // "See all results" link at the bottom isn't part of this list, it's
+    // reached with a normal Tab/click same as any other link).
     input.addEventListener("keydown", (e) => {
       const rows = Array.from(dropdown.querySelectorAll(".search-suggestion"));
       if (dropdown.hidden || rows.length === 0) return;
@@ -170,8 +205,14 @@
         return;
       } else if (e.key === "Enter") {
         e.preventDefault();
-        const target = highlightedIndex >= 0 ? rows[highlightedIndex] : rows[0];
-        if (target) window.location.href = target.getAttribute("href");
+        // A specific suggestion highlighted via arrow keys -> go straight
+        // there. Otherwise -> full search results page, not just "guess
+        // the first match" like before.
+        if (highlightedIndex >= 0 && rows[highlightedIndex]) {
+          window.location.href = rows[highlightedIndex].getAttribute("href");
+        } else if (currentQuery) {
+          goToResultsPage(currentQuery);
+        }
         return;
       } else {
         return;
@@ -184,8 +225,8 @@
     if (form) {
       form.addEventListener("submit", (e) => {
         e.preventDefault();
-        const rows = Array.from(dropdown.querySelectorAll(".search-suggestion"));
-        if (rows[0]) window.location.href = rows[0].getAttribute("href");
+        const query = input.value.trim();
+        if (query.length >= 2) goToResultsPage(query);
       });
     }
 
@@ -201,4 +242,20 @@
   window.addEventListener("layout:ready", () => {
     document.querySelectorAll(".search-wrap").forEach(wireSearchBar);
   });
+
+  // Used by search.html to get the FULL (not top-8) match list for the
+  // real results page/grid — same Fuse index this file already builds
+  // for the header dropdown, so there's only one search implementation.
+  window.SiteSearch = {
+    async fullResults(query) {
+      if (!query || query.trim().length < 2) return [];
+      await ensureIndex();
+      return fullSearchAll(query.trim());
+    }
+  };
+
+  function fullSearchAll(query) {
+    const results = fuseIndex.search(query);
+    return ProductLoader.sortByStock(ProductLoader.dedupeVariantGroups(results.map((r) => r.item)));
+  }
 })();

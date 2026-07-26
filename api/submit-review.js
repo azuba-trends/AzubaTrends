@@ -8,6 +8,7 @@
 // Firestore directly.
 
 import { getDb } from "../lib/firebase-admin.js";
+import { FieldValue } from "firebase-admin/firestore";
 import { containsProfanity, validateCommentLength, checkAndIncrementRateLimit } from "../lib/submit-review-guard.js";
 import { dispatchTelegramEvent } from "../lib/telegram.js";
 
@@ -32,7 +33,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { productId, rating, comment, imageUrl, website } = req.body || {};
+    const { productId, rating, comment, imageUrl, imageUrls, website } = req.body || {};
 
     // Honeypot — a real visitor never fills this field in. Silently
     // "succeed" (don't tip off a bot that it was caught) rather than
@@ -66,6 +67,19 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Invalid image." });
     }
 
+    // Up to 5 photos per review (matches the "+" image picker in the
+    // review form on product.html). imageUrl (singular) is kept working
+    // too, for any older client still sending just one.
+    let cleanImageUrls = [];
+    if (imageUrls !== undefined) {
+      if (!Array.isArray(imageUrls) || imageUrls.some((u) => typeof u !== "string")) {
+        return res.status(400).json({ error: "Invalid images." });
+      }
+      cleanImageUrls = imageUrls.filter(Boolean).slice(0, 5);
+    } else if (imageUrl) {
+      cleanImageUrls = [imageUrl];
+    }
+
     // Rate limit — per IP, per day.
     const ip = getClientIp(req);
     const { allowed } = await checkAndIncrementRateLimit(db, ip);
@@ -77,22 +91,35 @@ export default async function handler(req, res) {
       productId,
       rating: ratingNum,
       comment: trimmedComment,
-      imageUrl: imageUrl || null,
+      imageUrl: cleanImageUrls[0] || null, // kept for older readers of this field
+      imageUrls: cleanImageUrls,
       authorLabel: "Guest", // placeholder — replaced right below with a unique tag
       date: new Date().toISOString()
     };
 
-    const docRef = await db.collection("reviews").add(review);
-
-    // Give this reviewer a unique, stable display label ("Guest #A1B2")
-    // instead of every review just saying "Guest" — derived from the
-    // Firestore document's own ID, so two reviewers never collide.
+    // Pre-generate the doc ID locally (no network round-trip) so the
+    // "Guest #XXXX" author tag can be baked into the SAME write instead
+    // of needing a second sequential .update() afterwards — this was
+    // one of the extra round-trips making review submission feel slow.
+    const docRef = db.collection("reviews").doc();
     const guestTag = docRef.id.replace(/[^a-zA-Z0-9]/g, "").slice(-4).toUpperCase();
     review.authorLabel = `Guest #${guestTag}`;
-    await docRef.update({ authorLabel: review.authorLabel });
+    await docRef.set(review);
 
-    // Best-effort Telegram alert — never blocks or fails the review, which
-    // already saved successfully above.
+    // Keep the product's displayed rating (shown on every card site-wide)
+    // in sync — atomic increment, no read-before-write needed, so this
+    // doesn't add a round-trip to the critical path.
+    db.collection("products").doc(productId)
+      .update({ ratingSum: FieldValue.increment(ratingNum), ratingCount: FieldValue.increment(1) })
+      .catch((err) => console.error("Rating aggregate update failed (non-fatal):", err.message));
+
+    // Everything below is best-effort (product title for the Telegram
+    // message, then the Telegram alert itself) — the review is already
+    // safely saved above, so none of this can ever cause the review to
+    // be lost. dispatchTelegramEvent() also now sends to every bot in
+    // parallel instead of one-after-another (see lib/telegram.js), which
+    // was the single biggest source of the multi-second delay customers
+    // were seeing after tapping Submit.
     let productTitle = productId;
     try {
       const productDoc = await db.collection("products").doc(productId).get();

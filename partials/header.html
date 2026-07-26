@@ -18,7 +18,21 @@
       <a href="/category" data-page="category.html">Categories</a>
       <a href="/about" data-page="about.html">About</a>
       <a href="/blog" data-page="blog.html">Blog</a>
-      <a href="/terms" data-page="terms.html">Terms</a>
+
+      <div class="site-nav__dropdown" id="policies-dropdown">
+        <button type="button" class="site-nav__dropdown-trigger" id="policies-dropdown-trigger" aria-haspopup="true" aria-expanded="false">
+          Policies
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="site-nav__dropdown-caret"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="site-nav__dropdown-panel" role="menu">
+          <a href="/terms" role="menuitem">Terms &amp; Conditions</a>
+          <a href="/terms#delivery-area" role="menuitem">Delivery Area</a>
+          <a href="/terms#returns" role="menuitem">Returns &amp; Refunds</a>
+          <a href="/terms#reviews-policy" role="menuitem">Reviews Policy</a>
+        </div>
+      </div>
+
+      <a href="#" id="become-seller-link">Become a Seller</a>
     </nav>
 
     <!-- FIXED: Link to cart.html -->

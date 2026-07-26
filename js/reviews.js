@@ -1,29 +1,46 @@
 /**
  * reviews.js
  * ------------------------------------------------------------------
- * Star-rating input + review form + review list for product.html.
+ * Star-rating input + review form + review list for product.html,
+ * redesigned to match Meesho's product-page reviews pattern:
+ *   - a rating summary card (average score + Excellent/Very Good/Good/
+ *     Average/Poor bars, like Meesho's breakdown)
+ *   - only the first couple of reviews shown inline on the page
+ *   - a "View all reviews" button that opens a scrollable right-side
+ *     drawer (full width on small screens) with its own "View more"
+ *     pagination, rather than dumping every review onto the page or
+ *     into the drawer at once
+ *   - a review form whose photo picker is a "+" button inside the
+ *     comment box (opens a small popover -> "Add images" -> file
+ *     picker), with selected photos previewed as removable thumbnails
+ *     underneath, and up to 5 photos per review
  *
- * ---- Now backed by Firestore, not localStorage --------------------
- * Earlier versions of this file stored reviews in the visitor's own
- * browser (localStorage), which meant a review was only ever visible
- * on the device that wrote it. This version writes to the `reviews`
- * collection in Firestore instead, the same pattern already used for
- * products/categories/coupons: guests can read and create, only the
- * admin can edit or delete (see firestore.rules). That means every
- * review is now visible to every visitor, in real time, on any device.
- *
- * A review photo, if attached, is uploaded to ImgBB (same service the
- * admin panel already uses for product images) and only the resulting
- * URL is stored in Firestore — never a base64 blob — because a single
- * Firestore document has a 1MB size limit and storing images inline
- * would blow through that after a handful of reviews.
+ * ---- Backed by Firestore, not localStorage --------------------
+ * Reviews live in the `reviews` collection in Firestore (guests can
+ * read/create, only admin can edit/delete — see firestore.rules), so
+ * every review is visible to every visitor, in real time, on any
+ * device. Photos are uploaded to ImgBB (same service the admin panel
+ * uses for product images) and only the resulting URLs are stored —
+ * never a base64 blob — since a single Firestore document has a 1MB
+ * size limit.
  * ------------------------------------------------------------------
  */
 
 const Reviews = (function () {
   const FIRESTORE_SDK = 'https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js';
-  const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2MB
+  const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2MB per photo
+  const MAX_IMAGES = 5; // per review
   const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+  const PAGE_PREVIEW_COUNT = 2; // reviews shown inline on the page before "View all"
+  const DRAWER_BATCH_SIZE = 5;  // reviews per "View more" batch inside the drawer
+
+  const TIER_LABELS = [
+    { stars: 5, label: "Excellent", tier: "excellent" },
+    { stars: 4, label: "Very Good", tier: "verygood" },
+    { stars: 3, label: "Good", tier: "good" },
+    { stars: 2, label: "Average", tier: "average" },
+    { stars: 1, label: "Poor", tier: "poor" }
+  ];
 
   async function waitForDb() {
     if (window.SITE_CONFIG_READY) {
@@ -59,6 +76,24 @@ const Reviews = (function () {
     return { average: sum / list.length, count: list.length };
   }
 
+  function tierForRating(rating) {
+    const r = Math.round(Number(rating) || 0);
+    if (r >= 5) return "excellent";
+    if (r === 4) return "verygood";
+    if (r === 3) return "good";
+    if (r === 2) return "average";
+    return "poor";
+  }
+
+  // Maps a rating tier to the same red/orange/green scale used
+  // elsewhere on the site (oos-pill = danger, low-stock-pill = accent).
+  function badgeTierClass(tier) {
+    if (tier === "excellent" || tier === "verygood") return "good"; // green badge (CSS default)
+    if (tier === "good") return "good";
+    if (tier === "average") return "good";
+    return "poor";
+  }
+
   function renderStars(container, value, max = 5) {
     container.innerHTML = "";
     container.className = "stars";
@@ -82,7 +117,7 @@ const Reviews = (function () {
       return "Please upload a JPG, PNG, or WEBP image.";
     }
     if (file.size > MAX_IMAGE_BYTES) {
-      return "Image is too large — please keep it under 2MB.";
+      return "Each image must be under 2MB.";
     }
     return null;
   }
@@ -109,58 +144,72 @@ const Reviews = (function () {
     }
   }
 
-  function renderReviewList(container, list) {
-    container.innerHTML = "";
+  function reviewImages(review) {
+    if (Array.isArray(review.imageUrls) && review.imageUrls.length > 0) return review.imageUrls;
+    if (review.imageUrl) return [review.imageUrl];
+    return [];
+  }
 
+  function buildReviewItem(review) {
+    const item = document.createElement("div");
+    item.className = "review-item";
+
+    const head = document.createElement("div");
+    head.className = "review-item__head";
+
+    const badge = document.createElement("span");
+    badge.className = "review-item__rating-badge";
+    badge.dataset.tier = badgeTierClass(tierForRating(review.rating));
+    badge.textContent = `${Number(review.rating || 0).toFixed(1)} ★`;
+
+    const author = document.createElement("span");
+    author.className = "review-item__author";
+    Security.setTextSafely(author, review.authorLabel || "Guest");
+
+    const date = document.createElement("span");
+    date.className = "review-item__date";
+    date.textContent = "Posted on " + formatDate(review.date);
+
+    head.appendChild(badge);
+    head.appendChild(author);
+    head.appendChild(date);
+
+    const comment = document.createElement("p");
+    comment.className = "review-item__comment";
+    Security.setTextSafely(comment, review.comment);
+
+    item.appendChild(head);
+    item.appendChild(comment);
+
+    const imgs = reviewImages(review);
+    if (imgs.length > 0) {
+      const imagesRow = document.createElement("div");
+      imagesRow.className = "review-item__images";
+      imgs.forEach((url) => {
+        const img = document.createElement("img");
+        img.className = "review-item__image";
+        img.src = url;
+        img.loading = "lazy";
+        img.alt = "Photo attached to review by " + (review.authorLabel || "a guest");
+        img.addEventListener("click", () => openReviewLightbox(review, img));
+        imagesRow.appendChild(img);
+      });
+      item.appendChild(imagesRow);
+    }
+
+    return item;
+  }
+
+  function renderReviewList(container, list, { emptyMessage } = {}) {
+    container.innerHTML = "";
     if (list.length === 0) {
       const empty = document.createElement("p");
       empty.className = "form-hint";
-      empty.textContent = "No reviews yet — be the first to add one.";
+      empty.textContent = emptyMessage || "No reviews yet — be the first to add one.";
       container.appendChild(empty);
       return;
     }
-
-    list.forEach((review) => {
-      const item = document.createElement("div");
-      item.className = "review-item";
-
-      const head = document.createElement("div");
-      head.className = "review-item__head";
-
-      const starsEl = document.createElement("span");
-      renderStars(starsEl, review.rating);
-
-      const author = document.createElement("span");
-      author.className = "review-item__author";
-      Security.setTextSafely(author, review.authorLabel || "Guest");
-
-      const date = document.createElement("span");
-      date.className = "review-item__date";
-      date.textContent = formatDate(review.date);
-
-      head.appendChild(starsEl);
-      head.appendChild(author);
-      head.appendChild(date);
-
-      const comment = document.createElement("p");
-      comment.className = "review-item__comment";
-      Security.setTextSafely(comment, review.comment);
-
-      item.appendChild(head);
-      item.appendChild(comment);
-
-      if (review.imageUrl) {
-        const img = document.createElement("img");
-        img.className = "review-item__image";
-        img.src = review.imageUrl;
-        img.alt = "Photo attached to review by " + (review.authorLabel || "a guest");
-        img.style.cursor = "zoom-in";
-        img.addEventListener("click", () => openReviewLightbox(review, img));
-        item.appendChild(img);
-      }
-
-      container.appendChild(item);
-    });
+    list.forEach((review) => container.appendChild(buildReviewItem(review)));
   }
 
   // Reuses the page's existing #lightbox (already present on product.html
@@ -191,14 +240,40 @@ const Reviews = (function () {
     lightbox.hidden = false;
   }
 
+  function renderSummaryBars(container, list) {
+    container.innerHTML = "";
+    const total = list.length;
+    const counts = { excellent: 0, verygood: 0, good: 0, average: 0, poor: 0 };
+    list.forEach((r) => { counts[tierForRating(r.rating)]++; });
+
+    TIER_LABELS.forEach(({ label, tier }) => {
+      const count = counts[tier];
+      const pct = total > 0 ? (count / total) * 100 : 0;
+      const row = document.createElement("div");
+      row.className = "reviews-summary__bar-row";
+      row.dataset.tier = tier === "excellent" || tier === "verygood" ? "great" : tier;
+      row.innerHTML = `
+        <span>${label}</span>
+        <span class="reviews-summary__bar-track"><span class="reviews-summary__bar-fill" style="width:${pct}%"></span></span>
+        <span class="reviews-summary__bar-count">${count}</span>`;
+      container.appendChild(row);
+    });
+  }
+
   /**
-   * Wires up a review form + summary + list for one product.
-   * `els` = { form, starInput, ratingHiddenInput, commentInput,
-   *           imageInput, imageError, summaryScore, summaryStars,
-   *           summaryCount, list, toast }
+   * Wires up a review form + summary + preview list + "view all" drawer
+   * for one product. `els` = {
+   *   form, starInput, commentInput,
+   *   addImageBtn, imagePopover, addImageOption, imageInput, imagePreviews,
+   *   imageError, summaryScore, summaryStars, summaryCount, summaryBars,
+   *   list, viewAllBtn, drawerOverlay, drawerBody, drawerClose, drawerTitle,
+   *   toast, onSummary
+   * }
    */
   function init(productId, els) {
     let selectedRating = 0;
+    let selectedFiles = []; // File objects queued for upload on submit
+    let fullList = []; // last fetched review list, reused by the drawer
 
     function paintStarInput() {
       Array.from(els.starInput.children).forEach((btn, i) => {
@@ -222,15 +297,152 @@ const Reviews = (function () {
       els.starInput.appendChild(btn);
     }
 
+    // ---- "+" add-image button -> popover -> "Add images" -> file picker ----
+    function closeImagePopover() {
+      els.imagePopover.classList.remove("is-open");
+      els.addImageBtn.setAttribute("aria-expanded", "false");
+    }
+    if (els.addImageBtn && els.imagePopover) {
+      els.addImageBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const open = els.imagePopover.classList.toggle("is-open");
+        els.addImageBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+      document.addEventListener("click", (e) => {
+        if (!els.imagePopover.contains(e.target) && e.target !== els.addImageBtn) closeImagePopover();
+      });
+    }
+    if (els.addImageOption) {
+      els.addImageOption.addEventListener("click", () => {
+        closeImagePopover();
+        els.imageInput.click();
+      });
+    }
+
+    function renderPreviews() {
+      els.imagePreviews.innerHTML = "";
+      selectedFiles.forEach((file, idx) => {
+        const wrap = document.createElement("div");
+        wrap.className = "review-photo-preview";
+        const img = document.createElement("img");
+        img.src = URL.createObjectURL(file);
+        img.alt = "Selected photo " + (idx + 1);
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "review-photo-preview__remove";
+        removeBtn.setAttribute("aria-label", "Remove photo");
+        removeBtn.textContent = "×";
+        removeBtn.addEventListener("click", () => {
+          selectedFiles.splice(idx, 1);
+          renderPreviews();
+        });
+        wrap.appendChild(img);
+        wrap.appendChild(removeBtn);
+        els.imagePreviews.appendChild(wrap);
+      });
+    }
+
+    els.imageInput.addEventListener("change", () => {
+      els.imageError.classList.remove("is-visible");
+      const incoming = Array.from(els.imageInput.files || []);
+      els.imageInput.value = ""; // allow re-selecting the same file later
+
+      for (const file of incoming) {
+        if (selectedFiles.length >= MAX_IMAGES) {
+          Security.setTextSafely(els.imageError, `You can attach up to ${MAX_IMAGES} photos.`);
+          els.imageError.classList.add("is-visible");
+          break;
+        }
+        const error = validateImageFile(file);
+        if (error) {
+          Security.setTextSafely(els.imageError, error);
+          els.imageError.classList.add("is-visible");
+          continue;
+        }
+        selectedFiles.push(file);
+      }
+      renderPreviews();
+    });
+
+    const charCountEl = document.getElementById("review-char-count");
+    if (charCountEl) {
+      els.commentInput.addEventListener("input", () => {
+        const len = els.commentInput.value.length;
+        charCountEl.textContent = `${len} / 1000`;
+        charCountEl.style.color = len > 1000 ? "var(--color-danger)" : "";
+      });
+    }
+
     function renderSummary(list) {
       const { average, count } = getAverage(list);
       Security.setTextSafely(els.summaryScore, count > 0 ? average.toFixed(1) : "—");
       renderStars(els.summaryStars, average);
       Security.setTextSafely(
         els.summaryCount,
-        count > 0 ? `${count} review${count > 1 ? "s" : ""}` : "No reviews yet"
+        count > 0 ? `${count} rating${count > 1 ? "s" : ""}` : "No reviews yet"
       );
+      if (els.summaryBars) renderSummaryBars(els.summaryBars, list);
       if (typeof els.onSummary === "function") els.onSummary({ average, count });
+    }
+
+    function renderPagePreview(list) {
+      const preview = list.slice(0, PAGE_PREVIEW_COUNT);
+      renderReviewList(els.list, preview);
+      if (els.viewAllBtn) {
+        els.viewAllBtn.hidden = list.length <= PAGE_PREVIEW_COUNT;
+        Security.setTextSafely(els.viewAllBtn, `View all ${list.length} reviews →`);
+      }
+    }
+
+    // ---- "View all reviews" drawer, paginated with a "View more" button ----
+    let drawerShown = 0;
+    function renderDrawerBatch(reset) {
+      if (reset) { els.drawerBody.innerHTML = ""; drawerShown = 0; }
+      const nextBatch = fullList.slice(drawerShown, drawerShown + DRAWER_BATCH_SIZE);
+      const listWrap = els.drawerBody.querySelector(".review-list") || (() => {
+        const w = document.createElement("div");
+        w.className = "review-list";
+        els.drawerBody.appendChild(w);
+        return w;
+      })();
+      if (drawerShown === 0 && fullList.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "form-hint";
+        empty.textContent = "No reviews yet — be the first to add one.";
+        listWrap.appendChild(empty);
+      }
+      nextBatch.forEach((review) => listWrap.appendChild(buildReviewItem(review)));
+      drawerShown += nextBatch.length;
+
+      let moreBtn = els.drawerBody.querySelector(".review-load-more-btn");
+      if (moreBtn) moreBtn.remove();
+      if (drawerShown < fullList.length) {
+        moreBtn = document.createElement("button");
+        moreBtn.type = "button";
+        moreBtn.className = "btn btn-outline review-load-more-btn";
+        moreBtn.textContent = `View more (${fullList.length - drawerShown} left)`;
+        moreBtn.addEventListener("click", () => renderDrawerBatch(false));
+        els.drawerBody.appendChild(moreBtn);
+      }
+    }
+
+    function openDrawer() {
+      if (!els.drawerOverlay) return;
+      if (els.drawerTitle) Security.setTextSafely(els.drawerTitle, `All Reviews (${fullList.length})`);
+      renderDrawerBatch(true);
+      els.drawerOverlay.hidden = false;
+      document.body.style.overflow = "hidden";
+    }
+    function closeDrawer() {
+      if (!els.drawerOverlay) return;
+      els.drawerOverlay.hidden = true;
+      document.body.style.overflow = "";
+    }
+    if (els.viewAllBtn) els.viewAllBtn.addEventListener("click", openDrawer);
+    if (els.drawerClose) els.drawerClose.addEventListener("click", closeDrawer);
+    if (els.drawerOverlay) {
+      els.drawerOverlay.addEventListener("click", (e) => { if (e.target === els.drawerOverlay) closeDrawer(); });
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !els.drawerOverlay.hidden) closeDrawer(); });
     }
 
     async function refresh() {
@@ -247,29 +459,9 @@ const Reviews = (function () {
         renderSummary([]);
         return;
       }
+      fullList = list;
       renderSummary(list);
-      renderReviewList(els.list, list);
-    }
-
-    els.imageInput.addEventListener("change", () => {
-      els.imageError.classList.remove("is-visible");
-      const file = els.imageInput.files[0];
-      if (!file) return;
-      const error = validateImageFile(file);
-      if (error) {
-        Security.setTextSafely(els.imageError, error);
-        els.imageError.classList.add("is-visible");
-        els.imageInput.value = "";
-      }
-    });
-
-    const charCountEl = document.getElementById("review-char-count");
-    if (charCountEl) {
-      els.commentInput.addEventListener("input", () => {
-        const len = els.commentInput.value.length;
-        charCountEl.textContent = `${len} / 1000`;
-        charCountEl.style.color = len > 1000 ? "var(--color-danger)" : "";
-      });
+      renderPagePreview(list);
     }
 
     els.form.addEventListener("submit", async (e) => {
@@ -300,22 +492,14 @@ const Reviews = (function () {
       const submitBtn = els.form.querySelector('button[type="submit"]');
       if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Submitting..."; }
 
-      let imageUrl = null;
-      const file = els.imageInput.files[0];
-      if (file) {
-        const error = validateImageFile(file);
-        if (error) {
-          Security.setTextSafely(els.imageError, error);
-          els.imageError.classList.add("is-visible");
-          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Submit Review"; }
-          return;
-        }
+      let imageUrls = [];
+      if (selectedFiles.length > 0) {
         try {
-          imageUrl = await uploadReviewImage(file);
+          imageUrls = await Promise.all(selectedFiles.map((file) => uploadReviewImage(file)));
         } catch (err) {
-          Security.setTextSafely(els.imageError, err.message || "Could not upload that image — please try another file.");
+          Security.setTextSafely(els.imageError, err.message || "Could not upload your photos — please try again.");
           els.imageError.classList.add("is-visible");
-          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Submit Review"; }
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Submit review"; }
           return;
         }
       }
@@ -334,7 +518,7 @@ const Reviews = (function () {
             productId,
             rating: selectedRating,
             comment,
-            imageUrl,
+            imageUrls,
             website: honeypotField ? honeypotField.value : ""
           })
         });
@@ -346,15 +530,19 @@ const Reviews = (function () {
         console.error("Reviews: could not save via api/submit-review", err);
         Security.setTextSafely(els.imageError, err.message || "Your review couldn't be saved — please check your connection and try again.");
         els.imageError.classList.add("is-visible");
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Submit Review"; }
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Submit review"; }
         return;
       }
 
       // Reset form
       els.form.reset();
       selectedRating = 0;
+      selectedFiles = [];
+      renderPreviews();
+      closeImagePopover();
       paintStarInput();
-      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Submit Review"; }
+      if (charCountEl) charCountEl.textContent = "0 / 1000";
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Submit review"; }
       if (els.toast) {
         els.toast.classList.add("is-visible");
         setTimeout(() => els.toast.classList.remove("is-visible"), 3000);

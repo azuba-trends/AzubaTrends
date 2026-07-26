@@ -3,6 +3,20 @@ const ProductLoader = (function () {
   let inFlightRequest = null;
   const currency = "₹";
 
+  // Mirrors lib/pricing.js exactly (this file is loaded as a classic
+  // script, not a module, so it can't `import` that one) — only used on
+  // the direct-Firestore fallback path below, since the normal /api/products
+  // path already returns margin-applied prices from the server.
+  function applyStoreMarginLocal(sellingPrice) {
+    const price = Number(sellingPrice) || 0;
+    const margin = window.SITE_CONFIG && window.SITE_CONFIG.storeMargin;
+    if (!margin || !margin.value) return price;
+    const value = Number(margin.value) || 0;
+    if (value <= 0) return price;
+    const marked = margin.type === "flat" ? price + value : price + (price * value) / 100;
+    return Math.round(marked);
+  }
+
   async function loadAllProducts() {
     if (cachedProducts) return cachedProducts;
     if (inFlightRequest) return inFlightRequest;
@@ -31,6 +45,7 @@ const ProductLoader = (function () {
       // functions, or before the service account is configured.
       try {
         while(!window.FirebaseApp) { await new Promise(r => setTimeout(r, 100)); }
+        if (window.SITE_CONFIG_READY) await window.SITE_CONFIG_READY; // needed for storeMargin below
         
         const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js");
         const db = window.FirebaseApp.db;
@@ -40,9 +55,18 @@ const ProductLoader = (function () {
         
         // Same exclusion as api/list.js: a product with hasVariants:true
         // is only a template for the admin panel, never itself sellable.
+        // Store Margin applied here too — same markup api/list.js applies
+        // server-side (see lib/pricing.js) — so prices stay consistent
+        // even on this fallback path.
         cachedProducts = snapshot.docs
           .map(doc => ({ id: doc.id, ...doc.data() }))
-          .filter(p => !p.hasVariants);
+          .filter(p => !p.hasVariants)
+          .map(p => ({
+            ...p,
+            sellingPrice: applyStoreMarginLocal(p.sellingPrice),
+            rating: p.ratingCount ? Math.round((p.ratingSum / p.ratingCount) * 10) / 10 : 0,
+            reviewCount: p.ratingCount || 0
+          }));
         return cachedProducts;
       } catch (err) {
         console.error("ProductLoader Error:", err);
@@ -74,9 +98,36 @@ const ProductLoader = (function () {
     return product.slug ? `/products/${encodeURIComponent(product.slug)}` : `product.html?id=${encodeURIComponent(product.id)}`;
   }
 
+  // A color can have several sizes, and every size is still its own real
+  // product doc (own stock/price/sku) — but they all share ONE variantSlug
+  // (the color's slug), because a color is ONE product page, not one per
+  // size. Several docs can therefore match here; pick an in-stock one to
+  // land on by default, falling back to the first if all are out of stock.
   async function getProductByParentAndVariantSlug(parentId, variantSlug) {
     const products = await loadAllProducts();
-    return products.find((p) => p.isVariant && p.parentId === parentId && p.variantSlug === variantSlug) || null;
+    const matches = products.filter((p) => p.isVariant && p.parentId === parentId && p.variantSlug === variantSlug);
+    if (matches.length === 0) return null;
+    return matches.find((p) => p.stock > 0) || matches[0];
+  }
+
+  // Collapses same-color sibling docs (one per size) down to a single
+  // representative for grid/listing display, so a color with 5 sizes shows
+  // as ONE card, not 5. Non-variant products and each distinct color still
+  // get their own card. Prefers an in-stock size as the representative.
+  function dedupeVariantGroups(products) {
+    const bestByKey = new Map();
+    const order = [];
+    (products || []).forEach((p) => {
+      const key = (p.isVariant && p.parentId && p.variantSlug) ? `${p.parentId}::${p.variantSlug}` : `single::${p.id}`;
+      const cur = bestByKey.get(key);
+      if (!cur) {
+        bestByKey.set(key, p);
+        order.push(key);
+      } else if (cur.stock === 0 && p.stock > 0) {
+        bestByKey.set(key, p);
+      }
+    });
+    return order.map((k) => bestByKey.get(k));
   }
 
   // Every other variant of the same product (siblings), used to build
@@ -92,6 +143,39 @@ const ProductLoader = (function () {
   function calcDiscount(product) {
     if (!product || !product.mrp || product.sellingPrice >= product.mrp) return 0;
     return Math.round(((product.mrp - product.sellingPrice) / product.mrp) * 100);
+  }
+
+  // ------------------------------------------------------------------
+  // Size ordering — clothing sizes must show XS, S, M, L, XL... in that
+  // logical order, never however they happened to be added in the admin
+  // panel or however Set/array order came out. Anything not in this
+  // known list (e.g. numeric sizes like "30", "32", "6", "7", or free
+  // -text sizes like "Free Size") sorts numerically if it looks like a
+  // number, then alphabetically, and always AFTER the known apparel
+  // sizes above so a stray "Free Size" doesn't jump to the front.
+  // ------------------------------------------------------------------
+  const SIZE_ORDER = [
+    "xxxs", "xxs", "xs", "s", "m", "l", "xl", "xxl", "xxxl", "2xl", "3xl", "4xl", "5xl", "6xl"
+  ];
+  function sizeSortRank(size) {
+    const key = String(size || "").trim().toLowerCase();
+    const idx = SIZE_ORDER.indexOf(key);
+    return idx === -1 ? null : idx;
+  }
+  function sortSizes(sizes) {
+    return [...(sizes || [])].sort((a, b) => {
+      const ra = sizeSortRank(a), rb = sizeSortRank(b);
+      if (ra !== null && rb !== null) return ra - rb;
+      if (ra !== null) return -1; // known apparel sizes always come first
+      if (rb !== null) return 1;
+      const na = parseFloat(a), nb = parseFloat(b);
+      const aIsNum = !isNaN(na) && /^\s*[\d.]+\s*$/.test(String(a));
+      const bIsNum = !isNaN(nb) && /^\s*[\d.]+\s*$/.test(String(b));
+      if (aIsNum && bIsNum) return na - nb;
+      if (aIsNum) return -1;
+      if (bIsNum) return 1;
+      return String(a).localeCompare(String(b));
+    });
   }
 
   function formatPrice(amount) {
@@ -123,8 +207,18 @@ const ProductLoader = (function () {
     const safeTitle = window.Security ? window.Security.escapeHTML(product.title) : String(product.title || "");
     const safeCategory = window.Security ? window.Security.escapeHTML(product.category) : String(product.category || "");
     const safeImage = window.Security ? window.Security.escapeHTML(image) : image;
-    const variantBadge = (product.isVariant && (product.size || product.color))
-      ? `<span class="product-card__variant" style="color:var(--color-ink-soft); font-size:0.8em;"> — ${[product.size, product.color].filter(Boolean).map((s) => window.Security ? window.Security.escapeHTML(s) : s).join(" / ")}</span>`
+    // This card represents the whole color (every size of it), not one
+    // specific size, so only the color is shown here — the size itself is
+    // picked on the product page, not implied by which card was clicked.
+    const variantBadge = (product.isVariant && product.color)
+      ? `<span class="product-card__variant" style="color:var(--color-ink-soft); font-size:0.8em;"> — ${window.Security ? window.Security.escapeHTML(product.color) : product.color}</span>`
+      : "";
+
+    const ratingBadge = (product.reviewCount > 0)
+      ? `<span class="product-card__rating">
+          <svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 1.5l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.2-5.4 3.2 1.3-6L1.3 7.7l6.1-.6z"/></svg>
+          ${Number(product.rating).toFixed(1)} <span class="product-card__rating-count">(${product.reviewCount})</span>
+        </span>`
       : "";
 
     card.innerHTML = `
@@ -135,7 +229,10 @@ const ProductLoader = (function () {
         </div>
       </a>
       <div class="product-card__body">
-        <span class="product-card__category">${safeCategory}</span>
+        <div class="product-card__top-row">
+          <span class="product-card__category">${safeCategory}</span>
+          ${ratingBadge}
+        </div>
         <h3 class="product-card__title">${safeTitle}${variantBadge}</h3>
         <div class="product-card__price-row">
           <span class="price-current">${formatPrice(product.sellingPrice)}</span>
@@ -182,6 +279,7 @@ const ProductLoader = (function () {
   function renderGrid(container, products, emptyMessage) {
     if (!container) return;
     container.innerHTML = "";
+    products = dedupeVariantGroups(products);
     if (!products || products.length === 0) {
       container.innerHTML = `<div class="empty-state"><h2>No products found</h2><p>${emptyMessage || "Try another category."}</p></div>`;
       return;
@@ -235,13 +333,13 @@ const ProductLoader = (function () {
    *  from the interest cookie, then just newest-in-stock as a last resort —
    *  so this never comes up empty as long as *some* other product exists. */
   function pickRelatedProducts(allProducts, { excludeId, excludeParentId, category, limit = 8 } = {}) {
-    const pool = allProducts.filter((p) => {
+    const pool = dedupeVariantGroups(allProducts.filter((p) => {
       if (String(p.id) === String(excludeId)) return false;
       // Don't recommend a product's own other sizes/colors as "related" —
       // those belong in the variant selector, not this grid.
       if (excludeParentId && p.isVariant && String(p.parentId) === String(excludeParentId)) return false;
       return true;
-    });
+    }));
     const buckets = [];
     if (category) buckets.push(pool.filter((p) => p.category === category));
     getTopInterestCategories().forEach((cat) => buckets.push(pool.filter((p) => p.category === cat)));
@@ -260,35 +358,35 @@ const ProductLoader = (function () {
     return result;
   }
 
-  /** Lazy-loads a related-products row into `container` only once it
-   *  scrolls into view (shopper isn't looking at it yet, so there's no
-   *  reason to render/fetch before that) — shows the same skeleton
-   *  shimmer while it "arrives", and a clean empty-state if there's
-   *  genuinely nothing else to show. */
+  /** Renders the related-products row into `container`. Previously this
+   *  waited for an IntersectionObserver to report the (often 0-height,
+   *  not-yet-populated) container as "intersecting" before rendering
+   *  anything — on some layouts/browsers that observer callback never
+   *  fired, so the whole "You might also like" section silently stayed
+   *  empty. Now it just renders straight away (this is a small catalog,
+   *  so there's no real performance cost to not lazy-loading it), and
+   *  any error is caught so a data hiccup shows the empty-state instead
+   *  of leaving a blank gap on the page. */
   function mountRelatedProducts(container, opts) {
-    if (!container || !("IntersectionObserver" in window)) {
-      renderRelatedProductsNow(container, opts);
-      return;
-    }
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) {
-        observer.disconnect();
-        renderRelatedProductsNow(container, opts);
-      }
-    }, { rootMargin: "200px" });
-    observer.observe(container);
+    if (!container) return;
+    renderRelatedProductsNow(container, opts);
   }
 
   async function renderRelatedProductsNow(container, opts) {
     renderSkeletonGrid(container, 4);
-    const all = await loadAllProducts();
-    const related = pickRelatedProducts(all, opts);
-    if (related.length === 0) {
+    try {
+      const all = await loadAllProducts();
+      const related = pickRelatedProducts(all, opts);
+      if (related.length === 0) {
+        container.innerHTML = `<div class="empty-state"><h2>No related products yet</h2><p>Check back soon as more products are added.</p></div>`;
+        return;
+      }
+      container.innerHTML = "";
+      related.forEach((p) => container.appendChild(renderProductCard(p)));
+    } catch (err) {
+      console.error("ProductLoader: could not load related products", err);
       container.innerHTML = `<div class="empty-state"><h2>No related products yet</h2><p>Check back soon as more products are added.</p></div>`;
-      return;
     }
-    container.innerHTML = "";
-    related.forEach((p) => container.appendChild(renderProductCard(p)));
   }
 
   function initHeader() {
@@ -316,7 +414,7 @@ const ProductLoader = (function () {
     window.addEventListener("cart:updated", (e) => setBadge(e.detail.count));
   }
 
-  const API = { loadAllProducts, getProductById, getProductBySlug, getProductByParentAndVariantSlug, getVariantSiblings, productUrl, calcDiscount, formatPrice, sortByStock, getCategories, renderProductCard, renderGrid, renderSkeletonGrid, renderCategoryChips, initHeader, trackCategoryInterest, mountRelatedProducts };
+  const API = { loadAllProducts, getProductById, getProductBySlug, getProductByParentAndVariantSlug, getVariantSiblings, dedupeVariantGroups, productUrl, calcDiscount, formatPrice, sortByStock, sortSizes, getCategories, renderProductCard, renderGrid, renderSkeletonGrid, renderCategoryChips, initHeader, trackCategoryInterest, mountRelatedProducts };
   window.ProductLoader = API;
   return API;
 })();

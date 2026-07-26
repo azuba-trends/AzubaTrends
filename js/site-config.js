@@ -53,6 +53,11 @@ window.SITE_CONFIG_READY = (async function() {
       window.SITE_CONFIG.codExtraCharge = (data.codExtraCharge !== undefined && data.codExtraCharge !== null)
         ? Number(data.codExtraCharge)
         : window.SITE_CONFIG.codExtraCharge;
+      // Store Margin — admin's own markup layered on top of every
+      // product's Sale Price. Used by product-loader.js's direct-Firestore
+      // fallback path (the normal path is api/list.js, which applies this
+      // same markup server-side — see lib/pricing.js).
+      window.SITE_CONFIG.storeMargin = data.storeMargin || null;
       window.SITE_CONFIG.emailjs = {
         publicKey: data.emailjs_publicKey || "",
         serviceId: data.emailjs_serviceId || "",

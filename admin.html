@@ -409,7 +409,7 @@
             <thead>
               <tr>
                 <th><input type="checkbox" id="select-all-products"></th>
-                <th>Image</th><th>Name</th><th>Brand</th><th>Tags</th><th>Categories</th><th>Date</th><th>Stock</th><th>Status</th><th>Source Platform</th><th>Actions</th>
+                <th>Image</th><th>Name</th><th>Brand</th><th>Tags</th><th>Categories</th><th>Date</th><th>Stock</th><th>Status</th><th>Source Platform</th><th>Sync</th><th>Actions</th>
               </tr>
             </thead>
             <tbody id="products-table-body"></tbody>
@@ -461,31 +461,36 @@
             <select id="prod-brand"><option value="">Select Brand</option></select>
           </div>
 
-          <div class="form-field">
-            <label>Regular Price (MRP) ₹ <span class="required-star">*</span></label>
-            <input type="number" id="prod-mrp" min="0" required>
-          </div>
-          <div class="form-field">
-            <label>Sale Price ₹ <span class="required-star">*</span></label>
-            <input type="number" id="prod-price" min="0" required>
-          </div>
+          <div id="variant-top-pricing-wrap">
+            <div class="form-field">
+              <label>Regular Price (MRP) ₹ <span class="field-hint" style="display:inline;">(optional — leave blank if the seller doesn't give an MRP; no strikethrough/discount badge will show on the site without it)</span></label>
+              <input type="number" id="prod-mrp" min="0">
+            </div>
+            <div class="form-field">
+              <label>Sale Price ₹ <span class="required-star">*</span></label>
+              <input type="number" id="prod-price" min="0" required>
+            </div>
+            <div class="form-field full-width" id="prod-price-preview-wrap" style="margin:0;">
+              <div id="prod-price-preview" style="font-size:0.83rem; color:var(--color-ink-soft); background:#f7f5f0; border:1px solid var(--color-border,#e2ddd0); border-radius:6px; padding:8px 10px;"></div>
+            </div>
 
-          <div class="form-field">
-            <label>Cost Price ₹ <span class="required-star">*</span> <span class="field-hint" style="display:inline;">(what YOU pay for this — never shown to customers, used to calculate profit in reports)</span></label>
-            <input type="number" id="prod-cost-price" min="0" required>
-          </div>
+            <div class="form-field">
+              <label>Cost Price ₹ <span class="required-star">*</span> <span class="field-hint" style="display:inline;">(what YOU pay for this — never shown to customers, used to calculate profit in reports)</span></label>
+              <input type="number" id="prod-cost-price" min="0" required>
+            </div>
 
-          <div class="form-field">
-            <label>Stock Quantity <span class="required-star">*</span></label>
-            <input type="number" id="prod-stock" min="0" required>
-          </div>
-          <div class="form-field">
-            <label>SKU</label>
-            <input type="text" id="prod-sku">
-          </div>
-          <div class="form-field">
-            <label>HSN Code <span class="field-hint" style="display:inline;">(optional — shown on invoices, GST classification)</span></label>
-            <input type="text" id="prod-hsn">
+            <div class="form-field">
+              <label>Stock Quantity <span class="required-star">*</span></label>
+              <input type="number" id="prod-stock" min="0" required>
+            </div>
+            <div class="form-field">
+              <label>SKU</label>
+              <input type="text" id="prod-sku">
+            </div>
+            <div class="form-field">
+              <label>HSN Code <span class="field-hint" style="display:inline;">(optional — shown on invoices, GST classification)</span></label>
+              <input type="text" id="prod-hsn">
+            </div>
           </div>
 
           <div class="form-field">
@@ -499,15 +504,7 @@
 
           <input type="hidden" id="prod-is-variant" value="">
           <input type="hidden" id="prod-parent-id" value="">
-
-          <div class="form-field" id="variant-size-wrap" style="display:none;">
-            <label>Size</label>
-            <input type="text" id="prod-variant-size">
-          </div>
-          <div class="form-field" id="variant-color-wrap" style="display:none;">
-            <label>Color</label>
-            <input type="text" id="prod-variant-color">
-          </div>
+          <input type="hidden" id="prod-variant-color" value="">
 
           <div class="form-field full-width" id="variants-toggle-wrap">
             <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
@@ -517,26 +514,26 @@
           </div>
 
           <div class="form-field full-width" id="variants-section" style="display:none; border:1px solid var(--color-border,#e2ddd0); border-radius:8px; padding:16px; background:#fafaf7;">
-            <h3 style="margin-top:0;">Variants</h3>
-            <p class="field-hint">List every size and every color this product comes in, comma-separated, then press Add Variants — a box will be created for every size × color combination.</p>
-            <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+            <h3 style="margin-top:0;" id="variants-section-title">Variants</h3>
+            <p class="field-hint" id="variants-section-hint">A different COLOR is a different product on the site — each color gets its own box below and its own page. Sizes are NOT separate products: every size lives inside its color's box, with its own stock and (optionally) its own price, so you can add/remove a size or change its price without touching the others.</p>
+            <div class="form-grid" id="variant-add-color-wrap" style="grid-template-columns: 1fr 1fr; gap: 12px;">
               <div class="form-field">
-                <label>Sizes <span class="field-hint" style="display:inline;">(e.g. S, M, L, XL)</span></label>
-                <input type="text" id="variant-sizes-input" placeholder="XS, S, M, L">
-              </div>
-              <div class="form-field">
-                <label>Colors <span class="field-hint" style="display:inline;">(e.g. Red, Green, Blue)</span></label>
+                <label>Colors <span class="field-hint" style="display:inline;">(e.g. Red, Green, Blue) — one box per color</span></label>
                 <input type="text" id="variant-colors-input" placeholder="Red, Green, Blue">
               </div>
+              <div class="form-field">
+                <label>Default sizes for new colors <span class="field-hint" style="display:inline;">(optional, e.g. S, M, L, XL)</span></label>
+                <input type="text" id="variant-sizes-input" placeholder="XS, S, M, L">
+              </div>
             </div>
-            <button type="button" class="btn btn-outline" id="add-variants-btn" style="margin-top:8px;">+ Add Variants</button>
+            <button type="button" class="btn btn-outline" id="add-variants-btn" style="margin-top:8px;">+ Add Color(s)</button>
 
             <div id="variant-boxes-container" style="display:flex; flex-direction:column; gap:12px; margin-top:16px;"></div>
           </div>
 
           <div class="form-field full-width" id="variant-sync-wrap" style="display:none;">
             <button type="button" class="btn btn-outline" id="variant-auto-sync-btn">🔄 Auto Sync from Parent</button>
-            <p class="field-hint" style="margin-top:6px;">Overwrites this variant's Name, Description, Category, Brand, Tags, Delivery info and Images with whatever the parent product currently has. Its own Size, Color, MRP, Sale Price, HSN and Source URL are left untouched.</p>
+            <p class="field-hint" style="margin-top:6px;">Overwrites this color's Name, Description, Category, Brand, Tags, Delivery info and Images with whatever the parent product currently has. Its own Sizes, prices, HSN and Source URL (all in the Variants box above) are left untouched.</p>
           </div>
 
           <div class="form-field full-width">
@@ -1324,6 +1321,7 @@
       <div class="tab-strip">
         <button class="tab-btn active" data-settings-tab="account">Account</button>
         <button class="tab-btn" data-settings-tab="payment">Payment</button>
+        <button class="tab-btn" data-settings-tab="margin">Store Margin</button>
         <button class="tab-btn" data-settings-tab="support">Support</button>
         <button class="tab-btn" data-settings-tab="marketing">Marketing</button>
         <button class="tab-btn" data-settings-tab="telegram">Telegram Integration</button>
@@ -1432,6 +1430,40 @@
               <button type="submit" class="btn btn-primary" id="save-payment-settings-btn">Save Payment Settings</button>
             </div>
           </form>
+        </div>
+      </div>
+
+      <!-- Store Margin tab -->
+      <div class="tab-panel" id="settings-tab-margin">
+        <div class="card">
+          <form id="margin-settings-form" class="form-grid">
+            <div class="form-field full-width">
+              <p class="field-hint">Adds a markup on top of every product's Sale Price, site-wide — this becomes the actual price shown to shoppers and charged at checkout. It never appears as a separate "platform fee" on invoices; it's simply baked into the product's price.</p>
+            </div>
+            <div class="form-field">
+              <label>Margin Type</label>
+              <select id="set-margin-type">
+                <option value="percent">Percentage (%)</option>
+                <option value="flat">Flat amount (₹)</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label>Margin Value</label>
+              <input type="number" id="set-margin-value" min="0" step="0.01" placeholder="e.g. 10">
+            </div>
+            <div class="form-field full-width">
+              <p class="field-hint" id="margin-example-hint"></p>
+            </div>
+            <div class="form-field full-width">
+              <button type="submit" class="btn btn-primary" id="save-margin-settings-btn">Save Store Margin</button>
+            </div>
+          </form>
+        </div>
+        <div class="card" style="margin-top:16px;">
+          <h3>Product Ratings</h3>
+          <p class="field-hint">One-time fix-up: recalculates every product's star rating from all existing reviews. Only needs running once (reviews submitted from now on update the rating automatically) — safe to re-run any time if you ever suspect a rating looks off.</p>
+          <button type="button" class="btn btn-secondary" id="recalc-ratings-btn">Recalculate All Product Ratings</button>
+          <p class="field-hint" id="recalc-ratings-status"></p>
         </div>
       </div>
 
@@ -1548,6 +1580,16 @@
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- Reuses the same lightbox pattern/CSS as product.html — click any
+     product image preview or payment screenshot to view it full size,
+     click the cross or outside to close. -->
+<div class="lightbox" id="admin-lightbox" hidden>
+  <button class="lightbox__close" id="admin-lightbox-close" aria-label="Close image">&times;</button>
+  <div class="lightbox__content">
+    <img id="admin-lightbox-img" src="" alt="">
   </div>
 </div>
 

@@ -341,6 +341,48 @@ export default async function handler(req, res) {
       return;
     }
 
+    if (action === "recalc-ratings") {
+      // One-time (or run-whenever-needed) backfill: reviews written before
+      // the ratingSum/ratingCount aggregate existed on product docs never
+      // got counted, so this recomputes every product's rating from
+      // scratch by scanning the whole reviews collection. Safe to re-run
+      // any time — it fully overwrites (not increments) each product's
+      // aggregate, so it can never double-count.
+      const reviewsSnap = await db.collection("reviews").get();
+      const totals = {}; // productId -> { sum, count }
+      reviewsSnap.forEach((doc) => {
+        const r = doc.data();
+        if (!r.productId) return;
+        const rating = Number(r.rating) || 0;
+        if (!totals[r.productId]) totals[r.productId] = { sum: 0, count: 0 };
+        totals[r.productId].sum += rating;
+        totals[r.productId].count += 1;
+      });
+
+      const productIds = Object.keys(totals);
+      // A review can outlive the product it was for (product later
+      // deleted by the admin) — batch.update() on a missing doc fails the
+      // WHOLE batch, so filter those out first rather than risk one
+      // orphaned review blocking every other product's recalculation.
+      const existingSnap = await db.collection("products").get();
+      const existingIds = new Set(existingSnap.docs.map((d) => d.id));
+      const validProductIds = productIds.filter((pid) => existingIds.has(pid));
+
+      const batchSize = 400; // Firestore batch limit is 500 writes
+      for (let i = 0; i < validProductIds.length; i += batchSize) {
+        const batch = db.batch();
+        validProductIds.slice(i, i + batchSize).forEach((pid) => {
+          batch.update(db.collection("products").doc(pid), {
+            ratingSum: totals[pid].sum,
+            ratingCount: totals[pid].count
+          });
+        });
+        await batch.commit();
+      }
+
+      return res.status(200).json({ ok: true, productsUpdated: validProductIds.length });
+    }
+
     return res.status(400).json({ error: "Unknown or missing action. Use ?action=invoice&orderId=... or ?action=invoice-bulk" });
   } catch (err) {
     console.error("admin-tools error:", err);

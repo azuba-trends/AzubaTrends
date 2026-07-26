@@ -504,22 +504,103 @@ setTimeout(() => {
     throw new Error("Image upload failed: " + (data.error?.message || "unknown error"));
   }
 
+  // Reused for feature/gallery/delivery-partner image previews and the
+  // payment screenshot in the order modal — click any preview thumbnail
+  // to view it full-size, click the cross or outside to close.
+  const adminLightbox = document.getElementById("admin-lightbox");
+  const adminLightboxImg = document.getElementById("admin-lightbox-img");
+  function openAdminLightbox(url) {
+    if (!adminLightbox || !adminLightboxImg || !url) return;
+    adminLightboxImg.src = url;
+    adminLightbox.hidden = false;
+  }
+  if (adminLightbox) {
+    document.getElementById("admin-lightbox-close").addEventListener("click", () => { adminLightbox.hidden = true; });
+    adminLightbox.addEventListener("click", (e) => { if (e.target === adminLightbox) adminLightbox.hidden = true; });
+  }
+
   function previewFileList(input, container, max) {
     container.innerHTML = "";
     const files = Array.from(input.files || []).slice(0, max);
     files.forEach((file) => {
+      const url = URL.createObjectURL(file);
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "position:relative; display:inline-block;";
       const img = document.createElement("img");
-      img.src = URL.createObjectURL(file);
-      container.appendChild(img);
+      img.src = url;
+      img.style.cursor = "zoom-in";
+      img.addEventListener("click", () => openAdminLightbox(url));
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.textContent = "×";
+      removeBtn.title = "Remove this image";
+      removeBtn.style.cssText = "position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%; border:none; background:var(--color-danger,#c0392b); color:#fff; cursor:pointer; line-height:1; font-size:14px;";
+      removeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        input.value = "";
+        container.innerHTML = "";
+      });
+      wrap.appendChild(img);
+      wrap.appendChild(removeBtn);
+      container.appendChild(wrap);
     });
   }
 
-  function previewExistingImages(container, urls) {
+  // A native <input type="file" multiple> REPLACES its whole FileList every
+  // time the picker is opened — so picking 1 image, then picking 1 more,
+  // silently drops the first. Gallery images aren't uploaded until Save,
+  // so we keep our own running list here and merge new picks into it
+  // instead of ever trusting input.files directly.
+  let pendingGalleryFiles = [];
+  function renderGalleryPreview() {
+    const container = document.getElementById("prod-gallery-preview");
     container.innerHTML = "";
-    (urls || []).forEach((url) => {
+    pendingGalleryFiles.forEach((file, i) => {
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "position:relative; display:inline-block;";
+      const img = document.createElement("img");
+      const url = URL.createObjectURL(file);
+      img.src = url;
+      img.style.cursor = "zoom-in";
+      img.addEventListener("click", () => openAdminLightbox(url));
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.textContent = "×";
+      removeBtn.title = "Remove this image";
+      removeBtn.style.cssText = "position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%; border:none; background:var(--color-danger,#c0392b); color:#fff; cursor:pointer; line-height:1; font-size:14px;";
+      removeBtn.addEventListener("click", () => {
+        pendingGalleryFiles.splice(i, 1);
+        renderGalleryPreview();
+      });
+      wrap.appendChild(img);
+      wrap.appendChild(removeBtn);
+      container.appendChild(wrap);
+    });
+  }
+
+  function previewExistingImages(container, urls, onRemove) {
+    container.innerHTML = "";
+    (urls || []).forEach((url, idx) => {
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "position:relative; display:inline-block;";
       const img = document.createElement("img");
       img.src = url;
-      container.appendChild(img);
+      img.style.cursor = "zoom-in";
+      img.addEventListener("click", () => openAdminLightbox(url));
+      wrap.appendChild(img);
+      if (onRemove) {
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.textContent = "×";
+        removeBtn.title = "Remove this image";
+        removeBtn.style.cssText = "position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%; border:none; background:var(--color-danger,#c0392b); color:#fff; cursor:pointer; line-height:1; font-size:14px;";
+        removeBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          onRemove(idx);
+        });
+        wrap.appendChild(removeBtn);
+      }
+      container.appendChild(wrap);
     });
   }
 
@@ -1146,7 +1227,12 @@ setTimeout(() => {
   });
   document.getElementById("sd-content-visual").addEventListener("input", renderSeoChecklist);
   document.getElementById("prod-feature-img").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("prod-feature-preview"), 1));
-  document.getElementById("prod-gallery-imgs").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("prod-gallery-preview"), 5));
+  document.getElementById("prod-gallery-imgs").addEventListener("change", (e) => {
+    const newFiles = Array.from(e.target.files || []);
+    pendingGalleryFiles = pendingGalleryFiles.concat(newFiles).slice(0, 5);
+    renderGalleryPreview();
+    e.target.value = ""; // reset so picking the very same file again still fires "change"
+  });
   document.getElementById("prod-delivery-img").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("prod-delivery-preview"), 1));
 
   // ----------------------------------------------------------------
@@ -1422,6 +1508,7 @@ setTimeout(() => {
     document.getElementById("prod-existing-images").value = "";
     document.getElementById("prod-existing-delivery-img").value = "";
     document.getElementById("prod-feature-preview").innerHTML = "";
+    pendingGalleryFiles = [];
     document.getElementById("prod-gallery-preview").innerHTML = "";
     document.getElementById("prod-delivery-preview").innerHTML = "";
     document.getElementById("product-form-title").textContent = "Add New Product";
@@ -1430,18 +1517,21 @@ setTimeout(() => {
     // Variant state
     document.getElementById("prod-is-variant").value = "";
     document.getElementById("prod-parent-id").value = "";
-    document.getElementById("prod-variant-size").value = "";
     document.getElementById("prod-variant-color").value = "";
-    document.getElementById("variant-size-wrap").style.display = "none";
-    document.getElementById("variant-color-wrap").style.display = "none";
+    document.getElementById("variant-top-pricing-wrap").style.display = "";
+    document.getElementById("prod-mrp").required = false;
+    document.getElementById("prod-price").required = true;
+    document.getElementById("prod-stock").required = true;
     document.getElementById("variants-toggle-wrap").style.display = "";
     document.getElementById("prod-has-variants").checked = false;
     document.getElementById("variants-section").style.display = "none";
+    document.getElementById("variant-add-color-wrap").style.display = "";
     document.getElementById("variant-boxes-container").innerHTML = "";
     document.getElementById("variant-sizes-input").value = "";
     document.getElementById("variant-colors-input").value = "";
     document.getElementById("variant-sync-wrap").style.display = "none";
     renderSeoChecklist();
+    updateProductPricePreview();
   }
 
   let unsubProducts = null;
@@ -1477,7 +1567,7 @@ setTimeout(() => {
     tr.innerHTML = `
       <td><input type="checkbox" class="row-select" data-id="${p.id}"></td>
       <td><img src="${esc(img)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" alt=""></td>
-      <td>${nameCell}${missingCostPrice ? ` <span title="Cost Price not set — profit reports will show N/A for this product until you add it in Edit" style="color:var(--color-accent-dark); font-size:0.8rem; white-space:nowrap;">⚠ Cost price missing</span>` : ""}${(!opts.isChild && p.hasVariants) ? ` <span style="color:var(--color-ink-soft); font-size:0.78rem;">(${opts.childCount} variant${opts.childCount === 1 ? "" : "s"})</span>` : ""}</td>
+      <td>${nameCell}${missingCostPrice ? ` <span title="Cost Price not set — profit reports will show N/A for this product until you add it in Edit" style="color:var(--color-accent-dark); font-size:0.8rem; white-space:nowrap;">⚠ Cost price missing</span>` : ""}${(!opts.isChild && p.hasVariants) ? ` <span style="color:var(--color-ink-soft); font-size:0.78rem;">(${opts.childCount} color${opts.childCount === 1 ? "" : "s"})</span>` : ""}</td>
       <td>${esc(p.brand || "—")}</td>
       <td>${esc((p.tags || []).join(", "))}</td>
       <td>${esc(p.category)}</td>
@@ -1485,10 +1575,52 @@ setTimeout(() => {
       <td style="color:${p.stock > 0 ? 'inherit' : 'var(--color-danger)'}; font-weight:bold;">${(!opts.isChild && p.hasVariants) ? "—" : p.stock}</td>
       <td style="color:${sColor}; font-weight:bold;">${esc((p.status || "").toUpperCase())}</td>
       <td>${p.sourcePlatformUrl ? `<button class="btn btn-outline source-platform-btn" data-url="${esc(p.sourcePlatformUrl)}" style="padding:4px 8px; font-size:0.8rem;">Source Platform</button>` : '<span style="color:var(--color-ink-soft); font-size:0.8rem;">—</span>'}</td>
+      <td>${
+        opts.isChild
+          ? `<button class="btn btn-outline sync-variant-btn" data-id="${p.id}" title="Pull Name, Description, Category, Brand, Tags, Delivery info and Images from the parent, then publish" style="padding:4px 8px; font-size:0.8rem;">🔄 Auto Sync</button>`
+          : (opts.hasChildren
+              ? `<button class="btn btn-outline sync-all-btn" data-id="${p.id}" title="Auto Sync every variant of this product from the parent, then publish them all" style="padding:4px 8px; font-size:0.8rem;">🔄 Sync All</button>`
+              : '<span style="color:var(--color-ink-soft); font-size:0.8rem;">—</span>')
+      }</td>
       <td>
         <button class="btn btn-outline pause-prod-btn" data-id="${p.id}" data-status="${p.status}" style="padding:4px 8px; font-size:0.8rem;">${p.status === 'active' ? 'Pause' : 'Live'}</button>
         <button class="btn btn-outline edit-prod-btn" data-id="${p.id}" style="padding:4px 8px; font-size:0.8rem;">Edit</button>
         <button class="btn btn-outline del-prod-btn" data-id="${p.id}" style="color:var(--color-danger); padding:4px 8px; font-size:0.8rem;">Delete</button>
+      </td>`;
+    return tr;
+  }
+
+  // A COLOR group row — one per color, no matter how many sizes it has.
+  // This is the "sub product" row the admin actually thinks of as a
+  // product; its individual sizes are only edited inside the parent's
+  // Edit form (Variants section), not as separate rows here.
+  function buildColorGroupRow(parent, color, docs) {
+    const rep = docs.find((d) => d.stock > 0) || docs[0];
+    const totalStock = docs.reduce((s, d) => s + (Number(d.stock) || 0), 0);
+    const sizesLabel = docs.map((d) => d.size).filter(Boolean).join(", ");
+    const sColor = rep.status === "active" ? "var(--color-success)" : "var(--color-accent-dark)";
+    const img = (rep.images && rep.images[0]) ? rep.images[0] : "images/logo-placeholder.svg";
+    const dateStr = rep.createdAt ? new Date(rep.createdAt).toLocaleDateString("en-IN") : "—";
+    const missingCostPrice = rep.costPrice === undefined || rep.costPrice === null || rep.costPrice === 0;
+
+    const tr = document.createElement("tr");
+    tr.style.background = "#fafaf7";
+    tr.innerHTML = `
+      <td></td>
+      <td><img src="${esc(img)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" alt=""></td>
+      <td><span style="padding-left:24px; color:var(--color-ink-soft);">↳ ${esc(color || "(no color)")} — </span>${esc(rep.title)}${missingCostPrice ? ` <span title="Cost Price not set — profit reports will show N/A for this product until you add it in Edit" style="color:var(--color-accent-dark); font-size:0.8rem; white-space:nowrap;">⚠ Cost price missing</span>` : ""} <span style="color:var(--color-ink-soft); font-size:0.78rem;">(${docs.length} size${docs.length === 1 ? "" : "s"}${sizesLabel ? ": " + esc(sizesLabel) : ""})</span></td>
+      <td>${esc(rep.brand || "—")}</td>
+      <td>${esc((rep.tags || []).join(", "))}</td>
+      <td>${esc(rep.category)}</td>
+      <td>${dateStr}</td>
+      <td style="color:${totalStock > 0 ? 'inherit' : 'var(--color-danger)'}; font-weight:bold;">${totalStock}</td>
+      <td style="color:${sColor}; font-weight:bold;">${esc((rep.status || "").toUpperCase())}</td>
+      <td>${rep.sourcePlatformUrl ? `<button class="btn btn-outline source-platform-btn" data-url="${esc(rep.sourcePlatformUrl)}" style="padding:4px 8px; font-size:0.8rem;">Source Platform</button>` : '<span style="color:var(--color-ink-soft); font-size:0.8rem;">—</span>'}</td>
+      <td><button class="btn btn-outline sync-color-btn" data-parent="${parent.id}" data-color="${esc(color)}" title="Pull Name, Description, Category, Brand, Tags, Delivery info and Images from the parent for every size in this color, then publish" style="padding:4px 8px; font-size:0.8rem;">🔄 Auto Sync</button></td>
+      <td>
+        <button class="btn btn-outline pause-color-btn" data-parent="${parent.id}" data-color="${esc(color)}" data-status="${rep.status}" style="padding:4px 8px; font-size:0.8rem;">${rep.status === 'active' ? 'Pause' : 'Live'}</button>
+        <button class="btn btn-outline edit-color-btn" data-parent="${parent.id}" data-color="${esc(color)}" style="padding:4px 8px; font-size:0.8rem;">Edit</button>
+        <button class="btn btn-outline del-color-btn" data-parent="${parent.id}" data-color="${esc(color)}" style="color:var(--color-danger); padding:4px 8px; font-size:0.8rem;">Delete</button>
       </td>`;
     return tr;
   }
@@ -1500,9 +1632,15 @@ setTimeout(() => {
 
     topLevel.forEach((p) => {
       const children = p.hasVariants ? productsList.filter((c) => c.isVariant && c.parentId === p.id) : [];
-      tbody.appendChild(buildProductRow(p, { isChild: false, hasChildren: children.length > 0, childCount: children.length }));
-      if (children.length > 0 && expandedProductParents.has(p.id)) {
-        children.forEach((c) => tbody.appendChild(buildProductRow(c, { isChild: true })));
+      const byColor = new Map();
+      children.forEach((c) => {
+        const key = c.color || "";
+        if (!byColor.has(key)) byColor.set(key, []);
+        byColor.get(key).push(c);
+      });
+      tbody.appendChild(buildProductRow(p, { isChild: false, hasChildren: byColor.size > 0, childCount: byColor.size }));
+      if (byColor.size > 0 && expandedProductParents.has(p.id)) {
+        byColor.forEach((docs, color) => tbody.appendChild(buildColorGroupRow(p, color, docs)));
       }
     });
 
@@ -1515,11 +1653,96 @@ setTimeout(() => {
     tbody.querySelectorAll(".edit-prod-btn").forEach((b) => b.addEventListener("click", () => editProduct(b.dataset.id)));
     tbody.querySelectorAll(".del-prod-btn").forEach((b) => b.addEventListener("click", () => deleteProduct(b.dataset.id)));
     tbody.querySelectorAll(".source-platform-btn").forEach((b) => b.addEventListener("click", () => window.open(b.dataset.url, "_blank", "noopener,noreferrer")));
+    tbody.querySelectorAll(".sync-variant-btn").forEach((b) => b.addEventListener("click", () => syncVariantFromListRow(b.dataset.id)));
+    tbody.querySelectorAll(".sync-all-btn").forEach((b) => b.addEventListener("click", () => syncAllVariantsFromListRow(b.dataset.id)));
+
+    // Color-group row actions — every one of these acts on ALL size docs
+    // sharing that (parentId, color) pair at once.
+    function colorGroupDocs(parentId, color) {
+      return productsList.filter((c) => c.isVariant && c.parentId === parentId && (c.color || "") === color);
+    }
+    tbody.querySelectorAll(".edit-color-btn").forEach((b) => b.addEventListener("click", () => {
+      const parentId = b.dataset.parent, color = b.dataset.color;
+      const rep = colorGroupDocs(parentId, color)[0];
+      if (rep) editProduct(rep.id);
+    }));
+    tbody.querySelectorAll(".del-color-btn").forEach((b) => b.addEventListener("click", async () => {
+      const parentId = b.dataset.parent, color = b.dataset.color;
+      const docs = colorGroupDocs(parentId, color);
+      if (!confirm(`Delete the "${color}" color — ALL ${docs.length} size${docs.length === 1 ? "" : "s"} — permanently? This cannot be undone.`)) return;
+      for (const d of docs) await deleteDoc(doc(db, "products", d.id));
+    }));
+    tbody.querySelectorAll(".pause-color-btn").forEach((b) => b.addEventListener("click", async () => {
+      const parentId = b.dataset.parent, color = b.dataset.color, currentStatus = b.dataset.status;
+      const newStatus = currentStatus === "active" ? "draft" : "active";
+      const docs = colorGroupDocs(parentId, color);
+      for (const d of docs) await updateDoc(doc(db, "products", d.id), { status: newStatus });
+    }));
+    tbody.querySelectorAll(".sync-color-btn").forEach((b) => b.addEventListener("click", async () => {
+      const parentId = b.dataset.parent, color = b.dataset.color;
+      const docs = colorGroupDocs(parentId, color);
+      const original = b.textContent;
+      b.textContent = "Syncing..."; b.disabled = true;
+      try {
+        for (const d of docs) await syncOneVariant(d.id);
+      } catch (err) {
+        alert("Couldn't sync: " + err.message);
+      } finally {
+        b.textContent = original; b.disabled = false;
+      }
+    }));
+  }
+
+  // Same field-sync as the "🔄 Auto Sync from Parent" button inside Edit
+  // (buildVariantSyncPatch above), but callable straight from the All
+  // Products table without opening Edit first — and this version also
+  // publishes the variant (status: "active") once synced, per the
+  // "sync + save + publish in one click" request.
+  async function syncOneVariant(variantId) {
+    const variant = productsList.find((p) => p.id === variantId);
+    if (!variant || !variant.isVariant || !variant.parentId) {
+      throw new Error("This isn't a variant product.");
+    }
+    const parent = productsList.find((p) => p.id === variant.parentId);
+    if (!parent) throw new Error("Can't find the parent product — it may have been deleted.");
+    const syncPatch = { ...buildVariantSyncPatch(parent), status: "active" };
+    await updateDoc(doc(db, "products", variantId), syncPatch);
+  }
+
+  async function syncVariantFromListRow(variantId) {
+    const btn = document.querySelector(`.sync-variant-btn[data-id="${variantId}"]`);
+    if (btn) { btn.disabled = true; btn.textContent = "Syncing..."; }
+    try {
+      await syncOneVariant(variantId);
+      if (btn) { btn.textContent = "Synced ✓"; }
+      setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = "🔄 Auto Sync"; } }, 1200);
+    } catch (err) {
+      alert("Couldn't sync: " + err.message);
+      if (btn) { btn.disabled = false; btn.textContent = "🔄 Auto Sync"; }
+    }
+  }
+
+  async function syncAllVariantsFromListRow(parentId) {
+    const children = productsList.filter((p) => p.isVariant && p.parentId === parentId);
+    if (children.length === 0) return;
+    if (!confirm(`Auto Sync all ${children.length} variant(s) of this product from the parent's current Name, Description, Category, Brand, Tags, Delivery info and Images, then publish them all?`)) return;
+    const btn = document.querySelector(`.sync-all-btn[data-id="${parentId}"]`);
+    if (btn) { btn.disabled = true; btn.textContent = "Syncing..."; }
+    try {
+      for (const child of children) await syncOneVariant(child.id);
+      if (btn) { btn.textContent = "Synced ✓"; }
+      setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = "🔄 Sync All"; } }, 1200);
+    } catch (err) {
+      alert("Couldn't sync all variants: " + err.message);
+      if (btn) { btn.disabled = false; btn.textContent = "🔄 Sync All"; }
+    }
   }
 
   function editProduct(id) {
     const p = productsList.find((x) => x.id === id);
     if (!p) return;
+    pendingGalleryFiles = [];
+    document.getElementById("prod-gallery-preview").innerHTML = "";
     document.getElementById("prod-id").value = id;
     document.getElementById("prod-name").value = p.title || "";
     document.getElementById("prod-slug").value = p.slug || "";
@@ -1528,6 +1751,7 @@ setTimeout(() => {
     document.getElementById("prod-seo-desc").value = p.seoDesc || "";
     document.getElementById("prod-mrp").value = p.mrp ?? "";
     document.getElementById("prod-price").value = p.sellingPrice ?? "";
+    updateProductPricePreview();
     // Older products saved before this field existed won't have it —
     // leave blank rather than defaulting to 0, so the admin notices and
     // fills in the real number instead of accidentally saving "free".
@@ -1543,41 +1767,87 @@ setTimeout(() => {
     document.getElementById("prod-delivery-partner-name").value = p.deliveryPartnerName || "";
     document.getElementById("prod-existing-images").value = JSON.stringify(p.images || []);
     document.getElementById("prod-existing-delivery-img").value = p.deliveryPartnerImage || "";
-    previewExistingImages(document.getElementById("prod-feature-preview"), p.images && p.images[0] ? [p.images[0]] : []);
-    previewExistingImages(document.getElementById("prod-gallery-preview"), (p.images || []).slice(1));
-    previewExistingImages(document.getElementById("prod-delivery-preview"), p.deliveryPartnerImage ? [p.deliveryPartnerImage] : []);
+    function refreshFeaturePreview() {
+      const imgs = JSON.parse(document.getElementById("prod-existing-images").value || "[]");
+      previewExistingImages(document.getElementById("prod-feature-preview"), imgs[0] ? [imgs[0]] : [], () => {
+        imgs[0] = "";
+        document.getElementById("prod-existing-images").value = JSON.stringify(imgs);
+        refreshFeaturePreview();
+      });
+    }
+    function refreshGalleryExistingPreview() {
+      const imgs = JSON.parse(document.getElementById("prod-existing-images").value || "[]");
+      previewExistingImages(document.getElementById("prod-gallery-preview"), imgs.slice(1), (idx) => {
+        imgs.splice(1 + idx, 1);
+        document.getElementById("prod-existing-images").value = JSON.stringify(imgs);
+        refreshGalleryExistingPreview();
+      });
+    }
+    function refreshDeliveryLogoPreview() {
+      const url = document.getElementById("prod-existing-delivery-img").value;
+      previewExistingImages(document.getElementById("prod-delivery-preview"), url ? [url] : [], () => {
+        document.getElementById("prod-existing-delivery-img").value = "";
+        refreshDeliveryLogoPreview();
+      });
+    }
+    refreshFeaturePreview();
+    refreshGalleryExistingPreview();
+    refreshDeliveryLogoPreview();
     setTimeout(() => {
       document.getElementById("prod-category").value = p.category || "";
       document.getElementById("prod-brand").value = p.brand || "";
     }, 100);
 
-    // Variant-related form state — three cases: a variant itself, a
-    // parent with variants, or a plain product with neither.
+    // Variant-related form state — two cases: editing one COLOR of a
+    // variant family (isVariant), or a plain product / the parent
+    // template of a variant family (hasVariants, possibly false).
     document.getElementById("prod-is-variant").value = p.isVariant ? "1" : "";
     document.getElementById("prod-parent-id").value = p.parentId || "";
     if (p.isVariant) {
-      document.getElementById("variant-size-wrap").style.display = "";
-      document.getElementById("variant-color-wrap").style.display = "";
-      document.getElementById("prod-variant-size").value = p.size || "";
-      document.getElementById("prod-variant-color").value = p.color || "";
-      // A variant can't itself have variants — that section is parent-only.
+      // Per-doc pricing fields are meaningless here — every size in this
+      // color has its OWN price/stock/HSN/etc, edited in the box below —
+      // so hide them and drop their `required` (they're not part of the
+      // form being submitted in this mode).
+      document.getElementById("variant-top-pricing-wrap").style.display = "none";
+      document.getElementById("prod-mrp").required = false;
+      document.getElementById("prod-price").required = false;
+      document.getElementById("prod-stock").required = false;
+
+      // A color can't itself have other colors — that's parent-only.
       document.getElementById("variants-toggle-wrap").style.display = "none";
-      document.getElementById("variants-section").style.display = "none";
+      document.getElementById("prod-has-variants").checked = false;
+
       document.getElementById("variant-sync-wrap").style.display = p.parentId ? "" : "none";
+
+      // Show the box UI, but scoped to ONLY this one color — no "add a
+      // different color" controls here (that's a parent-level action).
+      document.getElementById("variants-section").style.display = "";
+      document.getElementById("variant-add-color-wrap").style.display = "none";
+      document.getElementById("variants-section-title").textContent = `Sizes for "${p.color || ""}"`;
+      document.getElementById("variants-section-hint").textContent = `Every size below belongs ONLY to "${p.color || ""}" — add, remove, or reprice a size here without touching any other color. Renaming the Color field and saving relabels this whole product (all its sizes) to the new name.`;
+      document.getElementById("prod-variant-color").value = p.color || "";
+      document.getElementById("variant-boxes-container").innerHTML = "";
+      const sameColorDocs = productsList.filter((c) => c.isVariant && c.parentId === p.parentId && (c.color || "") === (p.color || ""));
+      document.getElementById("variant-boxes-container").appendChild(buildColorBox(p.color || "", sameColorDocs));
     } else {
-      document.getElementById("variant-size-wrap").style.display = "none";
-      document.getElementById("variant-color-wrap").style.display = "none";
+      document.getElementById("variant-top-pricing-wrap").style.display = "";
+      document.getElementById("prod-mrp").required = false;
+      document.getElementById("prod-price").required = true;
+      document.getElementById("prod-stock").required = true;
       document.getElementById("variant-sync-wrap").style.display = "none";
       document.getElementById("variants-toggle-wrap").style.display = "";
       document.getElementById("prod-has-variants").checked = !!p.hasVariants;
       document.getElementById("variants-section").style.display = p.hasVariants ? "" : "none";
-      document.getElementById("variant-sizes-input").value = (p.variantAxes && p.variantAxes.sizes) ? p.variantAxes.sizes.join(", ") : "";
-      document.getElementById("variant-colors-input").value = (p.variantAxes && p.variantAxes.colors) ? p.variantAxes.colors.join(", ") : "";
+      document.getElementById("variant-add-color-wrap").style.display = "";
+      document.getElementById("variants-section-title").textContent = "Variants";
+      document.getElementById("variants-section-hint").textContent = "A different COLOR is a different product on the site — each color gets its own box below and its own page. Sizes are NOT separate products: every size lives inside its color's box, with its own stock and (optionally) its own price, so you can add/remove a size or change its price without touching the others.";
+      document.getElementById("variant-sizes-input").value = "";
+      document.getElementById("variant-colors-input").value = "";
       document.getElementById("variant-boxes-container").innerHTML = "";
       if (p.hasVariants) populateVariantBoxesForParent(id);
     }
 
-    document.getElementById("product-form-title").textContent = p.isVariant ? `Edit Variant (${p.size || ""} / ${p.color || ""})` : "Edit Product";
+    document.getElementById("product-form-title").textContent = p.isVariant ? `Edit "${p.color || ""}"` : "Edit Product";
     renderSeoChecklist();
     goToSection("store-add-product");
   }
@@ -1631,13 +1901,30 @@ setTimeout(() => {
 
     const isVariant = document.getElementById("prod-is-variant").value === "1";
     const hasVariants = !isVariant && variantsToggle.checked;
-    const variantBoxes = hasVariants ? Array.from(variantBoxesContainer.children) : [];
-    if (hasVariants) {
-      if (variantBoxes.length === 0) { alert("Add at least one size/color variant, or turn off \"This product has variants\"."); return; }
-      for (const box of variantBoxes) {
-        if (box.querySelector(".vb-stock").value.trim() === "") {
-          alert(`Stock is required for the ${box.dataset.size} / ${box.dataset.color} variant.`);
-          return;
+    // A single color's scoped edit uses the exact same box UI as the
+    // parent's — just with one box in it — so both paths process
+    // `variantBoxesContainer` the same way.
+    const usesColorBoxes = hasVariants || isVariant;
+    const colorBoxes = usesColorBoxes ? Array.from(variantBoxesContainer.children) : [];
+    if (usesColorBoxes) {
+      if (colorBoxes.length === 0) {
+        alert(isVariant ? "Add at least one size, or use Delete Color on the products list to remove this color entirely." : "Add at least one color, or turn off \"This product has variants\".");
+        return;
+      }
+      for (const box of colorBoxes) {
+        const colorVal = box.querySelector(".vc-color-input").value.trim();
+        if (!colorVal) { alert("Every color box needs a color name."); return; }
+        const rows = Array.from(box.querySelectorAll(".size-row"));
+        if (rows.length === 0) { alert(`Add at least one size for "${colorVal}", or remove that color.`); return; }
+        for (const row of rows) {
+          if (row.querySelector(".sr-size").value.trim() === "") {
+            alert(`Every size row for "${colorVal}" needs a size name.`);
+            return;
+          }
+          if (row.querySelector(".sr-stock").value.trim() === "") {
+            alert(`Stock is required for ${colorVal} / ${row.querySelector(".sr-size").value.trim()}.`);
+            return;
+          }
         }
       }
     }
@@ -1652,7 +1939,7 @@ setTimeout(() => {
       // Feature + gallery images
       let images = JSON.parse(document.getElementById("prod-existing-images").value || "[]");
       const featureFile = document.getElementById("prod-feature-img").files[0];
-      const galleryFiles = Array.from(document.getElementById("prod-gallery-imgs").files || []).slice(0, 5);
+      const galleryFiles = pendingGalleryFiles.slice(0, 5);
 
       if (featureFile) {
         const featureUrl = await uploadToImgBB(featureFile);
@@ -1709,81 +1996,119 @@ setTimeout(() => {
         updatedAt: new Date().toISOString()
       };
 
+      const trueParentId = document.getElementById("prod-parent-id").value;
       if (isVariant) {
-        // A variant is a normal product doc PLUS these three fields —
-        // never has its own hasVariants/variantAxes.
+        // A scoped color edit never touches a top-level "products" doc of
+        // its own (pId is just one of several sibling size docs) — the
+        // box loop below handles every size doc directly instead. These
+        // per-doc pricing fields are hidden/unused in this mode; zeroed
+        // here only as a safe fallback if a brand-new size row is left
+        // blank (its own box fields are what actually get saved).
         pData.isVariant = true;
-        pData.parentId = document.getElementById("prod-parent-id").value;
-        pData.size = document.getElementById("prod-variant-size").value.trim();
-        pData.color = document.getElementById("prod-variant-color").value.trim();
+        pData.parentId = trueParentId;
+        pData.mrp = 0; pData.sellingPrice = 0; pData.stock = 0;
+        pData.hsnCode = ""; pData.sourcePlatformUrl = ""; pData.sku = "";
         delete pData.hasVariants;
         delete pData.variantAxes;
       }
 
       let docId = pId;
-      if (pId) {
-        await updateDoc(doc(db, "products", pId), pData);
-      } else {
-        pData.createdAt = new Date().toISOString();
-        const ref = await addDoc(collection(db, "products"), pData);
-        docId = ref.id;
+      if (!isVariant) {
+        if (pId) {
+          await updateDoc(doc(db, "products", pId), pData);
+        } else {
+          pData.createdAt = new Date().toISOString();
+          const ref = await addDoc(collection(db, "products"), pData);
+          docId = ref.id;
+        }
       }
 
-      // Create/update each size×color variant as its own product doc.
-      // New boxes (no data-existing-id) get a full copy of everything
-      // just saved above, EXCEPT MRP/Sale Price/HSN/Source URL/Stock —
-      // those come from the box itself if filled in, or fall back to a
-      // one-time snapshot of the parent's value if left blank (not a
-      // live link — see the "Auto Sync" button for pulling parent
-      // changes in later). Existing boxes only touch fields the admin
-      // actually typed something into, so re-saving the parent never
-      // silently wipes a variant's own already-configured price/stock.
-      if (hasVariants) {
-        for (const box of variantBoxes) {
-          const size = box.dataset.size, color = box.dataset.color;
-          const mrpVal = box.querySelector(".vb-mrp").value.trim();
-          const priceVal = box.querySelector(".vb-price").value.trim();
-          const hsnVal = box.querySelector(".vb-hsn").value.trim();
-          const sourceVal = box.querySelector(".vb-source").value.trim();
-          const stockVal = box.querySelector(".vb-stock").value.trim();
+      // Create/update one real product doc PER SIZE, grouped by color box.
+      // A color box's `variantSlug` (based on the color name only) is what
+      // makes every size inside it land on the SAME product page — that's
+      // the whole "one product per color, sizes live inside it" behaviour.
+      // Renaming the box's Color field and saving re-patches that new
+      // color (and a fresh variantSlug) onto every size doc in the box,
+      // which is what makes "this red product is now called pink" a
+      // one-step rename instead of a rebuild.
+      if (usesColorBoxes) {
+        // Shared (non-per-size) fields — applied to every EXISTING size
+        // doc only in "scoped" mode (editing one color directly IS
+        // editing that product's own live fields). In "parent" mode,
+        // existing children are left alone on a plain re-save — that's
+        // what the "Auto Sync" button is for — so a parent edit never
+        // silently overwrites a live child's content.
+        const sharedFields = { ...pData };
+        delete sharedFields.slug;
+        delete sharedFields.hasVariants;
+        delete sharedFields.variantAxes;
+        delete sharedFields.mrp;
+        delete sharedFields.sellingPrice;
+        delete sharedFields.stock;
+        delete sharedFields.hsnCode;
+        delete sharedFields.sourcePlatformUrl;
+        delete sharedFields.sku;
+        delete sharedFields.isVariant;
+        delete sharedFields.parentId;
 
-          if (box.dataset.existingId) {
-            const patch = { size, color, stock: Number(stockVal) || 0 };
-            if (mrpVal !== "") patch.mrp = Number(mrpVal);
-            if (priceVal !== "") patch.sellingPrice = Number(priceVal);
-            if (hsnVal !== "") patch.hsnCode = hsnVal;
-            if (sourceVal !== "") patch.sourcePlatformUrl = sourceVal;
-            await updateDoc(doc(db, "products", box.dataset.existingId), patch);
-          } else {
-            const childData = {
-              ...pData,
-              isVariant: true,
-              parentId: docId,
-              size, color,
-              mrp: mrpVal !== "" ? Number(mrpVal) : pData.mrp,
-              sellingPrice: priceVal !== "" ? Number(priceVal) : pData.sellingPrice,
-              hsnCode: hsnVal !== "" ? hsnVal : pData.hsnCode,
-              sourcePlatformUrl: sourceVal !== "" ? sourceVal : pData.sourcePlatformUrl,
-              stock: Number(stockVal) || 0,
-              hasVariants: false,
-              variantAxes: null,
-              variantSlug: slugifyVariant(`${size}-${color}`),
-              createdAt: new Date().toISOString()
-            };
-            // Not `slug` — that field drives /products/:slug routing and
-            // ensureUniqueSlug()'s collision check for NORMAL products.
-            // A variant is never reached by that route (it uses parentId
-            // + variantSlug instead), so copying the parent's slug here
-            // would just sit there unused — and worse, on the parent's
-            // NEXT save, ensureUniqueSlug() would see its own slug as
-            // "already taken" by this child and needlessly append "-2".
-            delete childData.slug;
-            delete childData.updatedAt;
-            await addDoc(collection(db, "products"), childData);
+        for (const box of colorBoxes) {
+          const colorVal = box.querySelector(".vc-color-input").value.trim();
+          const variantSlug = slugifyVariant(colorVal);
+          const rows = Array.from(box.querySelectorAll(".size-row"));
+
+          for (const row of rows) {
+            const size = row.querySelector(".sr-size").value.trim();
+            const mrpVal = row.querySelector(".sr-mrp").value.trim();
+            const priceVal = row.querySelector(".sr-price").value.trim();
+            const hsnVal = row.querySelector(".sr-hsn").value.trim();
+            const sourceVal = row.querySelector(".sr-source").value.trim();
+            const stockVal = row.querySelector(".sr-stock").value.trim();
+
+            if (row.dataset.existingId) {
+              const patch = { size, color: colorVal, variantSlug, stock: Number(stockVal) || 0 };
+              if (mrpVal !== "") patch.mrp = Number(mrpVal);
+              if (priceVal !== "") patch.sellingPrice = Number(priceVal);
+              if (hsnVal !== "") patch.hsnCode = hsnVal;
+              if (sourceVal !== "") patch.sourcePlatformUrl = sourceVal;
+              if (isVariant) Object.assign(patch, sharedFields);
+              await updateDoc(doc(db, "products", row.dataset.existingId), patch);
+            } else {
+              // New rows (no data-existing-id) get a full copy of
+              // everything just saved above, EXCEPT MRP/Sale
+              // Price/HSN/Source URL/Stock — those come from the row
+              // itself if filled in, or fall back to a one-time snapshot
+              // of the shared value if left blank.
+              const childData = {
+                ...pData,
+                isVariant: true,
+                parentId: isVariant ? trueParentId : docId,
+                size, color: colorVal,
+                mrp: mrpVal !== "" ? Number(mrpVal) : pData.mrp,
+                sellingPrice: priceVal !== "" ? Number(priceVal) : pData.sellingPrice,
+                hsnCode: hsnVal !== "" ? hsnVal : pData.hsnCode,
+                sourcePlatformUrl: sourceVal !== "" ? sourceVal : pData.sourcePlatformUrl,
+                stock: Number(stockVal) || 0,
+                hasVariants: false,
+                variantAxes: null,
+                variantSlug,
+                createdAt: new Date().toISOString()
+              };
+              // Not `slug` — that field drives /products/:slug routing and
+              // ensureUniqueSlug()'s collision check for NORMAL products.
+              // A variant is never reached by that route (it uses parentId
+              // + variantSlug instead), so copying the parent's slug here
+              // would just sit there unused — and worse, on the parent's
+              // NEXT save, ensureUniqueSlug() would see its own slug as
+              // "already taken" by this child and needlessly append "-2".
+              delete childData.slug;
+              delete childData.updatedAt;
+              await addDoc(collection(db, "products"), childData);
+            }
           }
         }
       }
 
+      pendingGalleryFiles = [];
       resetProductForm();
       goToSection("store-products");
     } catch (err) {
@@ -1814,6 +2139,35 @@ setTimeout(() => {
   // api/list.js and js/product-loader.js) — it only exists from then on
   // as an admin-side "template" record.
   // ================================================================
+  function updateProductPricePreview() {
+    const previewEl = document.getElementById("prod-price-preview");
+    if (!previewEl) return;
+    const mrp = Number(document.getElementById("prod-mrp").value) || 0;
+    const price = Number(document.getElementById("prod-price").value) || 0;
+    if (!price) { previewEl.textContent = "Enter a Sale Price to see the live website price preview here."; return; }
+
+    const finalPrice = applyMarginToPrice(price);
+    const parts = [];
+    if (mrp > price) {
+      parts.push(`MRP ₹${mrp} − Sale Price ₹${price} = ₹${(mrp - price).toFixed(2)} off`);
+    } else if (mrp > 0) {
+      parts.push(`MRP ₹${mrp} is not higher than Sale Price ₹${price} — no discount badge will show`);
+    } else {
+      parts.push(`No MRP entered — no discount badge will show`);
+    }
+    if (finalPrice !== price) {
+      const { type, value } = currentMarginSettings();
+      const marginText = type === "percent" ? `${value}%` : `₹${value}`;
+      parts.push(`+ Store Margin (${marginText}) = <strong>₹${finalPrice}</strong> final price on the website`);
+    } else {
+      parts.push(`No Store Margin set — <strong>₹${price}</strong> will show on the website exactly as entered`);
+    }
+    previewEl.innerHTML = parts.join(" &nbsp;|&nbsp; ");
+  }
+  ["prod-mrp", "prod-price"].forEach((id) => {
+    document.getElementById(id).addEventListener("input", updateProductPricePreview);
+  });
+
   const variantsToggle = document.getElementById("prod-has-variants");
   const variantsSection = document.getElementById("variants-section");
   const variantBoxesContainer = document.getElementById("variant-boxes-container");
@@ -1826,97 +2180,149 @@ setTimeout(() => {
   function slugifyVariant(text) {
     return String(text || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-+|-+$)/g, "");
   }
-  function variantBoxKey(size, color) { return `${size}::${color}`; }
 
-  function buildVariantBox(size, color, existingProduct) {
-    const box = document.createElement("div");
-    box.className = "variant-box";
-    box.dataset.size = size;
-    box.dataset.color = color;
-    box.dataset.existingId = existingProduct ? existingProduct.id : "";
-    box.style.cssText = "border:1px solid var(--color-border,#e2ddd0); border-radius:6px; padding:12px; background:#fff;";
+  // A single SIZE row inside a color box. Each row maps 1:1 to a real
+  // product doc under the hood (own stock/price/sku) — but visually and
+  // editorially it's just "a size", not "a product". `existingDoc` is that
+  // doc when editing, or null for a brand-new size being added.
+  function buildSizeRow(size, existingDoc) {
+    const row = document.createElement("div");
+    row.className = "size-row";
+    row.dataset.existingId = existingDoc ? existingDoc.id : "";
+    row.style.cssText = "display:flex; align-items:flex-end; gap:6px; flex-wrap:wrap; border-top:1px dashed var(--color-border,#e2ddd0); padding-top:8px; margin-top:8px;";
 
-    const mrp = (existingProduct && existingProduct.mrp !== undefined && existingProduct.mrp !== null) ? existingProduct.mrp : "";
-    const price = (existingProduct && existingProduct.sellingPrice !== undefined && existingProduct.sellingPrice !== null) ? existingProduct.sellingPrice : "";
-    const hsn = existingProduct ? (existingProduct.hsnCode || "") : "";
-    const sourceUrl = existingProduct ? (existingProduct.sourcePlatformUrl || "") : "";
-    const stock = (existingProduct && existingProduct.stock !== undefined) ? existingProduct.stock : "";
+    const mrp = (existingDoc && existingDoc.mrp !== undefined && existingDoc.mrp !== null) ? existingDoc.mrp : "";
+    const price = (existingDoc && existingDoc.sellingPrice !== undefined && existingDoc.sellingPrice !== null) ? existingDoc.sellingPrice : "";
+    const hsn = existingDoc ? (existingDoc.hsnCode || "") : "";
+    const sourceUrl = existingDoc ? (existingDoc.sourcePlatformUrl || "") : "";
+    const stock = (existingDoc && existingDoc.stock !== undefined) ? existingDoc.stock : "";
 
-    box.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
-        <strong>${esc(size)} / ${esc(color)}</strong>
-        ${existingProduct
-          ? `<div style="display:flex; gap:6px;">
-               <button type="button" class="btn btn-outline variant-edit-btn" style="padding:2px 8px; font-size:0.78rem;">Edit as Product</button>
-               <button type="button" class="btn btn-outline variant-delete-btn" style="padding:2px 8px; font-size:0.78rem; color:var(--color-danger); border-color:var(--color-danger);">🗑 Delete</button>
-             </div>`
-          : `<button type="button" class="btn btn-outline variant-remove-btn" style="padding:2px 8px; font-size:0.78rem; color:var(--color-danger); border-color:var(--color-danger);">Remove</button>`
-        }
-      </div>
-      <div class="form-grid" style="grid-template-columns: repeat(5, minmax(90px,1fr)); gap:8px;">
-        <div class="form-field"><label style="font-size:0.78rem;">MRP ₹ <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="number" class="vb-mrp" min="0" value="${mrp}" placeholder="parent's"></div>
-        <div class="form-field"><label style="font-size:0.78rem;">Sale Price ₹ <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="number" class="vb-price" min="0" value="${price}" placeholder="parent's"></div>
-        <div class="form-field"><label style="font-size:0.78rem;">HSN <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="text" class="vb-hsn" value="${esc(hsn)}" placeholder="parent's"></div>
-        <div class="form-field"><label style="font-size:0.78rem;">Source URL <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="url" class="vb-source" value="${esc(sourceUrl)}" placeholder="parent's"></div>
-        <div class="form-field"><label style="font-size:0.78rem;">Stock <span class="required-star">*</span></label><input type="number" class="vb-stock" min="0" value="${stock}"></div>
+    row.innerHTML = `
+      <div class="form-field" style="flex:0 0 90px; margin:0;"><label style="font-size:0.78rem;">Size <span class="required-star">*</span></label><input type="text" class="sr-size" value="${esc(size || "")}" placeholder="S"></div>
+      <div class="form-field" style="flex:1 1 80px; margin:0;"><label style="font-size:0.78rem;">MRP ₹ <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="number" class="sr-mrp" min="0" value="${mrp}" placeholder="parent's"></div>
+      <div class="form-field" style="flex:1 1 80px; margin:0;"><label style="font-size:0.78rem;">Sale Price ₹ <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="number" class="sr-price" min="0" value="${price}" placeholder="parent's"></div>
+      <div class="form-field" style="flex:1 1 90px; margin:0;"><label style="font-size:0.78rem;">HSN <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="text" class="sr-hsn" value="${esc(hsn)}" placeholder="parent's"></div>
+      <div class="form-field" style="flex:1 1 110px; margin:0;"><label style="font-size:0.78rem;">Source URL <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="url" class="sr-source" value="${esc(sourceUrl)}" placeholder="parent's"></div>
+      <div class="form-field" style="flex:0 0 70px; margin:0;"><label style="font-size:0.78rem;">Stock <span class="required-star">*</span></label><input type="number" class="sr-stock" min="0" value="${stock}"></div>
+      <div style="display:flex; gap:4px; margin-bottom:2px;">
+        <button type="button" class="btn btn-outline sr-delete-btn" style="padding:2px 6px; font-size:0.75rem; color:var(--color-danger); border-color:var(--color-danger);">🗑</button>
       </div>
     `;
 
-    if (existingProduct) {
-      box.querySelector(".variant-edit-btn").addEventListener("click", () => editProduct(existingProduct.id));
-      box.querySelector(".variant-delete-btn").addEventListener("click", async () => {
-        if (!confirm(`Delete the ${size} / ${color} variant permanently? This cannot be undone.`)) return;
-        await deleteDoc(doc(db, "products", existingProduct.id));
-        box.remove();
+    if (existingDoc) {
+      row.querySelector(".sr-delete-btn").addEventListener("click", async () => {
+        if (!confirm(`Delete the "${size}" size permanently? This cannot be undone.`)) return;
+        await deleteDoc(doc(db, "products", existingDoc.id));
+        row.remove();
       });
     } else {
-      box.querySelector(".variant-remove-btn").addEventListener("click", () => box.remove());
+      row.querySelector(".sr-delete-btn").addEventListener("click", () => row.remove());
     }
+    return row;
+  }
+
+  // A COLOR box — this is the real "sub-product" from the shopper's point
+  // of view: one color = one product page. It holds an editable list of
+  // size rows (add/remove/rename/reprice) and a writable Color name, so
+  // renaming "Red" to "Pink" and saving just relabels this whole group —
+  // no need to recreate anything.
+  function buildColorBox(color, existingDocs, defaultSizes) {
+    existingDocs = existingDocs || [];
+    const box = document.createElement("div");
+    box.className = "variant-box";
+    box.dataset.color = color;
+    box.style.cssText = "border:1px solid var(--color-border,#e2ddd0); border-radius:6px; padding:12px; background:#fff;";
+
+    box.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:4px; flex-wrap:wrap; gap:6px;">
+        <div class="form-field" style="margin:0; flex:1 1 200px;">
+          <label style="font-size:0.78rem;">Color <span class="required-star">*</span> <span class="field-hint" style="display:inline;">— editable; renaming updates every size below</span></label>
+          <input type="text" class="vc-color-input" value="${esc(color || "")}" placeholder="Red">
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button type="button" class="btn btn-outline vc-add-size-btn" style="padding:2px 8px; font-size:0.78rem;">+ Add Size</button>
+          <button type="button" class="btn btn-outline vc-remove-color-btn" style="padding:2px 8px; font-size:0.78rem; color:var(--color-danger); border-color:var(--color-danger);">${existingDocs.length ? "🗑 Delete Color" : "Remove"}</button>
+        </div>
+      </div>
+      <div class="vc-size-rows"></div>
+    `;
+
+    const rowsWrap = box.querySelector(".vc-size-rows");
+    if (existingDocs.length > 0) {
+      existingDocs.forEach((d) => rowsWrap.appendChild(buildSizeRow(d.size, d)));
+    } else {
+      (defaultSizes && defaultSizes.length ? defaultSizes : [""]).forEach((s) => rowsWrap.appendChild(buildSizeRow(s, null)));
+    }
+
+    box.querySelector(".vc-add-size-btn").addEventListener("click", () => {
+      rowsWrap.appendChild(buildSizeRow("", null));
+    });
+
+    box.querySelector(".vc-remove-color-btn").addEventListener("click", async () => {
+      if (existingDocs.length > 0) {
+        if (!confirm(`Delete the "${color}" color — ALL ${existingDocs.length} of its sizes — permanently? This cannot be undone.`)) return;
+        for (const d of existingDocs) await deleteDoc(doc(db, "products", d.id));
+      }
+      box.remove();
+    });
+
     return box;
   }
 
   document.getElementById("add-variants-btn").addEventListener("click", () => {
-    const sizes = document.getElementById("variant-sizes-input").value.split(",").map((s) => s.trim()).filter(Boolean);
     const colors = document.getElementById("variant-colors-input").value.split(",").map((c) => c.trim()).filter(Boolean);
-    if (!sizes.length || !colors.length) { alert("Enter at least one size and one color, comma-separated."); return; }
+    const defaultSizes = document.getElementById("variant-sizes-input").value.split(",").map((s) => s.trim()).filter(Boolean);
+    if (!colors.length) { alert("Enter at least one color, comma-separated (e.g. Red, Blue)."); return; }
 
-    const existingKeys = new Set(
-      Array.from(variantBoxesContainer.children).map((box) => variantBoxKey(box.dataset.size, box.dataset.color))
+    const existingColors = new Set(
+      Array.from(variantBoxesContainer.children).map((box) => (box.dataset.color || "").toLowerCase())
     );
-    sizes.forEach((size) => {
-      colors.forEach((color) => {
-        const key = variantBoxKey(size, color);
-        if (existingKeys.has(key)) return; // already have a box for this combo — don't duplicate
-        variantBoxesContainer.appendChild(buildVariantBox(size, color, null));
-        existingKeys.add(key);
-      });
+    colors.forEach((color) => {
+      if (existingColors.has(color.toLowerCase())) return; // already have a box for this color — don't duplicate
+      variantBoxesContainer.appendChild(buildColorBox(color, [], defaultSizes));
+      existingColors.add(color.toLowerCase());
     });
   });
 
   function populateVariantBoxesForParent(parentId) {
     variantBoxesContainer.innerHTML = "";
-    productsList.filter((p) => p.isVariant && p.parentId === parentId)
-      .forEach((child) => variantBoxesContainer.appendChild(buildVariantBox(child.size, child.color, child)));
+    const children = productsList.filter((p) => p.isVariant && p.parentId === parentId);
+    const byColor = new Map();
+    children.forEach((c) => {
+      const key = c.color || "";
+      if (!byColor.has(key)) byColor.set(key, []);
+      byColor.get(key).push(c);
+    });
+    byColor.forEach((docs, color) => variantBoxesContainer.appendChild(buildColorBox(color, docs)));
+  }
+
+  // Shared by the "🔄 Auto Sync from Parent" button inside Edit (below)
+  // and the "Auto Sync" / "Sync All" buttons in the All Products table
+  // (see buildProductRow / renderProductsTable) — same fields every time,
+  // so the two entry points can never quietly drift apart.
+  function buildVariantSyncPatch(parent) {
+    return {
+      title: parent.title, keyphrase: parent.keyphrase, seoTitle: parent.seoTitle, seoDesc: parent.seoDesc,
+      category: parent.category, brand: parent.brand, tags: parent.tags || [],
+      shortDescription: parent.shortDescription, description: parent.description,
+      deliveryFee: parent.deliveryFee, deliveryPartnerName: parent.deliveryPartnerName, deliveryPartnerImage: parent.deliveryPartnerImage,
+      images: parent.images || []
+    };
   }
 
   document.getElementById("variant-auto-sync-btn").addEventListener("click", async () => {
     const parentId = document.getElementById("prod-parent-id").value;
     const parent = productsList.find((p) => p.id === parentId);
     if (!parent) { alert("Can't find the parent product — it may have been deleted."); return; }
-    if (!confirm("Overwrite this variant's Name, Description, Category, Brand, Tags, Delivery info and Images with the parent's current data? Size, Color, MRP, Sale Price, HSN and Source URL are kept as-is.")) return;
+    const color = document.getElementById("prod-variant-color").value;
+    const groupDocs = productsList.filter((c) => c.isVariant && c.parentId === parentId && (c.color || "") === color);
+    if (!confirm(`Overwrite Name, Description, Category, Brand, Tags, Delivery info and Images for ALL ${groupDocs.length} size(s) of "${color}" with the parent's current data? Sizes, prices, HSN and Source URL are kept as-is.`)) return;
 
     const variantId = document.getElementById("prod-id").value;
-    const syncPatch = {
-      title: parent.title, slug: parent.slug, keyphrase: parent.keyphrase, seoTitle: parent.seoTitle, seoDesc: parent.seoDesc,
-      category: parent.category, brand: parent.brand, tags: parent.tags || [],
-      shortDescription: parent.shortDescription, description: parent.description,
-      deliveryFee: parent.deliveryFee, deliveryPartnerName: parent.deliveryPartnerName, deliveryPartnerImage: parent.deliveryPartnerImage,
-      images: parent.images || []
-    };
+    const syncPatch = buildVariantSyncPatch(parent);
     try {
-      if (variantId) await updateDoc(doc(db, "products", variantId), syncPatch);
+      for (const d of groupDocs) await updateDoc(doc(db, "products", d.id), syncPatch);
       // Refresh the open form so the admin sees the synced values immediately.
-      Object.entries(syncPatch).forEach(() => {}); // no-op, real refresh below
       editProduct(variantId);
       alert("Synced from parent.");
     } catch (err) {
@@ -2986,13 +3392,12 @@ setTimeout(() => {
       const b = document.createElement("b"); b.textContent = "Payment Screenshot: ";
       p.appendChild(b);
       if (o.paymentScreenshotUrl) {
-        const a = document.createElement("a");
-        a.href = o.paymentScreenshotUrl;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        a.textContent = "🔍 View Screenshot";
-        a.style.cssText = "color: var(--color-primary); font-weight: 600;";
-        p.appendChild(a);
+        const thumb = document.createElement("img");
+        thumb.src = o.paymentScreenshotUrl;
+        thumb.alt = "Payment screenshot";
+        thumb.style.cssText = "max-width:120px; max-height:120px; border-radius:6px; border:1px solid var(--color-border,#e2ddd0); cursor:zoom-in; display:block; margin-top:4px;";
+        thumb.addEventListener("click", () => openAdminLightbox(o.paymentScreenshotUrl));
+        p.appendChild(thumb);
       } else {
         const span = document.createElement("span");
         span.textContent = o.autoPlaced ? "— (order auto-placed, no screenshot was uploaded)" : "— not uploaded";
@@ -3302,6 +3707,10 @@ setTimeout(() => {
     document.getElementById("set-cod-charge").value = SETTINGS.codExtraCharge ?? 30;
     document.getElementById("set-support-email").value = SETTINGS.supportEmail || "";
     document.getElementById("set-support-phone").value = SETTINGS.supportPhone || "";
+    const marginSettings = SETTINGS.storeMargin || { type: "percent", value: "" };
+    document.getElementById("set-margin-type").value = marginSettings.type || "percent";
+    document.getElementById("set-margin-value").value = marginSettings.value ?? "";
+    updateMarginExampleHint();
     const sidebarLabel = document.querySelector("[data-site-name]");
     if (sidebarLabel) sidebarLabel.textContent = (SETTINGS.storeName || "AzubaTrends") + " Admin";
   }
@@ -3357,6 +3766,61 @@ setTimeout(() => {
       upiId: document.getElementById("set-upi-id").value,
       codExtraCharge: Number(document.getElementById("set-cod-charge").value) || 0,
     }, document.getElementById("save-payment-settings-btn"));
+  });
+
+  function currentMarginSettings() {
+    const type = document.getElementById("set-margin-type").value === "flat" ? "flat" : "percent";
+    const value = Number(document.getElementById("set-margin-value").value) || 0;
+    return { type, value };
+  }
+
+  function applyMarginToPrice(price) {
+    const p = Number(price) || 0;
+    const { type, value } = currentMarginSettings();
+    if (!value || value <= 0) return p;
+    const marked = type === "flat" ? p + value : p + (p * value) / 100;
+    return Math.round(marked);
+  }
+
+  function updateMarginExampleHint() {
+    const { type, value } = currentMarginSettings();
+    const hint = document.getElementById("margin-example-hint");
+    if (!value || value <= 0) {
+      hint.textContent = "No margin set — products will show their Sale Price exactly as entered.";
+      return;
+    }
+    const sample = 500;
+    const marked = applyMarginToPrice(sample);
+    hint.textContent = type === "percent"
+      ? `Example: a ₹${sample} Sale Price will show as ₹${marked} on the site (${value}% added).`
+      : `Example: a ₹${sample} Sale Price will show as ₹${marked} on the site (₹${value} added flat).`;
+  }
+  document.getElementById("set-margin-type").addEventListener("change", updateMarginExampleHint);
+  document.getElementById("set-margin-value").addEventListener("input", updateMarginExampleHint);
+
+  document.getElementById("margin-settings-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    saveSettingsPatch({ storeMargin: currentMarginSettings() }, document.getElementById("save-margin-settings-btn"));
+  });
+
+  document.getElementById("recalc-ratings-btn").addEventListener("click", async () => {
+    const btn = document.getElementById("recalc-ratings-btn");
+    const statusEl = document.getElementById("recalc-ratings-status");
+    btn.disabled = true;
+    btn.textContent = "Recalculating…";
+    statusEl.textContent = "";
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+      const res = await fetch("/api/admin-tools?action=recalc-ratings", { headers: { Authorization: `Bearer ${idToken}` } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Something went wrong.");
+      statusEl.textContent = `Done — ${data.productsUpdated} product(s) updated. Ratings will show up on the site within a minute or so (cache refresh).`;
+    } catch (err) {
+      statusEl.textContent = "Failed: " + err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Recalculate All Product Ratings";
+    }
   });
 
   document.getElementById("support-settings-form").addEventListener("submit", (e) => {

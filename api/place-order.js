@@ -27,8 +27,10 @@
 // that fallback path, stock does NOT auto-decrement and Telegram
 // notifications do NOT fire, since neither is possible without a server.
 
+import { FieldValue } from "firebase-admin/firestore";
 import { getDb } from "../lib/firebase-admin.js";
 import { dispatchTelegramEvent } from "../lib/telegram.js";
+import { applyStoreMargin } from "../lib/pricing.js";
 
 const LOW_STOCK_THRESHOLD = 3;
 
@@ -88,8 +90,14 @@ export default async function handler(req, res) {
     }
 
     // 1. Re-fetch REAL prices/stock/deliveryFee/sourcePlatformUrl — never
-    //    trust what the browser sent for these.
-    const productsSnap = await db.collection("products").get();
+    //    trust what the browser sent for these. Settings fetched here too
+    //    (once) — needed for both the Store Margin markup below and the
+    //    COD charge further down.
+    const [productsSnap, settingsDocForOrder] = await Promise.all([
+      db.collection("products").get(),
+      db.collection("settings").doc("store_config").get()
+    ]);
+    const orderSettings = settingsDocForOrder.exists ? settingsDocForOrder.data() : {};
     const productsById = {};
     productsSnap.forEach((doc) => { productsById[doc.id] = { id: doc.id, ...doc.data() }; });
 
@@ -107,7 +115,7 @@ export default async function handler(req, res) {
       if (currentStock !== null && qty > currentStock) {
         return res.status(400).json({ error: `Only ${currentStock} of "${product.title}" left in stock.` });
       }
-      const price = Number(product.sellingPrice);
+      const price = applyStoreMargin(product.sellingPrice, orderSettings);
       // Snapshotted the same way price is — so profit reports for this
       // order stay accurate even if the admin changes (or hasn't yet set)
       // the product's cost price later. `null` (not 0) when genuinely
@@ -160,9 +168,7 @@ export default async function handler(req, res) {
     // 3. COD charge from real Settings, not the client.
     let codCharge = 0;
     if (paymentMethod === "COD") {
-      const settingsDoc = await db.collection("settings").doc("store_config").get();
-      const settings = settingsDoc.exists ? settingsDoc.data() : {};
-      codCharge = Number(settings.codExtraCharge) || 0;
+      codCharge = Number(orderSettings.codExtraCharge) || 0;
     }
 
     const finalTotal = Math.max(0, subtotal - discount + codCharge + deliveryFee);
@@ -196,19 +202,23 @@ export default async function handler(req, res) {
     await db.collection("orders").doc(orderId).create(orderPayload);
 
     // 5. Decrement stock for every item that tracks stock (stock === null
-    //    means "not tracked for this product" — never decrement past that).
+    //    means "not tracked for this product" — never decrement past that),
+    //    and bump orderCount (bestseller signal used by the site's "Best
+    //    Selling" sort) for every item regardless of stock tracking.
     const batch = db.batch();
     const stockUpdates = [];
     for (const item of verifiedItems) {
       const product = productsById[item.productId];
-      if (product.stock === undefined || product.stock === null) continue;
-      const newStock = Math.max(0, Number(product.stock) - item.quantity);
-      batch.update(db.collection("products").doc(item.productId), { stock: newStock });
-      stockUpdates.push({ product, newStock });
+      const productRef = db.collection("products").doc(item.productId);
+      const update = { orderCount: FieldValue.increment(item.quantity) };
+      if (product.stock !== undefined && product.stock !== null) {
+        const newStock = Math.max(0, Number(product.stock) - item.quantity);
+        update.stock = newStock;
+        stockUpdates.push({ product, newStock });
+      }
+      batch.update(productRef, update);
     }
-    if (stockUpdates.length > 0) {
-      await batch.commit();
-    }
+    await batch.commit();
 
     // 6. Telegram: new_order, then out_of_stock/low_stock for anything
     //    that just crossed a threshold. All of this is fire-and-forget

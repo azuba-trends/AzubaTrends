@@ -14,6 +14,7 @@
 // vercel.json.
 
 import { getDb } from "../lib/firebase-admin.js";
+import { applyStoreMargin } from "../lib/pricing.js";
 
 function csvEscape(value) {
   const str = String(value ?? "");
@@ -36,10 +37,12 @@ export default async function handler(req, res) {
   let rows = [];
   try {
     const db = getDb();
-    const [productsSnap, categoriesSnap] = await Promise.all([
+    const [productsSnap, categoriesSnap, settingsDoc] = await Promise.all([
       db.collection("products").get(),
-      db.collection("categories").get()
+      db.collection("categories").get(),
+      db.collection("settings").doc("store_config").get()
     ]);
+    const feedSettings = settingsDoc.exists ? settingsDoc.data() : {};
 
     const categoryNameById = {};
     categoriesSnap.forEach((doc) => { categoryNameById[doc.id] = doc.data().name || doc.id; });
@@ -80,7 +83,7 @@ export default async function handler(req, res) {
         link,
         image,
         availability,
-        `${Number(p.sellingPrice).toFixed(2)} INR`,
+        `${applyStoreMargin(p.sellingPrice, feedSettings).toFixed(2)} INR`,
         "new",
         p.brand || "",
         categoryName,
