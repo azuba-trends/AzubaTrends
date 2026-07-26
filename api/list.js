@@ -20,6 +20,28 @@
 import { getDb } from "../lib/firebase-admin.js";
 import { applyStoreMargin } from "../lib/pricing.js";
 
+// A deterministic pseudo-random order seeded by today's date + product id.
+// Same order for every visitor all day (so the s-maxage=60 cache above
+// stays meaningful), but reshuffles once the date rolls over — so across
+// days, no product is permanently stuck first or always last. Customers
+// can still override this with an explicit sort (price/rating/newest/
+// bestselling) picked in the filter bar; this is only the *default*.
+function fairDailyShuffle(products) {
+  const daySeed = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+  return products
+    .map((p) => {
+      let hash = 0;
+      const str = daySeed + p.id;
+      for (let i = 0; i < str.length; i++) {
+        hash = (hash << 5) - hash + str.charCodeAt(i);
+        hash |= 0;
+      }
+      return { p, sortKey: hash };
+    })
+    .sort((a, b) => a.sortKey - b.sortKey)
+    .map((x) => x.p);
+}
+
 async function handleProducts(req, res) {
   const db = getDb();
   const [snap, settingsDoc] = await Promise.all([
@@ -37,15 +59,24 @@ async function handleProducts(req, res) {
   // products — so they're excluded here too. Everything else (plain
   // products AND variant products, which are ordinary docs with
   // isVariant:true/parentId set) passes through untouched.
-  const products = snap.docs
+  let products = snap.docs
     .filter((d) => !d.data().hasVariants)
     .map((d) => {
-      const { costPrice, ...publicData } = d.data();
+      const { costPrice, ratingSum, ratingCount, ...publicData } = d.data();
       // Store Margin markup applied here — this is what every shopper
       // sees as the product's price. mrp is left untouched.
       publicData.sellingPrice = applyStoreMargin(publicData.sellingPrice, settings);
+      // rating/reviewCount computed here from the raw sum+count (kept off
+      // the public payload) so a display-ready number goes out — same
+      // pattern as the price margin above.
+      publicData.rating = ratingCount ? Math.round((ratingSum / ratingCount) * 10) / 10 : 0;
+      publicData.reviewCount = ratingCount || 0;
+      // orderCount (bestseller signal) already public-safe, passes
+      // through untouched via the spread above.
       return { id: d.id, ...publicData };
     });
+
+  products = fairDailyShuffle(products);
 
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "public, s-maxage=60, stale-while-revalidate=30");

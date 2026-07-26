@@ -3803,6 +3803,26 @@ setTimeout(() => {
     saveSettingsPatch({ storeMargin: currentMarginSettings() }, document.getElementById("save-margin-settings-btn"));
   });
 
+  document.getElementById("recalc-ratings-btn").addEventListener("click", async () => {
+    const btn = document.getElementById("recalc-ratings-btn");
+    const statusEl = document.getElementById("recalc-ratings-status");
+    btn.disabled = true;
+    btn.textContent = "Recalculating…";
+    statusEl.textContent = "";
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+      const res = await fetch("/api/admin-tools?action=recalc-ratings", { headers: { Authorization: `Bearer ${idToken}` } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Something went wrong.");
+      statusEl.textContent = `Done — ${data.productsUpdated} product(s) updated. Ratings will show up on the site within a minute or so (cache refresh).`;
+    } catch (err) {
+      statusEl.textContent = "Failed: " + err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Recalculate All Product Ratings";
+    }
+  });
+
   document.getElementById("support-settings-form").addEventListener("submit", (e) => {
     e.preventDefault();
     saveSettingsPatch({

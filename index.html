@@ -63,10 +63,10 @@
       <p id="home-tagline">Handmade and hand-loomed pieces, delivered around the courtyard.</p>
     </section>
 
-    <div class="chip-row" id="category-chips" aria-label="Filter by category"></div>
+    <div id="filter-bar-mount"></div>
 
     <div class="product-grid" id="product-grid" aria-live="polite">
-      <!-- ProductLoader.renderGrid() fills this in -->
+      <!-- ProductListing.mount() fills this in -->
     </div>
 
     <section aria-labelledby="recommended-heading" style="margin-top: var(--space-8);" id="recommended-section" hidden>
@@ -92,6 +92,7 @@
     <script src="js/cart-button-ui.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
 <script src="js/product-loader.js"></script>
+<script src="js/product-listing.js"></script>
 <script src="js/search.js"></script>
 <script src="js/page-loader.js"></script>
 <script>
@@ -110,28 +111,12 @@
     ProductLoader.renderSkeletonGrid(grid, 8);
 
     const products = await ProductLoader.loadAllProducts();
-    const chips = document.getElementById("category-chips");
-    let activeCategory = "All";
-
-    function applyFilter() {
-      const filtered = activeCategory === "All"
-        ? products
-        : products.filter((p) => p.category === activeCategory);
-      ProductLoader.renderGrid(grid, filtered, "No products in this category yet — try another one.");
-    }
-
-    function selectCategory(cat) {
-      activeCategory = cat;
-      renderChips();
-      applyFilter();
-    }
-
-    function renderChips() {
-      ProductLoader.renderCategoryChips(chips, products, selectCategory, activeCategory);
-    }
-
-    renderChips();
-    applyFilter();
+    ProductListing.mount(
+      document.getElementById("filter-bar-mount"),
+      grid,
+      products,
+      { emptyMessage: "No products match these filters — try widening your search." }
+    );
 
     // "Recommended for you" — only worth showing once the shopper has an
     // actual browsing signal (interest cookie from viewing a product

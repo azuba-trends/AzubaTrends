@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/images/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/images/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="/images/icons/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1F3A5F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="AzubaTrends" id="apple-app-title-meta">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title id="page-title">Search — AzubaTrends</title>
+<meta name="robots" content="noindex, follow">
+<!-- Search results pages are intentionally not indexed (noindex) — same
+     reasoning most e-commerce sites use: a near-infinite number of
+     possible ?q= combinations would otherwise flood Google with thin,
+     duplicate-ish pages. The actual products/categories stay indexable. -->
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/components.css">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div id="header-mount"></div>
+
+<main>
+  <div class="container">
+    <section class="page-header">
+      <div class="breadcrumb"><a href="/">Home</a> / Search</div>
+      <h1 id="search-title">Search</h1>
+      <p id="search-subtitle"></p>
+    </section>
+
+    <div id="filter-bar-mount"></div>
+
+    <div class="product-grid" id="product-grid" aria-live="polite"></div>
+  </div>
+</main>
+
+<div id="footer-mount"></div>
+
+<script src="js/site-config.js"></script>
+<script src="js/tracking.js"></script>
+<script src="js/security.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/loading-overlay.js"></script>
+<script src="js/a2hs.js"></script>
+<script src="js/cart.js"></script>
+<script src="js/cart-button-ui.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
+<script src="js/product-loader.js"></script>
+<script src="js/product-listing.js"></script>
+<script src="js/search.js"></script>
+<script>
+  window.addEventListener("layout:ready", () => ProductLoader.initHeader());
+
+  document.addEventListener("DOMContentLoaded", async () => {
+    const params = new URLSearchParams(window.location.search);
+    const query = (params.get("q") || "").trim();
+
+    const titleEl = document.getElementById("search-title");
+    const subtitleEl = document.getElementById("search-subtitle");
+    const grid = document.getElementById("product-grid");
+
+    if (!query || query.length < 2) {
+      Security.setTextSafely(titleEl, "Search");
+      Security.setTextSafely(subtitleEl, "Type at least 2 characters in the search bar above to find something.");
+      return;
+    }
+
+    document.getElementById("page-title").textContent = `"${query}" — Search results — AzubaTrends`;
+    Security.setTextSafely(titleEl, `Search results for "${query}"`);
+    ProductLoader.renderSkeletonGrid(grid, 8);
+
+    // Waits for search.js's layout:ready-triggered setup indirectly via
+    // ensureIndex() inside fullResults() — SiteSearch is already defined
+    // by the time this script runs (search.js executes synchronously
+    // above, only the *dropdown wiring* waits for layout:ready).
+    const results = await SiteSearch.fullResults(query);
+
+    Security.setTextSafely(
+      subtitleEl,
+      results.length === 0
+        ? `No products matched "${query}" — try a different word, or check the spelling.`
+        : `${results.length} result${results.length === 1 ? "" : "s"} for "${query}".`
+    );
+
+    ProductListing.mount(
+      document.getElementById("filter-bar-mount"),
+      grid,
+      results,
+      { isSearch: true, emptyMessage: `No products match these filters for "${query}" — try widening your search.` }
+    );
+  });
+</script>
+</body>
+</html>

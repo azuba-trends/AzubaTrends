@@ -27,6 +27,7 @@
 // that fallback path, stock does NOT auto-decrement and Telegram
 // notifications do NOT fire, since neither is possible without a server.
 
+import { FieldValue } from "firebase-admin/firestore";
 import { getDb } from "../lib/firebase-admin.js";
 import { dispatchTelegramEvent } from "../lib/telegram.js";
 import { applyStoreMargin } from "../lib/pricing.js";
@@ -201,19 +202,23 @@ export default async function handler(req, res) {
     await db.collection("orders").doc(orderId).create(orderPayload);
 
     // 5. Decrement stock for every item that tracks stock (stock === null
-    //    means "not tracked for this product" — never decrement past that).
+    //    means "not tracked for this product" — never decrement past that),
+    //    and bump orderCount (bestseller signal used by the site's "Best
+    //    Selling" sort) for every item regardless of stock tracking.
     const batch = db.batch();
     const stockUpdates = [];
     for (const item of verifiedItems) {
       const product = productsById[item.productId];
-      if (product.stock === undefined || product.stock === null) continue;
-      const newStock = Math.max(0, Number(product.stock) - item.quantity);
-      batch.update(db.collection("products").doc(item.productId), { stock: newStock });
-      stockUpdates.push({ product, newStock });
+      const productRef = db.collection("products").doc(item.productId);
+      const update = { orderCount: FieldValue.increment(item.quantity) };
+      if (product.stock !== undefined && product.stock !== null) {
+        const newStock = Math.max(0, Number(product.stock) - item.quantity);
+        update.stock = newStock;
+        stockUpdates.push({ product, newStock });
+      }
+      batch.update(productRef, update);
     }
-    if (stockUpdates.length > 0) {
-      await batch.commit();
-    }
+    await batch.commit();
 
     // 6. Telegram: new_order, then out_of_stock/low_stock for anything
     //    that just crossed a threshold. All of this is fire-and-forget

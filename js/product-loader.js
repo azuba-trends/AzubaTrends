@@ -61,7 +61,12 @@ const ProductLoader = (function () {
         cachedProducts = snapshot.docs
           .map(doc => ({ id: doc.id, ...doc.data() }))
           .filter(p => !p.hasVariants)
-          .map(p => ({ ...p, sellingPrice: applyStoreMarginLocal(p.sellingPrice) }));
+          .map(p => ({
+            ...p,
+            sellingPrice: applyStoreMarginLocal(p.sellingPrice),
+            rating: p.ratingCount ? Math.round((p.ratingSum / p.ratingCount) * 10) / 10 : 0,
+            reviewCount: p.ratingCount || 0
+          }));
         return cachedProducts;
       } catch (err) {
         console.error("ProductLoader Error:", err);
@@ -209,6 +214,13 @@ const ProductLoader = (function () {
       ? `<span class="product-card__variant" style="color:var(--color-ink-soft); font-size:0.8em;"> — ${window.Security ? window.Security.escapeHTML(product.color) : product.color}</span>`
       : "";
 
+    const ratingBadge = (product.reviewCount > 0)
+      ? `<span class="product-card__rating">
+          <svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 1.5l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.2-5.4 3.2 1.3-6L1.3 7.7l6.1-.6z"/></svg>
+          ${Number(product.rating).toFixed(1)} <span class="product-card__rating-count">(${product.reviewCount})</span>
+        </span>`
+      : "";
+
     card.innerHTML = `
       <a href="${productUrl(product)}" class="product-card__link">
         <div class="product-card__media">
@@ -217,7 +229,10 @@ const ProductLoader = (function () {
         </div>
       </a>
       <div class="product-card__body">
-        <span class="product-card__category">${safeCategory}</span>
+        <div class="product-card__top-row">
+          <span class="product-card__category">${safeCategory}</span>
+          ${ratingBadge}
+        </div>
         <h3 class="product-card__title">${safeTitle}${variantBadge}</h3>
         <div class="product-card__price-row">
           <span class="price-current">${formatPrice(product.sellingPrice)}</span>

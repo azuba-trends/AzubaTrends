@@ -8,6 +8,7 @@
 // Firestore directly.
 
 import { getDb } from "../lib/firebase-admin.js";
+import { FieldValue } from "firebase-admin/firestore";
 import { containsProfanity, validateCommentLength, checkAndIncrementRateLimit } from "../lib/submit-review-guard.js";
 import { dispatchTelegramEvent } from "../lib/telegram.js";
 
@@ -104,6 +105,13 @@ export default async function handler(req, res) {
     const guestTag = docRef.id.replace(/[^a-zA-Z0-9]/g, "").slice(-4).toUpperCase();
     review.authorLabel = `Guest #${guestTag}`;
     await docRef.set(review);
+
+    // Keep the product's displayed rating (shown on every card site-wide)
+    // in sync — atomic increment, no read-before-write needed, so this
+    // doesn't add a round-trip to the critical path.
+    db.collection("products").doc(productId)
+      .update({ ratingSum: FieldValue.increment(ratingNum), ratingCount: FieldValue.increment(1) })
+      .catch((err) => console.error("Rating aggregate update failed (non-fatal):", err.message));
 
     // Everything below is best-effort (product title for the Telegram
     // message, then the Telegram alert itself) — the review is already
