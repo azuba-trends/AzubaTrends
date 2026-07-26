@@ -18,10 +18,15 @@
 // before; the rewrite above is what points those URLs at this file.
 
 import { getDb } from "../lib/firebase-admin.js";
+import { applyStoreMargin } from "../lib/pricing.js";
 
 async function handleProducts(req, res) {
   const db = getDb();
-  const snap = await db.collection("products").where("status", "==", "active").get();
+  const [snap, settingsDoc] = await Promise.all([
+    db.collection("products").where("status", "==", "active").get(),
+    db.collection("settings").doc("store_config").get()
+  ]);
+  const settings = settingsDoc.exists ? settingsDoc.data() : {};
   // costPrice is internal-only (what the seller pays, used for profit
   // reports in the admin panel) and must never reach a customer's
   // browser — strip it here rather than trusting every future frontend
@@ -36,6 +41,9 @@ async function handleProducts(req, res) {
     .filter((d) => !d.data().hasVariants)
     .map((d) => {
       const { costPrice, ...publicData } = d.data();
+      // Store Margin markup applied here — this is what every shopper
+      // sees as the product's price. mrp is left untouched.
+      publicData.sellingPrice = applyStoreMargin(publicData.sellingPrice, settings);
       return { id: d.id, ...publicData };
     });
 

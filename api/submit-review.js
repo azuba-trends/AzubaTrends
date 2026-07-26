@@ -96,17 +96,22 @@ export default async function handler(req, res) {
       date: new Date().toISOString()
     };
 
-    const docRef = await db.collection("reviews").add(review);
-
-    // Give this reviewer a unique, stable display label ("Guest #A1B2")
-    // instead of every review just saying "Guest" — derived from the
-    // Firestore document's own ID, so two reviewers never collide.
+    // Pre-generate the doc ID locally (no network round-trip) so the
+    // "Guest #XXXX" author tag can be baked into the SAME write instead
+    // of needing a second sequential .update() afterwards — this was
+    // one of the extra round-trips making review submission feel slow.
+    const docRef = db.collection("reviews").doc();
     const guestTag = docRef.id.replace(/[^a-zA-Z0-9]/g, "").slice(-4).toUpperCase();
     review.authorLabel = `Guest #${guestTag}`;
-    await docRef.update({ authorLabel: review.authorLabel });
+    await docRef.set(review);
 
-    // Best-effort Telegram alert — never blocks or fails the review, which
-    // already saved successfully above.
+    // Everything below is best-effort (product title for the Telegram
+    // message, then the Telegram alert itself) — the review is already
+    // safely saved above, so none of this can ever cause the review to
+    // be lost. dispatchTelegramEvent() also now sends to every bot in
+    // parallel instead of one-after-another (see lib/telegram.js), which
+    // was the single biggest source of the multi-second delay customers
+    // were seeing after tapping Submit.
     let productTitle = productId;
     try {
       const productDoc = await db.collection("products").doc(productId).get();

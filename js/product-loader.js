@@ -3,6 +3,20 @@ const ProductLoader = (function () {
   let inFlightRequest = null;
   const currency = "₹";
 
+  // Mirrors lib/pricing.js exactly (this file is loaded as a classic
+  // script, not a module, so it can't `import` that one) — only used on
+  // the direct-Firestore fallback path below, since the normal /api/products
+  // path already returns margin-applied prices from the server.
+  function applyStoreMarginLocal(sellingPrice) {
+    const price = Number(sellingPrice) || 0;
+    const margin = window.SITE_CONFIG && window.SITE_CONFIG.storeMargin;
+    if (!margin || !margin.value) return price;
+    const value = Number(margin.value) || 0;
+    if (value <= 0) return price;
+    const marked = margin.type === "flat" ? price + value : price + (price * value) / 100;
+    return Math.round(marked * 100) / 100;
+  }
+
   async function loadAllProducts() {
     if (cachedProducts) return cachedProducts;
     if (inFlightRequest) return inFlightRequest;
@@ -31,6 +45,7 @@ const ProductLoader = (function () {
       // functions, or before the service account is configured.
       try {
         while(!window.FirebaseApp) { await new Promise(r => setTimeout(r, 100)); }
+        if (window.SITE_CONFIG_READY) await window.SITE_CONFIG_READY; // needed for storeMargin below
         
         const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js");
         const db = window.FirebaseApp.db;
@@ -40,9 +55,13 @@ const ProductLoader = (function () {
         
         // Same exclusion as api/list.js: a product with hasVariants:true
         // is only a template for the admin panel, never itself sellable.
+        // Store Margin applied here too — same markup api/list.js applies
+        // server-side (see lib/pricing.js) — so prices stay consistent
+        // even on this fallback path.
         cachedProducts = snapshot.docs
           .map(doc => ({ id: doc.id, ...doc.data() }))
-          .filter(p => !p.hasVariants);
+          .filter(p => !p.hasVariants)
+          .map(p => ({ ...p, sellingPrice: applyStoreMarginLocal(p.sellingPrice) }));
         return cachedProducts;
       } catch (err) {
         console.error("ProductLoader Error:", err);

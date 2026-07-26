@@ -504,13 +504,45 @@ setTimeout(() => {
     throw new Error("Image upload failed: " + (data.error?.message || "unknown error"));
   }
 
+  // Reused for feature/gallery/delivery-partner image previews and the
+  // payment screenshot in the order modal — click any preview thumbnail
+  // to view it full-size, click the cross or outside to close.
+  const adminLightbox = document.getElementById("admin-lightbox");
+  const adminLightboxImg = document.getElementById("admin-lightbox-img");
+  function openAdminLightbox(url) {
+    if (!adminLightbox || !adminLightboxImg || !url) return;
+    adminLightboxImg.src = url;
+    adminLightbox.hidden = false;
+  }
+  if (adminLightbox) {
+    document.getElementById("admin-lightbox-close").addEventListener("click", () => { adminLightbox.hidden = true; });
+    adminLightbox.addEventListener("click", (e) => { if (e.target === adminLightbox) adminLightbox.hidden = true; });
+  }
+
   function previewFileList(input, container, max) {
     container.innerHTML = "";
     const files = Array.from(input.files || []).slice(0, max);
     files.forEach((file) => {
+      const url = URL.createObjectURL(file);
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "position:relative; display:inline-block;";
       const img = document.createElement("img");
-      img.src = URL.createObjectURL(file);
-      container.appendChild(img);
+      img.src = url;
+      img.style.cursor = "zoom-in";
+      img.addEventListener("click", () => openAdminLightbox(url));
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.textContent = "×";
+      removeBtn.title = "Remove this image";
+      removeBtn.style.cssText = "position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%; border:none; background:var(--color-danger,#c0392b); color:#fff; cursor:pointer; line-height:1; font-size:14px;";
+      removeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        input.value = "";
+        container.innerHTML = "";
+      });
+      wrap.appendChild(img);
+      wrap.appendChild(removeBtn);
+      container.appendChild(wrap);
     });
   }
 
@@ -527,7 +559,10 @@ setTimeout(() => {
       const wrap = document.createElement("div");
       wrap.style.cssText = "position:relative; display:inline-block;";
       const img = document.createElement("img");
-      img.src = URL.createObjectURL(file);
+      const url = URL.createObjectURL(file);
+      img.src = url;
+      img.style.cursor = "zoom-in";
+      img.addEventListener("click", () => openAdminLightbox(url));
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.textContent = "×";
@@ -543,12 +578,29 @@ setTimeout(() => {
     });
   }
 
-  function previewExistingImages(container, urls) {
+  function previewExistingImages(container, urls, onRemove) {
     container.innerHTML = "";
-    (urls || []).forEach((url) => {
+    (urls || []).forEach((url, idx) => {
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "position:relative; display:inline-block;";
       const img = document.createElement("img");
       img.src = url;
-      container.appendChild(img);
+      img.style.cursor = "zoom-in";
+      img.addEventListener("click", () => openAdminLightbox(url));
+      wrap.appendChild(img);
+      if (onRemove) {
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.textContent = "×";
+        removeBtn.title = "Remove this image";
+        removeBtn.style.cssText = "position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%; border:none; background:var(--color-danger,#c0392b); color:#fff; cursor:pointer; line-height:1; font-size:14px;";
+        removeBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          onRemove(idx);
+        });
+        wrap.appendChild(removeBtn);
+      }
+      container.appendChild(wrap);
     });
   }
 
@@ -1467,7 +1519,7 @@ setTimeout(() => {
     document.getElementById("prod-parent-id").value = "";
     document.getElementById("prod-variant-color").value = "";
     document.getElementById("variant-top-pricing-wrap").style.display = "";
-    document.getElementById("prod-mrp").required = true;
+    document.getElementById("prod-mrp").required = false;
     document.getElementById("prod-price").required = true;
     document.getElementById("prod-stock").required = true;
     document.getElementById("variants-toggle-wrap").style.display = "";
@@ -1479,6 +1531,7 @@ setTimeout(() => {
     document.getElementById("variant-colors-input").value = "";
     document.getElementById("variant-sync-wrap").style.display = "none";
     renderSeoChecklist();
+    updateProductPricePreview();
   }
 
   let unsubProducts = null;
@@ -1698,6 +1751,7 @@ setTimeout(() => {
     document.getElementById("prod-seo-desc").value = p.seoDesc || "";
     document.getElementById("prod-mrp").value = p.mrp ?? "";
     document.getElementById("prod-price").value = p.sellingPrice ?? "";
+    updateProductPricePreview();
     // Older products saved before this field existed won't have it —
     // leave blank rather than defaulting to 0, so the admin notices and
     // fills in the real number instead of accidentally saving "free".
@@ -1713,9 +1767,32 @@ setTimeout(() => {
     document.getElementById("prod-delivery-partner-name").value = p.deliveryPartnerName || "";
     document.getElementById("prod-existing-images").value = JSON.stringify(p.images || []);
     document.getElementById("prod-existing-delivery-img").value = p.deliveryPartnerImage || "";
-    previewExistingImages(document.getElementById("prod-feature-preview"), p.images && p.images[0] ? [p.images[0]] : []);
-    previewExistingImages(document.getElementById("prod-gallery-preview"), (p.images || []).slice(1));
-    previewExistingImages(document.getElementById("prod-delivery-preview"), p.deliveryPartnerImage ? [p.deliveryPartnerImage] : []);
+    function refreshFeaturePreview() {
+      const imgs = JSON.parse(document.getElementById("prod-existing-images").value || "[]");
+      previewExistingImages(document.getElementById("prod-feature-preview"), imgs[0] ? [imgs[0]] : [], () => {
+        imgs[0] = "";
+        document.getElementById("prod-existing-images").value = JSON.stringify(imgs);
+        refreshFeaturePreview();
+      });
+    }
+    function refreshGalleryExistingPreview() {
+      const imgs = JSON.parse(document.getElementById("prod-existing-images").value || "[]");
+      previewExistingImages(document.getElementById("prod-gallery-preview"), imgs.slice(1), (idx) => {
+        imgs.splice(1 + idx, 1);
+        document.getElementById("prod-existing-images").value = JSON.stringify(imgs);
+        refreshGalleryExistingPreview();
+      });
+    }
+    function refreshDeliveryLogoPreview() {
+      const url = document.getElementById("prod-existing-delivery-img").value;
+      previewExistingImages(document.getElementById("prod-delivery-preview"), url ? [url] : [], () => {
+        document.getElementById("prod-existing-delivery-img").value = "";
+        refreshDeliveryLogoPreview();
+      });
+    }
+    refreshFeaturePreview();
+    refreshGalleryExistingPreview();
+    refreshDeliveryLogoPreview();
     setTimeout(() => {
       document.getElementById("prod-category").value = p.category || "";
       document.getElementById("prod-brand").value = p.brand || "";
@@ -1754,7 +1831,7 @@ setTimeout(() => {
       document.getElementById("variant-boxes-container").appendChild(buildColorBox(p.color || "", sameColorDocs));
     } else {
       document.getElementById("variant-top-pricing-wrap").style.display = "";
-      document.getElementById("prod-mrp").required = true;
+      document.getElementById("prod-mrp").required = false;
       document.getElementById("prod-price").required = true;
       document.getElementById("prod-stock").required = true;
       document.getElementById("variant-sync-wrap").style.display = "none";
@@ -2062,6 +2139,35 @@ setTimeout(() => {
   // api/list.js and js/product-loader.js) — it only exists from then on
   // as an admin-side "template" record.
   // ================================================================
+  function updateProductPricePreview() {
+    const previewEl = document.getElementById("prod-price-preview");
+    if (!previewEl) return;
+    const mrp = Number(document.getElementById("prod-mrp").value) || 0;
+    const price = Number(document.getElementById("prod-price").value) || 0;
+    if (!price) { previewEl.textContent = "Enter a Sale Price to see the live website price preview here."; return; }
+
+    const finalPrice = applyMarginToPrice(price);
+    const parts = [];
+    if (mrp > price) {
+      parts.push(`MRP ₹${mrp} − Sale Price ₹${price} = ₹${(mrp - price).toFixed(2)} off`);
+    } else if (mrp > 0) {
+      parts.push(`MRP ₹${mrp} is not higher than Sale Price ₹${price} — no discount badge will show`);
+    } else {
+      parts.push(`No MRP entered — no discount badge will show`);
+    }
+    if (finalPrice !== price) {
+      const { type, value } = currentMarginSettings();
+      const marginText = type === "percent" ? `${value}%` : `₹${value}`;
+      parts.push(`+ Store Margin (${marginText}) = <strong>₹${finalPrice}</strong> final price on the website`);
+    } else {
+      parts.push(`No Store Margin set — <strong>₹${price}</strong> will show on the website exactly as entered`);
+    }
+    previewEl.innerHTML = parts.join(" &nbsp;|&nbsp; ");
+  }
+  ["prod-mrp", "prod-price"].forEach((id) => {
+    document.getElementById(id).addEventListener("input", updateProductPricePreview);
+  });
+
   const variantsToggle = document.getElementById("prod-has-variants");
   const variantsSection = document.getElementById("variants-section");
   const variantBoxesContainer = document.getElementById("variant-boxes-container");
@@ -3286,13 +3392,12 @@ setTimeout(() => {
       const b = document.createElement("b"); b.textContent = "Payment Screenshot: ";
       p.appendChild(b);
       if (o.paymentScreenshotUrl) {
-        const a = document.createElement("a");
-        a.href = o.paymentScreenshotUrl;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        a.textContent = "🔍 View Screenshot";
-        a.style.cssText = "color: var(--color-primary); font-weight: 600;";
-        p.appendChild(a);
+        const thumb = document.createElement("img");
+        thumb.src = o.paymentScreenshotUrl;
+        thumb.alt = "Payment screenshot";
+        thumb.style.cssText = "max-width:120px; max-height:120px; border-radius:6px; border:1px solid var(--color-border,#e2ddd0); cursor:zoom-in; display:block; margin-top:4px;";
+        thumb.addEventListener("click", () => openAdminLightbox(o.paymentScreenshotUrl));
+        p.appendChild(thumb);
       } else {
         const span = document.createElement("span");
         span.textContent = o.autoPlaced ? "— (order auto-placed, no screenshot was uploaded)" : "— not uploaded";
@@ -3602,6 +3707,10 @@ setTimeout(() => {
     document.getElementById("set-cod-charge").value = SETTINGS.codExtraCharge ?? 30;
     document.getElementById("set-support-email").value = SETTINGS.supportEmail || "";
     document.getElementById("set-support-phone").value = SETTINGS.supportPhone || "";
+    const marginSettings = SETTINGS.storeMargin || { type: "percent", value: "" };
+    document.getElementById("set-margin-type").value = marginSettings.type || "percent";
+    document.getElementById("set-margin-value").value = marginSettings.value ?? "";
+    updateMarginExampleHint();
     const sidebarLabel = document.querySelector("[data-site-name]");
     if (sidebarLabel) sidebarLabel.textContent = (SETTINGS.storeName || "AzubaTrends") + " Admin";
   }
@@ -3657,6 +3766,41 @@ setTimeout(() => {
       upiId: document.getElementById("set-upi-id").value,
       codExtraCharge: Number(document.getElementById("set-cod-charge").value) || 0,
     }, document.getElementById("save-payment-settings-btn"));
+  });
+
+  function currentMarginSettings() {
+    const type = document.getElementById("set-margin-type").value === "flat" ? "flat" : "percent";
+    const value = Number(document.getElementById("set-margin-value").value) || 0;
+    return { type, value };
+  }
+
+  function applyMarginToPrice(price) {
+    const p = Number(price) || 0;
+    const { type, value } = currentMarginSettings();
+    if (!value || value <= 0) return p;
+    const marked = type === "flat" ? p + value : p + (p * value) / 100;
+    return Math.round(marked * 100) / 100;
+  }
+
+  function updateMarginExampleHint() {
+    const { type, value } = currentMarginSettings();
+    const hint = document.getElementById("margin-example-hint");
+    if (!value || value <= 0) {
+      hint.textContent = "No margin set — products will show their Sale Price exactly as entered.";
+      return;
+    }
+    const sample = 500;
+    const marked = applyMarginToPrice(sample);
+    hint.textContent = type === "percent"
+      ? `Example: a ₹${sample} Sale Price will show as ₹${marked} on the site (${value}% added).`
+      : `Example: a ₹${sample} Sale Price will show as ₹${marked} on the site (₹${value} added flat).`;
+  }
+  document.getElementById("set-margin-type").addEventListener("change", updateMarginExampleHint);
+  document.getElementById("set-margin-value").addEventListener("input", updateMarginExampleHint);
+
+  document.getElementById("margin-settings-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    saveSettingsPatch({ storeMargin: currentMarginSettings() }, document.getElementById("save-margin-settings-btn"));
   });
 
   document.getElementById("support-settings-form").addEventListener("submit", (e) => {

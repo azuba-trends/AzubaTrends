@@ -684,6 +684,7 @@
   margin: var(--space-5) 0;
   flex-wrap: wrap;
 }
+.product-info__actions[hidden] { display: none; }
 
 .product-info__meta {
   font-size: 0.82rem;
@@ -1159,6 +1160,11 @@
 }
 
 .notify-me-block { display: flex; flex-direction: column; gap: var(--space-2); flex: 1; min-width: 180px; }
+/* Without this, the rule above (same specificity as the browser's
+   built-in `[hidden]{display:none}`) wins the tie and the block stays
+   visible even when JS sets `.hidden = true` — this was why "Notify Me"
+   kept showing alongside Add to Cart/Buy Now on in-stock products. */
+.notify-me-block[hidden] { display: none; }
 
 .notify-me-form {
   display: none;
