@@ -314,6 +314,7 @@
     const thumbsWrap = document.getElementById("gallery-thumbs");
     const galleryMain = document.getElementById("gallery-main");
     let currentImageIndex = 0;
+    let wasDragged = false; // set by the swipe handler below; read by the lightbox click handler
 
     function showImage(index, { fromLightbox } = {}) {
       currentImageIndex = ((index % images.length) + images.length) % images.length;
@@ -371,39 +372,139 @@
       });
       galleryMain.appendChild(dots);
 
+      // ---- Drag-follow swipe -----------------------------------
+      // The image tracks the pointer 1:1 while dragging (instead of
+      // only reacting on release), and a peer image slides in from
+      // the side being revealed. On release it either finishes the
+      // slide (past the threshold) or springs back to place.
       let dragStartX = null;
       let dragStartY = null;
       let dragging = false;
+      let dragLocked = false; // true once we've decided this is a horizontal drag
+      let peerImg = null;
+      let peerDir = 0; // -1 = peer is the previous image (entering from left), 1 = next image (entering from right)
       const SWIPE_THRESHOLD = 40; // px
+      const galleryWidth = () => galleryMain.getBoundingClientRect().width || 1;
+
+      mainImg.style.position = "absolute";
+      mainImg.style.top = "0";
+      mainImg.style.left = "0";
+      mainImg.style.width = "100%";
+      mainImg.style.height = "100%";
+
+      function makePeer(index) {
+        const img = document.createElement("img");
+        img.src = images[((index % images.length) + images.length) % images.length];
+        img.alt = "";
+        img.style.position = "absolute";
+        img.style.top = "0";
+        img.style.left = "0";
+        img.style.width = "100%";
+        img.style.height = "100%";
+        img.style.objectFit = "contain";
+        img.style.objectPosition = "center";
+        img.style.pointerEvents = "none";
+        return img;
+      }
+
+      function clearPeer() {
+        if (peerImg && peerImg.parentNode) peerImg.parentNode.removeChild(peerImg);
+        peerImg = null;
+        peerDir = 0;
+      }
 
       function attachSwipe(el, onSwipeLeft, onSwipeRight) {
         el.addEventListener("pointerdown", (e) => {
+          if (e.target.closest(".gallery__nav")) return;
           dragStartX = e.clientX;
           dragStartY = e.clientY;
           dragging = true;
+          dragLocked = false;
+          wasDragged = false;
         });
-        el.addEventListener("pointerup", (e) => {
+
+        el.addEventListener("pointermove", (e) => {
+          if (!dragging || dragStartX === null) return;
+          const dx = e.clientX - dragStartX;
+          const dy = e.clientY - dragStartY;
+
+          if (!dragLocked) {
+            if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return; // not enough movement yet to decide
+            if (Math.abs(dy) > Math.abs(dx)) { dragging = false; return; } // vertical scroll, let the page handle it
+            dragLocked = true;
+            el.setPointerCapture(e.pointerId);
+          }
+
+          wasDragged = true;
+          mainImg.style.transition = "none";
+          mainImg.style.transform = `translateX(${dx}px)`;
+
+          const wantDir = dx < 0 ? 1 : -1; // dragging left reveals the next image, dragging right reveals the previous
+          if (peerImg && peerDir !== wantDir) clearPeer();
+          if (!peerImg) {
+            peerDir = wantDir;
+            peerImg = makePeer(currentImageIndex + wantDir);
+            galleryMain.insertBefore(peerImg, mainImg);
+          }
+          peerImg.style.transition = "none";
+          peerImg.style.transform = `translateX(${wantDir * galleryWidth() + dx}px)`;
+        });
+
+        function finishDrag(e) {
           if (!dragging || dragStartX === null) return;
           const dx = e.clientX - dragStartX;
           const dy = e.clientY - dragStartY;
           dragging = false;
-          if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
-            if (dx < 0) onSwipeLeft(); else onSwipeRight();
-          }
           dragStartX = null;
           dragStartY = null;
-        });
-        el.addEventListener("pointercancel", () => { dragging = false; dragStartX = null; });
+
+          if (!dragLocked) return;
+          dragLocked = false;
+
+          const width = galleryWidth();
+          const settled = Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy);
+
+          mainImg.style.transition = "transform 0.25s ease";
+          if (peerImg) peerImg.style.transition = "transform 0.25s ease";
+
+          if (settled && peerImg) {
+            const dir = dx < 0 ? 1 : -1;
+            mainImg.style.transform = `translateX(${dir * width}px)`;
+            peerImg.style.transform = "translateX(0px)";
+            const nextIndex = currentImageIndex + dir;
+            setTimeout(() => {
+              showImage(nextIndex);
+              mainImg.style.transition = "none";
+              mainImg.style.transform = "translateX(0px)";
+              clearPeer();
+              if (dx < 0) onSwipeLeft(); else onSwipeRight();
+            }, 250);
+          } else {
+            mainImg.style.transform = "translateX(0px)";
+            if (peerImg) {
+              const dir = peerDir;
+              peerImg.style.transform = `translateX(${dir * width}px)`;
+            }
+            setTimeout(() => {
+              mainImg.style.transition = "none";
+              clearPeer();
+            }, 250);
+          }
+        }
+
+        el.addEventListener("pointerup", finishDrag);
+        el.addEventListener("pointercancel", finishDrag);
         el.style.touchAction = "pan-y";
       }
 
-      attachSwipe(galleryMain, () => showImage(currentImageIndex + 1), () => showImage(currentImageIndex - 1));
+      attachSwipe(galleryMain, () => {}, () => {});
     }
 
     const lightbox = document.getElementById("lightbox");
     const lightboxImg = document.getElementById("lightbox-img");
     galleryMain.addEventListener("click", (e) => {
       if (e.target.closest(".gallery__nav")) return;
+      if (wasDragged) { wasDragged = false; return; }
       lightboxImg.src = mainImg.src;
       lightboxImg.alt = mainImg.alt;
       document.getElementById("lightbox-caption").hidden = true;
