@@ -345,19 +345,68 @@
         thumbsWrap.appendChild(thumb);
       });
 
+      // NEW: Arrow click slide animation logic
+      let isAnimating = false;
+      function slideWithAnimation(dir) {
+        if (isAnimating) return; // Prevent spam clicks
+        isAnimating = true;
+
+        const width = galleryMain.getBoundingClientRect().width || 1;
+        const nextIndex = currentImageIndex + dir;
+        
+        // Create incoming peer image
+        const peer = document.createElement("img");
+        peer.src = images[((nextIndex % images.length) + images.length) % images.length];
+        peer.alt = "";
+        peer.style.position = "absolute";
+        peer.style.top = "0";
+        peer.style.left = "0";
+        peer.style.width = "100%";
+        peer.style.height = "100%";
+        peer.style.objectFit = "contain";
+        peer.style.objectPosition = "center";
+        peer.style.pointerEvents = "none";
+        
+        // Position peer off-screen
+        peer.style.transform = `translateX(${dir * width}px)`;
+        galleryMain.insertBefore(peer, mainImg);
+
+        // Force browser repaint to avoid CSS batching
+        void peer.offsetWidth;
+
+        // Apply transitions
+        mainImg.style.transition = "transform 0.25s ease";
+        peer.style.transition = "transform 0.25s ease";
+        
+        // Slide both images
+        mainImg.style.transform = `translateX(${-dir * width}px)`;
+        peer.style.transform = "translateX(0px)";
+
+        // Cleanup
+        setTimeout(() => {
+          showImage(nextIndex);
+          mainImg.style.transition = "none";
+          mainImg.style.transform = "translateX(0px)";
+          peer.remove();
+          isAnimating = false;
+        }, 250);
+      }
+
       const prevBtn = document.createElement("button");
       prevBtn.type = "button";
       prevBtn.className = "gallery__nav gallery__nav--prev";
       prevBtn.setAttribute("aria-label", "Previous image");
       prevBtn.innerHTML = "&#10094;";
-      prevBtn.addEventListener("click", (e) => { e.stopPropagation(); showImage(currentImageIndex - 1); });
+      // FIX: Use animation function for Prev button
+      prevBtn.addEventListener("click", (e) => { e.stopPropagation(); slideWithAnimation(-1); });
 
       const nextBtn = document.createElement("button");
       nextBtn.type = "button";
       nextBtn.className = "gallery__nav gallery__nav--next";
       nextBtn.setAttribute("aria-label", "Next image");
       nextBtn.innerHTML = "&#10095;";
-      nextBtn.addEventListener("click", (e) => { e.stopPropagation(); showImage(currentImageIndex + 1); });
+      // FIX: Use animation function for Next button
+      nextBtn.addEventListener("click", (e) => { e.stopPropagation(); slideWithAnimation(1); });
 
       galleryMain.appendChild(prevBtn);
       galleryMain.appendChild(nextBtn);
