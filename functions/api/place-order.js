@@ -317,6 +317,7 @@ export async function onRequestPost(context) {
       paymentMethod,
       paymentScreenshotUrl: paymentMethod === "UPI" ? (paymentScreenshotUrl || null) : null,
       autoPlaced: !!autoPlaced,
+      estimatedDelivery: estimatedDeliveryString, // <--- Yeh naya field add kar diya
       status: "Pending",
       createdAt,
       verifiedServerSide: true
