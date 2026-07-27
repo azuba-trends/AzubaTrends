@@ -313,6 +313,8 @@
     const mainImg = document.getElementById("gallery-main-img");
     const thumbsWrap = document.getElementById("gallery-thumbs");
     const galleryMain = document.getElementById("gallery-main");
+    // FIX: Container ke bahar (off-screen) jane wali images page ki width na badhaye
+    galleryMain.style.overflow = "hidden";
     let currentImageIndex = 0;
     let wasDragged = false; // set by the swipe handler below; read by the lightbox click handler
 
