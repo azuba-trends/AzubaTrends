@@ -230,6 +230,14 @@
   window.addEventListener("layout:ready", () => ProductLoader.initHeader());
 
   document.addEventListener("DOMContentLoaded", async () => {
+    
+    // FIX: Hardware-accelerated transforms ki wajah se hone wale "Scroll Bleed" ko global level pe lock karna.
+    // Yeh kisi bhi child element ko viewport stretch karne se completely block kar dega.
+    document.documentElement.style.overflowX = "hidden";
+    document.body.style.overflowX = "hidden";
+    document.body.style.position = "relative";
+    document.body.style.maxWidth = "100vw";
+
     if (window.LoadingOverlay) window.LoadingOverlay.show();
 
     // ---- Back button ---------------------------------------------
