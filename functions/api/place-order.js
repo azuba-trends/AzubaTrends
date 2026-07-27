@@ -287,6 +287,16 @@ export async function onRequestPost(context) {
 
     const finalTotal = Math.max(0, subtotal - discount + codCharge + deliveryFee);
     const createdAt = new Date().toISOString();
+    // -- ESTIMATED DELIVERY WINDOW CALCULATION (7 to 10 Days) --
+    const orderDate = new Date();
+    const dispatchDays = 1;
+    const transitMin = 6;
+    const transitMax = 9;
+    
+    const fmt = (d) => d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+    const estFrom = new Date(orderDate); estFrom.setDate(estFrom.getDate() + dispatchDays + transitMin);
+    const estTo = new Date(orderDate); estTo.setDate(estTo.getDate() + dispatchDays + transitMax);
+    const estimatedDeliveryString = `${fmt(estFrom)} – ${fmt(estTo)}`;
 
     const orderPayload = {
       orderId,
