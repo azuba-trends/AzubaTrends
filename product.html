@@ -313,8 +313,12 @@
     const mainImg = document.getElementById("gallery-main-img");
     const thumbsWrap = document.getElementById("gallery-thumbs");
     const galleryMain = document.getElementById("gallery-main");
-    // FIX: Container ke bahar (off-screen) jane wali images page ki width na badhaye
+    
+    // FIX: Parent container ko 'relative' set karna zaroori hai taaki 'overflow: hidden' 
+    // absolute positioned child images ko properly clip kar sake aur width stretch na ho.
+    galleryMain.style.position = "relative";
     galleryMain.style.overflow = "hidden";
+    
     let currentImageIndex = 0;
     let wasDragged = false; // set by the swipe handler below; read by the lightbox click handler
 
