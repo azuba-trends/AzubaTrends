@@ -422,7 +422,7 @@ export async function onRequestPost(context) {
     //    from the customer's point of view — dispatchTelegramEvent never
     //    throws, so none of this can fail the order that was already saved.
     const host = request.headers.get("host");
-    const adminOrderUrl = host ? `https://${host}/admin.html` : null;
+    const adminOrderUrl = host ? `https://${host}/admin` : null;
 
     // dispatchTelegramEvent's first argument used to be the Admin SDK `db`
     // object; Worker 4's converted lib/telegram.js takes `env` in that

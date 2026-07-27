@@ -135,7 +135,7 @@
     let highlightedIndex = -1;
 
     function goToResultsPage(query) {
-      window.location.href = `/search.html?q=${encodeURIComponent(query)}`;
+      window.location.href = `/search?q=${encodeURIComponent(query)}`;
     }
 
     function closeDropdown() {
@@ -158,7 +158,7 @@
       });
       if (currentTotal > 0) {
         const seeAll = document.createElement("a");
-        seeAll.href = `/search.html?q=${encodeURIComponent(query)}`;
+        seeAll.href = `/search?q=${encodeURIComponent(query)}`;
         seeAll.className = "search-see-all";
         seeAll.textContent = `See all ${currentTotal} result${currentTotal === 1 ? "" : "s"} for "${query}"`;
         dropdown.appendChild(seeAll);

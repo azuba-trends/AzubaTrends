@@ -3610,7 +3610,7 @@ setTimeout(() => {
             orderId: order.orderId,
             customerName: order.customerName,
             finalTotal: order.finalTotal,
-            adminOrderUrl: `${window.location.origin}/admin.html`
+            adminOrderUrl: `${window.location.origin}/admin`
           }
         })
       }).catch((err) => console.warn("Telegram order_cancelled notify failed (non-fatal):", err));
