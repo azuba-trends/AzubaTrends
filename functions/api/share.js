@@ -120,7 +120,7 @@ async function handleProduct(url, env, request) {
 
   const title = product?.seoTitle || product?.title || "AzubaTrends Product";
   const description = product?.seoDesc || product?.shortDescription || "Buy amazing products on AzubaTrends.";
-  const imageUrl = (Array.isArray(product?.images) && product.images[0]) || "https://azuba-trends.vercel.app/images/logo-placeholder.png";
+  const imageUrl = (Array.isArray(product?.images) && product.images[0]) || `${url.origin}/images/logo-placeholder.png`;
   const redirectPath = (product?.isVariant && product?.parentId && product?.variantSlug)
     ? `/products/${encodeURIComponent(product.parentId)}/${encodeURIComponent(product.variantSlug)}`
     : (resolvedSlug ? `/products/${encodeURIComponent(resolvedSlug)}` : `/?id=${encodeURIComponent(id || "")}`);
@@ -146,9 +146,9 @@ async function handleBlog(url, env, request) {
   }
   const rawDescription = post.seoDesc || fallbackText || "Read this post on the AzubaTrends blog.";
   const description = rawDescription.length > 160 ? rawDescription.slice(0, 160).trim() + "…" : rawDescription;
-  const imageUrl = post.coverImage || "https://azuba-trends.vercel.app/images/logo-placeholder.png";
+  const imageUrl = post.coverImage || `${url.origin}/images/logo-placeholder.png`;
   const redirectPath = `/blog/${encodeURIComponent(slug)}`;
-  const canonicalUrl = `https://azuba-trends.vercel.app${redirectPath}`;
+  const canonicalUrl = `${url.origin}${redirectPath}`;
 
   return previewResponse({ title, description, imageUrl, redirectPath, ogType: "article", canonicalUrl });
 }

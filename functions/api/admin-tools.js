@@ -1,57 +1,35 @@
 // functions/api/admin-tools.js
 //
-// *** RECONSTRUCTED BY THE MIGRATION MANAGER ***
-// Worker 3's REPORT.md describes converting this file in detail (see
-// "Status by file" -> admin-tools.js), but the actual file was missing
-// from the delivered zip. This file has been rebuilt from the original
-// api/admin-tools.js plus Worker 3's written description of exactly what
-// changed, so behavior matches what was reported. If Worker 3 still has
-// the real file, diff it against this one before deploying — this is a
-// reconstruction, not a verified-identical copy.
-//
 // Admin-only order-tools endpoint (?action=). Auth via lib/auth.js's
 // requireAdmin(), which wraps the shared contract's verifyIdToken(). No
 // public path to this endpoint.
 //
-// GET ?action=recalc-ratings   -> fully converted, works as before.
-// GET ?action=invoice&orderId= -> NOT implemented (see risk write-up below).
-// GET ?action=invoice-bulk     -> NOT implemented (see risk write-up below).
+// GET ?action=recalc-ratings   -> unchanged from the original.
+// GET ?action=invoice&orderId= -> streams back one order's invoice as a PDF.
+// GET ?action=invoice-bulk     -> streams back a ZIP of every order's invoice.
 //
 // ---------------------------------------------------------------------
-// WHY invoice / invoice-bulk return 501 instead of a converted pdfkit/
-// archiver implementation (per Worker 3's REPORT.md):
+// PDF/ZIP GENERATION (Cloudflare Workers-safe)
 //
-// pdfkit was built for Node streams and is not a safe drop-in for
-// Cloudflare Workers — it can load under the nodejs_compat flag, but has
-// real, reported limitations (font/layout issues) once you go past basic
-// text, and this was never exercised against a real Worker in this
-// migration. archiver pulls in Node's stream/zlib/fs and is NOT expected
-// to work on Workers at all.
+// The original Vercel version used `pdfkit` (Node-stream based) and
+// `archiver` (pulls in Node's stream/zlib/fs) — neither is safe on
+// Cloudflare Workers. This version uses:
+//   - `pdf-lib` for invoice drawing (see lib/invoice.js — pure JS,
+//     confirmed working on Workers, no nodejs_compat flag needed).
+//   - `fflate`'s `zipSync()` for the bulk ZIP (pure JS, also
+//     Workers-safe). Both are declared in package.json.
 //
-// Recommended replacement (Worker 3's recommendation, not yet built):
-//   - Invoice drawing: rewrite `drawInvoice()` against `pdf-lib` (pure JS,
-//     confirmed working on Workers, no nodejs_compat flag). Since the
-//     original drawInvoice() already does its own manual x/y positioning
-//     rather than relying on pdfkit's auto text-flow, this is a bounded
-//     rewrite, not a redesign — the Indian-numbering/currency helpers
-//     below need zero changes either way.
-//   - Bulk ZIP: swap `archiver` for `fflate`'s `zipSync()` (pure JS,
-//     confirmed working on Workers). Build a { "Invoice-<id>.pdf":
-//     Uint8Array } map as each PDF is generated in memory, then one
-//     zipSync(files) call. Flag: zipSync builds the whole archive in
-//     memory before returning it (no streaming start like archiver had),
-//     so a store with a very large order count could hit a Worker's
-//     memory/CPU-time limit — size this against real order-count
-//     expectations, and consider batching into multiple ZIPs or an
-//     R2-backed job if this store ever has thousands of orders.
-//
-// The pure numeric helpers below (amountToWords etc.) have ZERO pdfkit
-// dependency and are carried over unchanged, ready for whichever PDF
-// approach is picked to reuse without a rewrite.
+// zipSync builds the whole archive in memory before returning it (no
+// streaming start the way `archiver` had) — fine for a normal store's
+// order volume, but if this store ever has thousands of orders, watch
+// Worker CPU-time/memory limits and consider batching into multiple ZIPs
+// or moving to an R2-backed background job instead.
 // ---------------------------------------------------------------------
 
-import { getDocs, batchWrite } from "../../lib/firestore-rest.js";
+import { getDoc, getDocs, batchWrite } from "../../lib/firestore-rest.js";
 import { requireAdmin } from "../../lib/auth.js";
+import { generateInvoicePdf } from "../../lib/invoice.js";
+import { zipSync } from "fflate";
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -60,42 +38,9 @@ function json(data, status = 200) {
   });
 }
 
-// ---------------------------------------------------------------------
-// Number -> Indian-English words (unchanged from the original — pure
-// math, no Node/Firestore dependency). Kept here, unused for now, so
-// whichever pdf-lib rewrite happens later doesn't have to reproduce it.
-// ---------------------------------------------------------------------
-const ONES = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
-  "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
-const TENS = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-
-function twoDigitWords(n) {
-  if (n < 20) return ONES[n];
-  return TENS[Math.floor(n / 10)] + (n % 10 ? " " + ONES[n % 10] : "");
-}
-function threeDigitWords(n) {
-  if (n < 100) return twoDigitWords(n);
-  return ONES[Math.floor(n / 100)] + " Hundred" + (n % 100 ? " " + twoDigitWords(n % 100) : "");
-}
-function integerToWordsIndian(n) {
-  if (n === 0) return "Zero";
-  const crore = Math.floor(n / 10000000); n %= 10000000;
-  const lakh = Math.floor(n / 100000); n %= 100000;
-  const thousand = Math.floor(n / 1000); n %= 1000;
-  const rest = n;
-  let parts = [];
-  if (crore) parts.push(threeDigitWords(crore) + " Crore");
-  if (lakh) parts.push(threeDigitWords(lakh) + " Lakh");
-  if (thousand) parts.push(threeDigitWords(thousand) + " Thousand");
-  if (rest) parts.push(threeDigitWords(rest));
-  return parts.join(" ");
-}
-function amountToWords(amount) {
-  const rupees = Math.floor(Math.abs(amount));
-  const paise = Math.round((Math.abs(amount) - rupees) * 100);
-  let words = "Rupees " + integerToWordsIndian(rupees);
-  if (paise > 0) words += " and " + twoDigitWords(paise) + " Paise";
-  return words + " Only";
+async function loadSettings(env) {
+  const settings = await getDoc(env, "settings/store_config");
+  return settings || {};
 }
 
 // ---------------------------------------------------------------------
@@ -160,18 +105,51 @@ export async function onRequestGet(context) {
       return await recalcRatings(env);
     }
 
-    if (action === "invoice" || action === "invoice-bulk") {
-      return json(
-        {
-          error:
-            "Invoice generation is not available on this deployment yet. " +
-            "pdfkit/archiver (the original Node-based PDF/ZIP libraries) are not " +
-            "safe to run as-is on Cloudflare Workers — this needs a rewrite against " +
-            "pdf-lib (invoices) and fflate's zipSync (bulk ZIP) before it can ship. " +
-            "See functions/api/admin-tools.js's header comment for the full plan."
-        },
-        501
-      );
+    if (action === "invoice") {
+      const orderId = searchParams.get("orderId");
+      if (!orderId) return json({ error: "Missing orderId" }, 400);
+      const [order, settings] = await Promise.all([
+        getDoc(env, `orders/${orderId}`),
+        loadSettings(env)
+      ]);
+      if (!order) return json({ error: "Order not found" }, 404);
+      const pdfBytes = await generateInvoicePdf(order, settings);
+      return new Response(pdfBytes, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="Invoice-${order.orderId}.pdf"`
+        }
+      });
+    }
+
+    if (action === "invoice-bulk") {
+      const [orders, settings] = await Promise.all([
+        getDocs(env, "orders", {}),
+        loadSettings(env)
+      ]);
+      if (!orders || orders.length === 0) return json({ error: "No orders found" }, 404);
+
+      const files = {};
+      for (const order of orders) {
+        try {
+          const pdfBytes = await generateInvoicePdf(order, settings);
+          files[`Invoice-${order.orderId || order.id}.pdf`] = pdfBytes;
+        } catch (err) {
+          console.error(`admin-tools: failed to generate invoice for order ${order.id}:`, err.message);
+          // Skip this one order rather than failing the whole ZIP — one
+          // malformed order shouldn't block every other invoice.
+        }
+      }
+
+      const zipBytes = zipSync(files, { level: 6 });
+      return new Response(zipBytes, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/zip",
+          "Content-Disposition": `attachment; filename="Invoices-${new Date().toISOString().slice(0, 10)}.zip"`
+        }
+      });
     }
 
     return json(
@@ -183,7 +161,3 @@ export async function onRequestGet(context) {
     return json({ error: "Something went wrong running this admin action." }, 500);
   }
 }
-
-// Exported for the future pdf-lib rewrite, so it doesn't need to
-// reimplement Indian-numbering currency formatting from scratch.
-export { amountToWords, integerToWordsIndian };

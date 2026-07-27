@@ -14,7 +14,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title id="page-title">Product — AzubaTrends</title>
 <meta id="page-description" name="description" content="Shop handmade home goods at AzubaTrends.">
-<link id="page-canonical" rel="canonical" href="https://azuba-trends.vercel.app/">
+<link id="page-canonical" rel="canonical" href="https://azubatrends.pages.dev/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -283,7 +283,7 @@
     // ---- SEO meta tags ---------------------------------------------
     document.title = product.seoTitle || `${product.title} — ${SITE_CONFIG.siteName}`;
     document.getElementById("page-description").setAttribute("content", product.seoDesc || product.shortDescription || product.title);
-    document.getElementById("page-canonical").setAttribute("href", `https://azuba-trends.vercel.app${ProductLoader.productUrl(product)}`);
+    document.getElementById("page-canonical").setAttribute("href", `${window.location.origin}${ProductLoader.productUrl(product)}`);
 
     if (window.Tracking) {
       window.Tracking.trackEvent({

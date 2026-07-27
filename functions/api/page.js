@@ -109,7 +109,7 @@ export async function onRequestGet(context) {
     const description = escapeHtml(page.metaDesc || "");
     const heading = escapeHtml(page.heading || "");
     const image = page.image || "";
-    const pageUrl = `https://azuba-trends.vercel.app/${encodeURIComponent(slug)}`;
+    const pageUrl = `${url.origin}/${encodeURIComponent(slug)}`;
     // page.content comes only from the admin's own rich-text editor
     // (Admin -> Pages), never from public/user input, so it's trusted the
     // same way product/blog HTML content already is elsewhere in this app.
@@ -121,7 +121,7 @@ export async function onRequestGet(context) {
       name: page.heading,
       description: page.metaDesc || undefined,
       url: pageUrl,
-      isPartOf: { "@type": "WebSite", name: "AzubaTrends", url: "https://azuba-trends.vercel.app/" }
+      isPartOf: { "@type": "WebSite", name: "AzubaTrends", url: `${url.origin}/` }
     };
 
     const html = `

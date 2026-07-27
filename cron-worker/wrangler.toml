@@ -1,0 +1,13 @@
+name = "azubatrends-cron-digest"
+main = "worker.js"
+compatibility_date = "2026-07-26"
+
+# 03:00 UTC daily = 8:30 AM IST. Change the cron expression if you want a
+# different time — Cloudflare Cron Triggers are always specified in UTC.
+# Format is standard 5-field cron: minute hour day month weekday.
+[triggers]
+crons = ["0 3 * * *"]
+
+# Secrets (SITE_URL, CRON_SECRET) are NOT set here — see worker.js's
+# header comment for the `wrangler secret put` commands. Never commit
+# secrets into this file or version control.
