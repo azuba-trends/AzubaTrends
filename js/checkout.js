@@ -694,6 +694,12 @@
       $('confirmation-section').hidden = false;
       if ($('summary-aside')) $('summary-aside').style.display = 'none';
       Security.setTextSafely($('confirmation-order-id'), currentOrderId);
+      
+      // -- Estimated Delivery Render --
+      if (orderPayload.estimatedDelivery) {
+        document.getElementById("success-delivery-estimate").innerHTML = `📦 Estimated Delivery: <strong>${orderPayload.estimatedDelivery}</strong>`;
+      }
+      
       let paymentNote;
       if (method === 'COD') {
         paymentNote = 'Payment to be collected on delivery.';
