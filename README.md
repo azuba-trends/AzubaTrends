@@ -55,9 +55,6 @@ for the single admin login. ImgBB for image hosting (free image-upload API,
 key entered in Settings, not hardcoded). EmailJS for optional order-email
 notifications.
 
-## CRON_SECRET 
-WiG6cTB-mO7O2S3ZO4HQUXl_I6XlbuFEtPL2w5c5lJ9
-
 ## Directory Structure
 
 ```
