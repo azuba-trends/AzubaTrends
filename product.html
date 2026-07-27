@@ -880,9 +880,13 @@
       const METRO_DISTRICTS = ["kolkata", "howrah", "north 24 parganas", "south 24 parganas", "hooghly"];
       function estimateWindow(district) {
         const dispatchDays = 1;
-        const isMetro = METRO_DISTRICTS.includes(String(district || "").toLowerCase());
-        const transitMin = isMetro ? 2 : 3;
-        const transitMax = isMetro ? 3 : 6;
+        
+        // FIX: Transit time adjust kiya gaya hai. 
+        // 1 day dispatch + 6 days transit = 7 days minimum.
+        // 1 day dispatch + 9 days transit = 10 days maximum.
+        const transitMin = 6;
+        const transitMax = 9;
+        
         const fmt = (d) => d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
         const from = new Date(); from.setDate(from.getDate() + dispatchDays + transitMin);
         const to = new Date(); to.setDate(to.getDate() + dispatchDays + transitMax);
