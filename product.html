@@ -411,4 +411,651 @@
       prevBtn.type = "button";
       prevBtn.className = "gallery__nav gallery__nav--prev";
       prevBtn.setAttribute("aria-label", "Previous image");
-      prevBtn.inner
+      prevBtn.innerHTML = "&#10094;";
+      // FIX: Use animation function for Prev button
+      prevBtn.addEventListener("click", (e) => { e.stopPropagation(); slideWithAnimation(-1); });
+
+      const nextBtn = document.createElement("button");
+      nextBtn.type = "button";
+      nextBtn.className = "gallery__nav gallery__nav--next";
+      nextBtn.setAttribute("aria-label", "Next image");
+      nextBtn.innerHTML = "&#10095;";
+      // FIX: Use animation function for Next button
+      nextBtn.addEventListener("click", (e) => { e.stopPropagation(); slideWithAnimation(1); });
+
+      galleryMain.appendChild(prevBtn);
+      galleryMain.appendChild(nextBtn);
+
+      const dots = document.createElement("div");
+      dots.className = "gallery__dots";
+      dots.id = "gallery-dots";
+      images.forEach((_, i) => {
+        const dot = document.createElement("span");
+        dot.className = "gallery__dot" + (i === 0 ? " is-active" : "");
+        dots.appendChild(dot);
+      });
+      galleryMain.appendChild(dots);
+
+      // ---- Drag-follow swipe -----------------------------------
+      // The image tracks the pointer 1:1 while dragging (instead of
+      // only reacting on release), and a peer image slides in from
+      // the side being revealed. On release it either finishes the
+      // slide (past the threshold) or springs back to place.
+      let dragStartX = null;
+      let dragStartY = null;
+      let dragging = false;
+      let dragLocked = false; // true once we've decided this is a horizontal drag
+      let peerImg = null;
+      let peerDir = 0; // -1 = peer is the previous image (entering from left), 1 = next image (entering from right)
+      const SWIPE_THRESHOLD = 40; // px
+      const galleryWidth = () => galleryMain.getBoundingClientRect().width || 1;
+
+      mainImg.style.position = "absolute";
+      mainImg.style.top = "0";
+      mainImg.style.left = "0";
+      mainImg.style.width = "100%";
+      mainImg.style.height = "100%";
+      
+      // FIX 1: Native browser drag disable kiya main image pe taaki pointer events interrupt na ho
+      mainImg.ondragstart = () => false;
+
+      function makePeer(index) {
+        const img = document.createElement("img");
+        img.src = images[((index % images.length) + images.length) % images.length];
+        img.alt = "";
+        img.style.position = "absolute";
+        img.style.top = "0";
+        img.style.left = "0";
+        img.style.width = "100%";
+        img.style.height = "100%";
+        img.style.objectFit = "contain";
+        img.style.objectPosition = "center";
+        img.style.pointerEvents = "none";
+        
+        // FIX 2: Native browser drag disable kiya peer image pe bhi
+        img.ondragstart = () => false;
+        
+        return img;
+      }
+
+      function clearPeer() {
+        if (peerImg && peerImg.parentNode) peerImg.parentNode.removeChild(peerImg);
+        peerImg = null;
+        peerDir = 0;
+      }
+
+      function attachSwipe(el, onSwipeLeft, onSwipeRight) {
+        el.addEventListener("pointerdown", (e) => {
+          if (e.target.closest(".gallery__nav")) return;
+          dragStartX = e.clientX;
+          dragStartY = e.clientY;
+          dragging = true;
+          dragLocked = false;
+          wasDragged = false;
+        });
+
+        el.addEventListener("pointermove", (e) => {
+          if (!dragging || dragStartX === null) return;
+          const dx = e.clientX - dragStartX;
+          const dy = e.clientY - dragStartY;
+
+          if (!dragLocked) {
+            if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return; // not enough movement yet to decide
+            if (Math.abs(dy) > Math.abs(dx)) { dragging = false; return; } // vertical scroll, let the page handle it
+            dragLocked = true;
+            el.setPointerCapture(e.pointerId);
+          }
+
+          wasDragged = true;
+          mainImg.style.transition = "none";
+          mainImg.style.transform = `translateX(${dx}px)`;
+
+          const wantDir = dx < 0 ? 1 : -1; // dragging left reveals the next image, dragging right reveals the previous
+          if (peerImg && peerDir !== wantDir) clearPeer();
+          if (!peerImg) {
+            peerDir = wantDir;
+            peerImg = makePeer(currentImageIndex + wantDir);
+            galleryMain.insertBefore(peerImg, mainImg);
+          }
+          peerImg.style.transition = "none";
+          peerImg.style.transform = `translateX(${wantDir * galleryWidth() + dx}px)`;
+        });
+
+        function finishDrag(e) {
+          if (!dragging || dragStartX === null) return;
+          const dx = e.clientX - dragStartX;
+          const dy = e.clientY - dragStartY;
+          dragging = false;
+          dragStartX = null;
+          dragStartY = null;
+
+          if (!dragLocked) return;
+          dragLocked = false;
+
+          const width = galleryWidth();
+          const settled = Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy);
+
+          mainImg.style.transition = "transform 0.25s ease";
+          if (peerImg) peerImg.style.transition = "transform 0.25s ease";
+
+          if (settled && peerImg) {
+            // FIX 3: Direction correct math (-1 for left swipe, 1 for right swipe)
+            const exitDir = dx < 0 ? -1 : 1; 
+            mainImg.style.transform = `translateX(${exitDir * width}px)`;
+            peerImg.style.transform = "translateX(0px)";
+            
+            // Track next image index based on swipe direction
+            const dir = dx < 0 ? 1 : -1;
+            const nextIndex = currentImageIndex + dir;
+            
+            setTimeout(() => {
+              showImage(nextIndex);
+              mainImg.style.transition = "none";
+              mainImg.style.transform = "translateX(0px)";
+              clearPeer();
+              if (dx < 0) onSwipeLeft(); else onSwipeRight();
+            }, 250);
+          } else {
+            mainImg.style.transform = "translateX(0px)";
+            if (peerImg) {
+              const dir = peerDir;
+              peerImg.style.transform = `translateX(${dir * width}px)`;
+            }
+            setTimeout(() => {
+              mainImg.style.transition = "none";
+              clearPeer();
+            }, 250);
+          }
+        }
+
+        el.addEventListener("pointerup", finishDrag);
+        el.addEventListener("pointercancel", finishDrag);
+        
+        // FIX 4: Mobile pe browser ko strictly batana ki yaha vertical pan allowed hai but horizontal hum handle karenge
+        el.style.touchAction = "pan-y";
+      }
+
+      attachSwipe(galleryMain, () => {}, () => {});
+    }
+
+    const lightbox = document.getElementById("lightbox");
+    const lightboxImg = document.getElementById("lightbox-img");
+    galleryMain.addEventListener("click", (e) => {
+      if (e.target.closest(".gallery__nav")) return;
+      if (wasDragged) { wasDragged = false; return; }
+      lightboxImg.src = mainImg.src;
+      lightboxImg.alt = mainImg.alt;
+      document.getElementById("lightbox-caption").hidden = true;
+      lightbox.hidden = false;
+    });
+    if (images.length > 1) {
+      let lbDragStartX = null;
+      lightbox.addEventListener("pointerdown", (e) => { lbDragStartX = e.clientX; });
+      lightbox.addEventListener("pointerup", (e) => {
+        if (lbDragStartX === null || e.target !== lightboxImg) return;
+        const dx = e.clientX - lbDragStartX;
+        lbDragStartX = null;
+        if (Math.abs(dx) > 40) {
+          showImage(currentImageIndex + (dx < 0 ? 1 : -1), { fromLightbox: true });
+        }
+      });
+    }
+    function closeLightbox() { lightbox.hidden = true; }
+    document.getElementById("lightbox-close").addEventListener("click", closeLightbox);
+    lightbox.addEventListener("click", (e) => { if (e.target === lightbox) closeLightbox(); });
+    document.addEventListener("keydown", (e) => {
+      if (lightbox.hidden) return;
+      if (e.key === "Escape") closeLightbox();
+      if (e.key === "ArrowLeft" && images.length > 1) showImage(currentImageIndex - 1, { fromLightbox: true });
+      if (e.key === "ArrowRight" && images.length > 1) showImage(currentImageIndex + 1, { fromLightbox: true });
+    });
+
+    // ---- Info ---------------------------------------------
+    const brandEl = document.getElementById("product-brand");
+    if (product.brand) {
+      Security.setTextSafely(brandEl, product.brand);
+      brandEl.hidden = false;
+    } else {
+      brandEl.hidden = true;
+    }
+
+    Security.setTextSafely(document.getElementById("product-category"), product.category || "");
+    Security.setTextSafely(document.getElementById("product-title"), product.title || "");
+    document.getElementById("product-short-desc").innerHTML = product.shortDescription || "";
+
+    const descSection = document.getElementById("product-description-section");
+    const descBody = document.getElementById("product-description");
+    const descToggle = document.getElementById("product-description-toggle");
+    if (product.description && product.description.trim()) {
+      descBody.innerHTML = product.description;
+      descSection.hidden = false;
+      requestAnimationFrame(() => {
+        if (descBody.scrollHeight > descBody.clientHeight + 4) {
+          descToggle.hidden = false;
+          descToggle.addEventListener("click", () => {
+            const expanded = descBody.classList.toggle("is-expanded");
+            descToggle.textContent = expanded ? "Show less" : "Show more";
+          });
+        }
+      });
+    } else {
+      descSection.hidden = true;
+    }
+
+    // `product` is whatever doc the URL resolved to (a specific size, under
+    // the hood). `activeProduct` is whichever size is currently selected on
+    // screen — they start out the same, and switching Size below only moves
+    // activeProduct, never the URL/page. Switching Color is a real
+    // navigation to a different product page (color = its own product).
+    let activeProduct = product;
+
+    // Delivery partner note
+    const deliveryNote = document.getElementById("delivery-partner-note");
+    const deliveryLogo = document.getElementById("delivery-partner-logo");
+    const deliveryNameEl = document.getElementById("delivery-partner-name");
+    if (product.deliveryPartnerName || product.deliveryPartnerImage) {
+      Security.setTextSafely(deliveryNameEl, product.deliveryPartnerName || "");
+      if (product.deliveryPartnerImage) {
+        deliveryLogo.src = product.deliveryPartnerImage;
+        deliveryLogo.hidden = false;
+      } else {
+        deliveryLogo.hidden = true;
+      }
+      deliveryNote.hidden = false;
+    } else {
+      deliveryNote.hidden = true;
+    }
+
+    // ---- Price / Stock status / actions / Notify Me ---------------------------
+    // All of this depends on which SIZE is currently selected, so it's a
+    // function that re-runs every time the size changes, instead of a
+    // one-shot block. The Notify Me button/form listeners are wired ONCE,
+    // outside this function, so switching sizes several times never stacks
+    // duplicate listeners on them.
+    const addToCartMount = document.getElementById("add-to-cart-mount");
+    const buyNowBtn = document.getElementById("buy-now-btn");
+    const stockStatusEl = document.getElementById("product-stock-status");
+    const productActionsEl = document.getElementById("product-actions");
+    const notifyBlock = document.getElementById("notify-me-block");
+    const notifyBtn = document.getElementById("notify-me-btn");
+    const notifyForm = document.getElementById("notify-me-form");
+    const notifyEmailInput = document.getElementById("notify-me-email");
+    const notifyStatus = document.getElementById("notify-me-status");
+    const notifySubmitBtn = notifyForm.querySelector('button[type="submit"]');
+
+    function renderVariantDependentUI(vp) {
+      activeProduct = vp;
+
+      document.getElementById("product-price-current").textContent = ProductLoader.formatPrice(vp.sellingPrice);
+      const mrpEl = document.getElementById("product-price-mrp");
+      const discEl = document.getElementById("product-discount");
+      const discount = ProductLoader.calcDiscount(vp);
+      if (discount > 0) {
+        mrpEl.textContent = ProductLoader.formatPrice(vp.mrp);
+        mrpEl.hidden = false;
+        discEl.textContent = `${discount}% off`;
+        discEl.hidden = false;
+      } else {
+        mrpEl.hidden = true;
+        discEl.hidden = true;
+      }
+
+      // Reset Notify Me back to its default state for the newly-selected size.
+      notifyForm.classList.remove("is-open");
+      notifyForm.hidden = false;
+      notifyBtn.hidden = false;
+      notifyStatus.textContent = "";
+      notifyStatus.removeAttribute("data-tone");
+      notifySubmitBtn.disabled = false;
+      notifySubmitBtn.textContent = "Notify Me";
+
+      stockStatusEl.innerHTML = "";
+      if (vp.stock === 0) {
+        stockStatusEl.innerHTML = '<span class="oos-pill">Out of Stock</span>';
+
+        // No Add to Cart / Buy Now while out of stock — Notify Me instead.
+        productActionsEl.hidden = true;
+        notifyBlock.hidden = false;
+        buyNowBtn.disabled = true;
+        buyNowBtn.setAttribute("aria-disabled", "true");
+      } else {
+        if (vp.stock <= 5) {
+          stockStatusEl.innerHTML = `<span class="low-stock-pill">Only ${vp.stock} left</span>`;
+        }
+        productActionsEl.hidden = false;
+        notifyBlock.hidden = true;
+        buyNowBtn.disabled = false;
+        buyNowBtn.removeAttribute("aria-disabled");
+
+        window.CartButtonUI.mount(addToCartMount, {
+          productId: vp.id,
+          title: vp.title,
+          price: vp.sellingPrice,
+          image: images[0],
+          stock: vp.stock,
+          size: vp.size || "",
+          color: vp.color || ""
+        });
+
+        buyNowBtn.setAttribute("data-buy-now", "");
+        buyNowBtn.setAttribute("data-product-id", vp.id);
+        buyNowBtn.setAttribute("data-product-title", vp.title);
+        buyNowBtn.setAttribute("data-product-price", String(vp.sellingPrice));
+        buyNowBtn.setAttribute("data-product-image", images[0]);
+        buyNowBtn.setAttribute("data-product-size", vp.size || "");
+        buyNowBtn.setAttribute("data-product-color", vp.color || "");
+      }
+    }
+
+    notifyBtn.addEventListener("click", () => {
+      notifyForm.classList.add("is-open");
+      notifyBtn.hidden = true;
+      notifyEmailInput.focus();
+    });
+
+    notifyForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = notifyEmailInput.value.trim();
+      if (!email) return;
+      notifySubmitBtn.disabled = true;
+      notifySubmitBtn.textContent = "Sending...";
+      notifyStatus.removeAttribute("data-tone");
+      notifyStatus.textContent = "";
+      try {
+        const res = await fetch("/api/notify-stock", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId: activeProduct.id, productTitle: activeProduct.title, email })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || "Couldn't save your request. Please try again.");
+        notifyForm.hidden = true;
+        notifyStatus.setAttribute("data-tone", "success");
+        notifyStatus.textContent = "You're on the list — we'll email you when this is back in stock.";
+      } catch (err) {
+        notifyStatus.setAttribute("data-tone", "error");
+        notifyStatus.textContent = err.message || "Something went wrong. Please try again.";
+        notifySubmitBtn.disabled = false;
+        notifySubmitBtn.textContent = "Notify Me";
+      }
+    });
+
+    // ---- Variant selector (Color = separate product, Size = in-page) ---
+    if (product.isVariant) {
+      const siblings = await ProductLoader.getVariantSiblings(product);
+      // Sizes always show in the standard S/M/L/XL... order, never
+      // however they happened to be typed into the admin panel. Only sizes
+      // belonging to THIS color are offered — a color's sizes never leak
+      // into another color's page.
+      const sameColorSiblings = siblings.filter((s) => s.color === product.color);
+      const sizes = ProductLoader.sortSizes([...new Set(sameColorSiblings.map((s) => s.size).filter(Boolean))]);
+      const colors = [...new Set(siblings.map((s) => s.color).filter(Boolean))];
+
+      if (sizes.length > 0 || colors.length > 0) {
+        const wrap = document.getElementById("product-variant-selector");
+        wrap.hidden = false;
+        wrap.innerHTML = "";
+
+        function findSameColorSibling(size) {
+          return sameColorSiblings.find((s) => s.size === size) || null;
+        }
+        function findAnySiblingForColor(color) {
+          return siblings.find((s) => s.color === color) || null;
+        }
+        function goToVariant(sibling) {
+          if (!sibling || sibling.id === product.id) return;
+          window.location.href = ProductLoader.productUrl(sibling);
+        }
+
+        // Colors render in TWO places in the markup — a desktop copy
+        // sitting right under the gallery thumbnails, and a mobile copy
+        // in its usual spot above Size in the right-hand info column.
+        // CSS (not JS) decides which one is actually visible at a given
+        // viewport width, so both are always built identically here.
+        function buildColorGroup() {
+          const group = document.createElement("div");
+          group.className = "variant-selector-group variant-selector-group--color";
+          group.innerHTML = `<span class="variant-selector-group__label">${colors.length} Similar Product${colors.length === 1 ? "" : "s"}</span>`;
+          const row = document.createElement("div");
+          row.className = "variant-color-row";
+          colors.forEach((color) => {
+            const sibling = findAnySiblingForColor(color);
+            const imgSrc = (sibling && sibling.images && sibling.images[0]) ? sibling.images[0] : "images/logo-placeholder.svg";
+            const swatch = document.createElement("button");
+            swatch.type = "button";
+            swatch.className = "variant-color-swatch" + (color === product.color ? " is-active" : "");
+            swatch.title = color;
+            swatch.setAttribute("aria-label", color);
+            const img = document.createElement("img");
+            img.src = imgSrc;
+            img.alt = color;
+            img.loading = "lazy";
+            swatch.appendChild(img);
+            // Picking a different color is a different product page.
+            swatch.addEventListener("click", () => goToVariant(sibling));
+            row.appendChild(swatch);
+          });
+          group.appendChild(row);
+          return group;
+        }
+
+        if (colors.length > 0) {
+          wrap.appendChild(buildColorGroup());
+
+          const galleryColorWrap = document.getElementById("gallery-color-variants");
+          galleryColorWrap.innerHTML = "";
+          galleryColorWrap.appendChild(buildColorGroup());
+          galleryColorWrap.hidden = false;
+        }
+
+        if (sizes.length > 0) {
+          const group = document.createElement("div");
+          group.className = "variant-selector-group";
+          group.innerHTML = `<span class="variant-selector-group__label">Size</span>`;
+          const row = document.createElement("div");
+          row.className = "variant-size-row";
+          sizes.forEach((size) => {
+            const match = findSameColorSibling(size);
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "variant-size-btn" + (size === product.size ? " is-active" : "");
+            btn.textContent = size;
+            if (!match || match.stock === 0) btn.disabled = true;
+            // Picking a different size stays on THIS product page — it just
+            // swaps which underlying size's price/stock is shown.
+            btn.addEventListener("click", () => {
+              if (!match || match.id === activeProduct.id) return;
+              row.querySelectorAll(".variant-size-btn").forEach((b) => b.classList.remove("is-active"));
+              btn.classList.add("is-active");
+              renderVariantDependentUI(match);
+            });
+            row.appendChild(btn);
+          });
+          group.appendChild(row);
+          wrap.appendChild(group);
+        }
+      }
+    }
+
+    renderVariantDependentUI(product);
+
+    // ---- Sold By (demo) ---------------------------------------------
+    (async () => {
+      if (window.SITE_CONFIG_READY) { try { await window.SITE_CONFIG_READY; } catch (err) { /* ignore */ } }
+      const storeName = (window.SITE_CONFIG && window.SITE_CONFIG.siteName) || "AzubaTrends";
+      Security.setTextSafely(document.getElementById("sold-by-name"), storeName);
+      Security.setTextSafely(document.getElementById("sold-by-initial"), storeName.trim().charAt(0).toUpperCase() || "A");
+    })();
+
+    // ---- Check Delivery Date & Availability ---------------------------
+    (function initDeliveryChecker() {
+      const input = document.getElementById("delivery-pincode-input");
+      const btn = document.getElementById("delivery-pincode-check-btn");
+      const resultEl = document.getElementById("delivery-checker-result");
+
+      // Rough district -> dispatch/transit estimate. This store only
+      // ships within West Bengal (see config/geo-config.json) — Kolkata
+      // metro-area pincodes go out fast, other WB districts take a bit
+      // longer. This is an ESTIMATE for browsing, not a courier-verified
+      // promise — checkout does the real, final validation.
+      const METRO_DISTRICTS = ["kolkata", "howrah", "north 24 parganas", "south 24 parganas", "hooghly"];
+      function estimateWindow(district) {
+        const dispatchDays = 1;
+        
+        // FIX: Transit time adjust kiya gaya hai. 
+        // 1 day dispatch + 6 days transit = 7 days minimum.
+        // 1 day dispatch + 9 days transit = 10 days maximum.
+        const transitMin = 6;
+        const transitMax = 9;
+        
+        const fmt = (d) => d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+        const from = new Date(); from.setDate(from.getDate() + dispatchDays + transitMin);
+        const to = new Date(); to.setDate(to.getDate() + dispatchDays + transitMax);
+        return { dispatchDays, from: fmt(from), to: fmt(to) };
+      }
+
+      async function runCheck() {
+        const pin = (input.value || "").replace(/\D/g, "");
+        resultEl.classList.remove("is-visible");
+        resultEl.removeAttribute("data-status");
+        if (pin.length !== 6) {
+          resultEl.dataset.status = "error";
+          resultEl.innerHTML = `<p class="delivery-checker__headline">Please enter a valid 6-digit pincode.</p>`;
+          resultEl.classList.add("is-visible");
+          return;
+        }
+
+        btn.disabled = true;
+        const originalLabel = btn.textContent;
+        btn.textContent = "Checking...";
+
+        let verify = { checked: false, valid: null };
+        try {
+          if (window.GeoRestriction) verify = await window.GeoRestriction.verifyPincodeRealtime(pin);
+        } catch (err) { /* fall through to static config check below */ }
+
+        let serviceable = verify.valid;
+        let district = verify.district || null;
+        if (serviceable === null || serviceable === undefined) {
+          // India Post lookup failed/timed out — fall back to the
+          // site's static pincode-range config instead of blocking.
+          try {
+            const config = await window.GeoRestriction.loadConfig();
+            const pinNum = parseInt(pin, 10);
+            serviceable = (config.pincodeRanges || []).some((r) => pinNum >= r.min && pinNum <= r.max);
+          } catch (err) {
+            serviceable = false;
+          }
+        }
+
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+
+        if (!serviceable) {
+          resultEl.dataset.status = "error";
+          resultEl.innerHTML = `<p class="delivery-checker__headline">Sorry, we don't deliver to this pincode yet.</p>`;
+          resultEl.classList.add("is-visible");
+          return;
+        }
+
+        if (product.stock === 0) {
+          resultEl.dataset.status = "error";
+          resultEl.innerHTML = `
+            <p class="delivery-checker__result-row"><span class="delivery-checker__icon">✅</span><span>We deliver to <strong>${district ? Security.escapeHTML(district) : pin}</strong>.</span></p>
+            <p class="delivery-checker__headline">This product is currently out of stock at this location.</p>`;
+          resultEl.classList.add("is-visible");
+          return;
+        }
+
+        const est = estimateWindow(district);
+        resultEl.dataset.status = "ok";
+        resultEl.innerHTML = `
+          <p class="delivery-checker__result-row"><span class="delivery-checker__icon">✅</span><span class="delivery-checker__headline">Delivers to ${district ? Security.escapeHTML(district) : "pincode " + pin}</span></p>
+          <p class="delivery-checker__result-row"><span class="delivery-checker__icon">📦</span><span>Dispatch in ${est.dispatchDays} day${est.dispatchDays > 1 ? "s" : ""}</span></p>
+          <p class="delivery-checker__result-row"><span class="delivery-checker__icon">🚚</span><span>Estimated delivery: <strong>${est.from} – ${est.to}</strong></span></p>`;
+        resultEl.classList.add("is-visible");
+      }
+
+      btn.addEventListener("click", runCheck);
+      input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); runCheck(); } });
+    })();
+
+    // ---- SEO: Structured Data (Schema.org Product) -------------------
+    function buildProductSchema(ratingInfo) {
+      const schema = {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        name: product.title,
+        description: product.shortDescription || product.title,
+        image: images.filter(Boolean),
+        sku: product.sku || product.id,
+        brand: product.brand ? { "@type": "Brand", name: product.brand } : undefined,
+        offers: {
+          "@type": "Offer",
+          url: window.location.href,
+          priceCurrency: "INR",
+          price: Number(product.sellingPrice).toFixed(2),
+          availability: product.stock === 0 ? "https://schema.org/OutOfStock" : "https://schema.org/InStock"
+        }
+      };
+      if (ratingInfo && ratingInfo.count > 0) {
+        schema.aggregateRating = {
+          "@type": "AggregateRating",
+          ratingValue: ratingInfo.average.toFixed(1),
+          reviewCount: ratingInfo.count
+        };
+      }
+      return schema;
+    }
+
+    function setProductSchema(ratingInfo) {
+      let scriptEl = document.getElementById("product-schema");
+      if (!scriptEl) {
+        scriptEl = document.createElement("script");
+        scriptEl.type = "application/ld+json";
+        scriptEl.id = "product-schema";
+        document.head.appendChild(scriptEl);
+      }
+      scriptEl.textContent = JSON.stringify(buildProductSchema(ratingInfo));
+    }
+    setProductSchema(null);
+
+    // ---- Reviews ---------------------------------------------
+    Reviews.init(product.id, {
+      productTitle: product.title,
+      form: document.getElementById("review-form"),
+      starInput: document.getElementById("review-star-input"),
+      commentInput: document.getElementById("review-comment"),
+      addImageBtn: document.getElementById("review-add-image-btn"),
+      imagePopover: document.getElementById("review-image-popover"),
+      addImageOption: document.getElementById("review-add-image-option"),
+      imageInput: document.getElementById("review-image"),
+      imagePreviews: document.getElementById("review-photo-previews"),
+      imageError: document.getElementById("review-error"),
+      summaryScore: document.getElementById("review-avg-score"),
+      summaryStars: document.getElementById("review-avg-stars"),
+      summaryCount: document.getElementById("review-count-note"),
+      summaryBars: document.getElementById("review-bars"),
+      list: document.getElementById("review-list"),
+      viewAllBtn: document.getElementById("review-view-all-btn"),
+      drawerOverlay: document.getElementById("review-drawer-overlay"),
+      drawerBody: document.getElementById("review-drawer-body"),
+      drawerClose: document.getElementById("review-drawer-close"),
+      drawerTitle: document.getElementById("review-drawer-title"),
+      toast: document.getElementById("review-toast"),
+      onSummary: setProductSchema
+    });
+
+    // ---- Related / recommended products -----------------------
+    try {
+      window.ProductLoader.mountRelatedProducts(
+        document.getElementById("related-products-grid"),
+        { excludeId: product.id, excludeParentId: product.parentId, category: product.category }
+      );
+    } catch (err) {
+      console.error("Could not load related products", err);
+    }
+  });
+</script>
+</body>
+</html>
