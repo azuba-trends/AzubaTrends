@@ -455,9 +455,18 @@ main { flex: 1; }
 .page-header p { max-width: 60ch; margin-top: var(--space-2); }
 
 .breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
   font-size: 0.82rem;
   color: var(--color-muted);
-  margin-bottom: var(--space-2);
+  margin-top: var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.breadcrumb__sep {
+  color: var(--color-border);
 }
 
 .breadcrumb a { color: var(--color-primary); }
