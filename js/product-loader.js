@@ -333,13 +333,19 @@ const ProductLoader = (function () {
    *  from the interest cookie, then just newest-in-stock as a last resort —
    *  so this never comes up empty as long as *some* other product exists. */
   function pickRelatedProducts(allProducts, { excludeId, excludeParentId, category, limit = 8 } = {}) {
-    const pool = dedupeVariantGroups(allProducts.filter((p) => {
+    let pool = dedupeVariantGroups(allProducts.filter((p) => {
       if (String(p.id) === String(excludeId)) return false;
       // Don't recommend a product's own other sizes/colors as "related" —
-      // those belong in the variant selector, not this grid.
+      // those belong in the variant selector, not this grid. EXCEPT when
+      // there is nothing else in the whole catalog to show (a brand-new
+      // store with just one product family) — then showing the product's
+      // other colors here is better than an empty "no related products".
       if (excludeParentId && p.isVariant && String(p.parentId) === String(excludeParentId)) return false;
       return true;
     }));
+    if (pool.length === 0 && excludeParentId) {
+      pool = dedupeVariantGroups(allProducts.filter((p) => String(p.id) !== String(excludeId)));
+    }
     const buckets = [];
     if (category) buckets.push(pool.filter((p) => p.category === category));
     getTopInterestCategories().forEach((cat) => buckets.push(pool.filter((p) => p.category === cat)));
