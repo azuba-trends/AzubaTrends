@@ -36,10 +36,13 @@
     </div>
 
     <div id="product-root" hidden>
-      <div class="breadcrumb">
-        <a href="/" id="product-back-btn">← Back</a> &nbsp;/&nbsp;
-        <a href="/">Home</a> / <a href="/category" id="breadcrumb-category">Category</a>
-      </div>
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="/" id="product-back-btn">← Back</a>
+        <span class="breadcrumb__sep" aria-hidden="true">/</span>
+        <a href="/">Home</a>
+        <span class="breadcrumb__sep" aria-hidden="true">/</span>
+        <a href="/category" id="breadcrumb-category">Category</a>
+      </nav>
 
       <div class="product-detail">
         <!-- Gallery -->
