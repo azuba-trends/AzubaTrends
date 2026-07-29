@@ -313,7 +313,24 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   overflow: hidden;
+  position: relative;
   transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+/* Whole-card click target: the existing link around the image is
+   stretched (via ::after) to cover the entire card, so tapping the
+   title, price, or empty space also opens the product — not just the
+   photo. The Add to Cart / CTA button sits in its own stacking context
+   above this overlay so it keeps working as its own, separate click. */
+.product-card__link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.product-card__cta {
+  position: relative;
+  z-index: 2;
 }
 
 .product-card:hover {
