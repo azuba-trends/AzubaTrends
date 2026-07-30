@@ -1682,6 +1682,13 @@
 .variant-color-swatch:hover:not(:disabled) { transform: scale(1.05); }
 .variant-color-swatch.is-active { border-color: var(--color-primary); box-shadow: 0 0 0 2px var(--color-primary); }
 .variant-color-swatch:disabled { opacity: 0.3; cursor: not-allowed; }
+.variant-color-swatch.is-oos { opacity: 0.45; }
+.variant-color-swatch.is-oos::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top right, transparent calc(50% - 1px), var(--color-danger, #d33) calc(50% - 1px), var(--color-danger, #d33) calc(50% + 1px), transparent calc(50% + 1px));
+}
 .variant-color-swatch__label {
   position: absolute;
   bottom: -18px;

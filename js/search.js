@@ -92,7 +92,7 @@
   function buildSuggestionRow(product, rawQuery) {
     const row = document.createElement("a");
     row.href = ProductLoader.productUrl(product);
-    row.className = "search-suggestion" + (product.stock === 0 ? " is-out-of-stock" : "");
+    row.className = "search-suggestion" + (ProductLoader.isUnavailable(product) ? " is-out-of-stock" : "");
     row.setAttribute("role", "option");
 
     const img = document.createElement("img");
@@ -112,7 +112,7 @@
     const sub = document.createElement("div");
     sub.className = "search-suggestion__sub";
     const variantLabel = product.color ? `${product.color} · ` : "";
-    sub.textContent = product.stock === 0
+    sub.textContent = ProductLoader.isUnavailable(product)
       ? `${variantLabel}${product.category || ""} · Out of stock`
       : `${variantLabel}${product.category || ""} · ${ProductLoader.formatPrice(product.sellingPrice)}`;
 

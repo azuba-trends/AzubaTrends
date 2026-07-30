@@ -483,6 +483,12 @@
               <label>Stock Quantity <span class="required-star">*</span></label>
               <input type="number" id="prod-stock" min="0" required>
             </div>
+            <div class="form-field" style="display:flex; align-items:center; gap:8px; padding-top:22px;">
+              <label style="display:flex; align-items:center; gap:6px; font-weight:normal; margin:0;">
+                <input type="checkbox" id="prod-paused" style="width:auto;">
+                Pause sale <span class="field-hint" style="display:inline;">(hides Buy/Add to Cart without touching stock — toggle off to resume)</span>
+              </label>
+            </div>
             <div class="form-field">
               <label>SKU</label>
               <input type="text" id="prod-sku">

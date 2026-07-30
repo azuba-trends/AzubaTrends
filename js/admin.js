@@ -1573,7 +1573,7 @@ setTimeout(() => {
       <td>${esc((p.tags || []).join(", "))}</td>
       <td>${esc(p.category)}</td>
       <td>${dateStr}</td>
-      <td style="color:${p.stock > 0 ? 'inherit' : 'var(--color-danger)'}; font-weight:bold;">${(!opts.isChild && p.hasVariants) ? "—" : p.stock}</td>
+      <td style="color:${p.stock > 0 ? 'inherit' : 'var(--color-danger)'}; font-weight:bold;">${(!opts.isChild && p.hasVariants) ? "—" : p.stock}${p.paused ? ` <span title="Manually paused — off sale even though stock is unaffected" style="color:var(--color-accent-dark); font-weight:normal; font-size:0.75rem;">⏸ Paused</span>` : ""}</td>
       <td style="color:${sColor}; font-weight:bold;">${esc((p.status || "").toUpperCase())}</td>
       <td>${p.sourcePlatformUrl ? `<button class="btn btn-outline source-platform-btn" data-url="${esc(p.sourcePlatformUrl)}" style="padding:4px 8px; font-size:0.8rem;">Source Platform</button>` : '<span style="color:var(--color-ink-soft); font-size:0.8rem;">—</span>'}</td>
       <td>${
@@ -1596,8 +1596,13 @@ setTimeout(() => {
   // product; its individual sizes are only edited inside the parent's
   // Edit form (Variants section), not as separate rows here.
   function buildColorGroupRow(parent, color, docs) {
-    const rep = docs.find((d) => d.stock > 0) || docs[0];
+    const rep = docs.find((d) => d.stock > 0 && !d.paused) || docs.find((d) => d.stock > 0) || docs[0];
     const totalStock = docs.reduce((s, d) => s + (Number(d.stock) || 0), 0);
+    const allPaused = docs.length > 0 && docs.every((d) => d.paused === true);
+    const somePaused = !allPaused && docs.some((d) => d.paused === true);
+    const pausedBadge = allPaused
+      ? ` <span title="Every size in this color is manually paused" style="color:var(--color-accent-dark); font-weight:normal; font-size:0.75rem;">⏸ All Paused</span>`
+      : (somePaused ? ` <span title="Some sizes in this color are manually paused" style="color:var(--color-accent-dark); font-weight:normal; font-size:0.75rem;">⏸ Some Paused</span>` : "");
     const sizesLabel = docs.map((d) => d.size).filter(Boolean).join(", ");
     const sColor = rep.status === "active" ? "var(--color-success)" : "var(--color-accent-dark)";
     const img = (rep.images && rep.images[0]) ? rep.images[0] : "images/logo-placeholder.svg";
@@ -1614,7 +1619,7 @@ setTimeout(() => {
       <td>${esc((rep.tags || []).join(", "))}</td>
       <td>${esc(rep.category)}</td>
       <td>${dateStr}</td>
-      <td style="color:${totalStock > 0 ? 'inherit' : 'var(--color-danger)'}; font-weight:bold;">${totalStock}</td>
+      <td style="color:${totalStock > 0 ? 'inherit' : 'var(--color-danger)'}; font-weight:bold;">${totalStock}${pausedBadge}</td>
       <td style="color:${sColor}; font-weight:bold;">${esc((rep.status || "").toUpperCase())}</td>
       <td>${rep.sourcePlatformUrl ? `<button class="btn btn-outline source-platform-btn" data-url="${esc(rep.sourcePlatformUrl)}" style="padding:4px 8px; font-size:0.8rem;">Source Platform</button>` : '<span style="color:var(--color-ink-soft); font-size:0.8rem;">—</span>'}</td>
       <td><button class="btn btn-outline sync-color-btn" data-parent="${parent.id}" data-color="${esc(color)}" title="Pull Name, Description, Category, Brand, Tags, Delivery info and Images from the parent for every size in this color, then publish" style="padding:4px 8px; font-size:0.8rem;">🔄 Auto Sync</button></td>
@@ -1761,6 +1766,7 @@ setTimeout(() => {
     // fills in the real number instead of accidentally saving "free".
     document.getElementById("prod-cost-price").value = (p.costPrice !== undefined && p.costPrice !== null) ? p.costPrice : "";
     document.getElementById("prod-stock").value = p.stock ?? "";
+    document.getElementById("prod-paused").checked = p.paused === true;
     document.getElementById("prod-tags").value = (p.tags || []).join(", ");
     document.getElementById("prod-sku").value = p.sku || "";
     document.getElementById("prod-hsn").value = p.hsnCode || "";
@@ -2016,6 +2022,7 @@ setTimeout(() => {
         sellingPrice: Number(document.getElementById("prod-price").value) || 0,
         costPrice: Number(document.getElementById("prod-cost-price").value) || 0,
         stock: Number(document.getElementById("prod-stock").value) || 0,
+        paused: document.getElementById("prod-paused").checked === true,
         sku: document.getElementById("prod-sku").value,
         hsnCode: document.getElementById("prod-hsn").value.trim(),
         sourcePlatformUrl: document.getElementById("prod-source-url").value.trim(),
@@ -2086,6 +2093,7 @@ setTimeout(() => {
         delete sharedFields.mrp;
         delete sharedFields.sellingPrice;
         delete sharedFields.stock;
+        delete sharedFields.paused;
         delete sharedFields.hsnCode;
         delete sharedFields.sourcePlatformUrl;
         delete sharedFields.sku;
@@ -2128,9 +2136,10 @@ setTimeout(() => {
             const hsnVal = row.querySelector(".sr-hsn").value.trim();
             const sourceVal = row.querySelector(".sr-source").value.trim();
             const stockVal = row.querySelector(".sr-stock").value.trim();
+            const pausedVal = row.querySelector(".sr-paused").checked === true;
 
             if (row.dataset.existingId) {
-              const patch = { size, color: colorVal, variantSlug, stock: Number(stockVal) || 0 };
+              const patch = { size, color: colorVal, variantSlug, stock: Number(stockVal) || 0, paused: pausedVal };
               if (mrpVal !== "") patch.mrp = Number(mrpVal);
               if (priceVal !== "") patch.sellingPrice = Number(priceVal);
               if (hsnVal !== "") patch.hsnCode = hsnVal;
@@ -2153,6 +2162,7 @@ setTimeout(() => {
                 hsnCode: hsnVal !== "" ? hsnVal : pData.hsnCode,
                 sourcePlatformUrl: sourceVal !== "" ? sourceVal : pData.sourcePlatformUrl,
                 stock: Number(stockVal) || 0,
+                paused: pausedVal,
                 hasVariants: false,
                 variantAxes: null,
                 variantSlug,
@@ -2261,6 +2271,7 @@ setTimeout(() => {
     const hsn = existingDoc ? (existingDoc.hsnCode || "") : "";
     const sourceUrl = existingDoc ? (existingDoc.sourcePlatformUrl || "") : "";
     const stock = (existingDoc && existingDoc.stock !== undefined) ? existingDoc.stock : "";
+    const paused = existingDoc ? existingDoc.paused === true : false;
 
     row.innerHTML = `
       <div class="form-field" style="flex:0 0 90px; margin:0;"><label style="font-size:0.78rem;">Size <span class="required-star">*</span></label><input type="text" class="sr-size" value="${esc(size || "")}" placeholder="S"></div>
@@ -2269,6 +2280,11 @@ setTimeout(() => {
       <div class="form-field" style="flex:1 1 90px; margin:0;"><label style="font-size:0.78rem;">HSN <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="text" class="sr-hsn" value="${esc(hsn)}" placeholder="parent's"></div>
       <div class="form-field" style="flex:1 1 110px; margin:0;"><label style="font-size:0.78rem;">Source URL <span class="field-hint" style="display:inline;">(opt.)</span></label><input type="url" class="sr-source" value="${esc(sourceUrl)}" placeholder="parent's"></div>
       <div class="form-field" style="flex:0 0 70px; margin:0;"><label style="font-size:0.78rem;">Stock <span class="required-star">*</span></label><input type="number" class="sr-stock" min="0" value="${stock}"></div>
+      <div class="form-field" style="flex:0 0 80px; margin:0; display:flex; align-items:center; gap:4px; margin-bottom:6px;">
+        <label style="display:flex; align-items:center; gap:4px; font-size:0.75rem; font-weight:normal; margin:0; white-space:nowrap;" title="Manually take just this size off sale without changing its stock number — untick to resume.">
+          <input type="checkbox" class="sr-paused" style="width:auto;" ${paused ? "checked" : ""}> Pause Sale
+        </label>
+      </div>
       <div style="display:flex; gap:4px; margin-bottom:2px;">
         <button type="button" class="btn btn-outline sr-delete-btn" style="padding:2px 6px; font-size:0.75rem; color:var(--color-danger); border-color:var(--color-danger);">🗑</button>
       </div>
@@ -2306,6 +2322,7 @@ setTimeout(() => {
         </div>
         <div style="display:flex; gap:6px;">
           <button type="button" class="btn btn-outline vc-add-size-btn" style="padding:2px 8px; font-size:0.78rem;">+ Add Size</button>
+          <button type="button" class="btn btn-outline vc-pause-all-btn" style="padding:2px 8px; font-size:0.78rem;" title="Ticks/unticks Pause on every size below at once — still saves as a per-size field, this is just a shortcut.">⏸ Pause/Resume All Sizes</button>
           <button type="button" class="btn btn-outline vc-remove-color-btn" style="padding:2px 8px; font-size:0.78rem; color:var(--color-danger); border-color:var(--color-danger);">${existingDocs.length ? "🗑 Delete Color" : "Remove"}</button>
         </div>
       </div>
@@ -2332,6 +2349,18 @@ setTimeout(() => {
 
     box.querySelector(".vc-add-size-btn").addEventListener("click", () => {
       rowsWrap.appendChild(buildSizeRow("", null));
+    });
+
+    // Shortcut only — flips every visible size row's own Pause checkbox.
+    // If any size is currently NOT paused, this pauses all of them first;
+    // once every size is already paused, clicking again resumes all of
+    // them. Nothing new is saved here; the normal Publish/Save Draft click
+    // still does that, same as any other field on this row.
+    box.querySelector(".vc-pause-all-btn").addEventListener("click", () => {
+      const checkboxes = Array.from(rowsWrap.querySelectorAll(".sr-paused"));
+      if (checkboxes.length === 0) return;
+      const shouldPause = checkboxes.some((cb) => !cb.checked);
+      checkboxes.forEach((cb) => { cb.checked = shouldPause; });
     });
 
     box.querySelector(".vc-remove-color-btn").addEventListener("click", async () => {
@@ -3636,7 +3665,7 @@ setTimeout(() => {
   function renderDashboard() {
     const total = productsList.length;
     const active = productsList.filter((p) => p.status === "active").length;
-    const oos = productsList.filter((p) => Number(p.stock) === 0).length;
+    const oos = productsList.filter((p) => Number(p.stock) === 0 || p.paused === true).length;
     const nonCancelled = ordersList.filter((o) => o.status !== "Cancelled");
     const revenue = nonCancelled.reduce((sum, o) => sum + (Number(o.finalTotal) || 0), 0);
 

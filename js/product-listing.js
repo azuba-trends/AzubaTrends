@@ -136,7 +136,7 @@ const ProductListing = (function () {
         if (state.size !== "All" && p.size !== state.size) return false;
         if (state.color !== "All" && p.color !== state.color) return false;
         if (state.minRating > 0 && Number(p.rating || 0) < state.minRating) return false;
-        if (state.inStockOnly && p.stock === 0) return false;
+        if (state.inStockOnly && ProductLoader.isUnavailable(p)) return false;
         if (state.priceMin !== "" && Number(p.sellingPrice) < Number(state.priceMin)) return false;
         if (state.priceMax !== "" && Number(p.sellingPrice) > Number(state.priceMax)) return false;
         return true;

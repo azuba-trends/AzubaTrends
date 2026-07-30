@@ -60,7 +60,7 @@ export async function onRequestGet(context) {
       if (!p.title || p.sellingPrice === undefined) return; // skip incomplete records rather than submitting a bad row
 
       const stock = p.stock !== undefined && p.stock !== null ? Number(p.stock) : null;
-      const availability = stock === null ? "in_stock" : stock > 0 ? "in_stock" : "out_of_stock";
+      const availability = (p.paused === true) ? "out_of_stock" : (stock === null ? "in_stock" : stock > 0 ? "in_stock" : "out_of_stock");
       const image = (p.images && p.images[0]) || p.image || "";
       const categoryName = categoryNameById[p.category] || p.category || "";
 

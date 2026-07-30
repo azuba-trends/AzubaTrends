@@ -713,7 +713,7 @@
       notifySubmitBtn.textContent = "Notify Me";
 
       stockStatusEl.innerHTML = "";
-      if (vp.stock === 0) {
+      if (ProductLoader.isUnavailable(vp)) {
         stockStatusEl.innerHTML = '<span class="oos-pill">Out of Stock</span>';
 
         // No Add to Cart / Buy Now while out of stock — Notify Me instead.
@@ -824,11 +824,18 @@
           colors.forEach((color) => {
             const sibling = findAnySiblingForColor(color);
             const imgSrc = (sibling && sibling.images && sibling.images[0]) ? sibling.images[0] : "images/logo-placeholder.svg";
+            // A color is "out of stock" only once EVERY size under it is
+            // unavailable (naturally out of stock or manually paused).
+            // Still clickable — same as any other sold-out product on this
+            // site, its page just opens straight into the Notify Me state —
+            // just visually dimmed here so shoppers see it before clicking.
+            const colorSizes = siblings.filter((s) => s.color === color);
+            const colorIsOut = colorSizes.length > 0 && colorSizes.every((s) => ProductLoader.isUnavailable(s));
             const swatch = document.createElement("button");
             swatch.type = "button";
-            swatch.className = "variant-color-swatch" + (color === product.color ? " is-active" : "");
-            swatch.title = color;
-            swatch.setAttribute("aria-label", color);
+            swatch.className = "variant-color-swatch" + (color === product.color ? " is-active" : "") + (colorIsOut ? " is-oos" : "");
+            swatch.title = color + (colorIsOut ? " (Out of Stock)" : "");
+            swatch.setAttribute("aria-label", color + (colorIsOut ? " (Out of Stock)" : ""));
             const img = document.createElement("img");
             img.src = imgSrc;
             img.alt = color;
@@ -863,7 +870,7 @@
             btn.type = "button";
             btn.className = "variant-size-btn" + (size === product.size ? " is-active" : "");
             btn.textContent = size;
-            if (!match || match.stock === 0) btn.disabled = true;
+            if (!match || ProductLoader.isUnavailable(match)) btn.disabled = true;
             // Picking a different size stays on THIS product page — it just
             // swaps which underlying size's price/stock is shown.
             btn.addEventListener("click", () => {
@@ -961,7 +968,7 @@
           return;
         }
 
-        if (product.stock === 0) {
+        if (ProductLoader.isUnavailable(product)) {
           resultEl.dataset.status = "error";
           resultEl.innerHTML = `
             <p class="delivery-checker__result-row"><span class="delivery-checker__icon">✅</span><span>We deliver to <strong>${district ? Security.escapeHTML(district) : pin}</strong>.</span></p>
@@ -998,7 +1005,7 @@
           url: window.location.href,
           priceCurrency: "INR",
           price: Number(product.sellingPrice).toFixed(2),
-          availability: product.stock === 0 ? "https://schema.org/OutOfStock" : "https://schema.org/InStock"
+          availability: ProductLoader.isUnavailable(product) ? "https://schema.org/OutOfStock" : "https://schema.org/InStock"
         }
       };
       if (ratingInfo && ratingInfo.count > 0) {
