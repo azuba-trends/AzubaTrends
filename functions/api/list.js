@@ -115,6 +115,18 @@ async function handlePosts(env) {
   return jsonResponse({ posts, generatedAt: new Date().toISOString() });
 }
 
+async function handleCategories(env) {
+  // No status/where filter — the whole `categories` collection is small
+  // and public (see firestore.rules), same as the old direct-Firestore
+  // read CategoryLoader used to do client-side. Serving it from here
+  // instead just moves that read behind the same edge cache as
+  // /api/products, so product.html's breadcrumb (which needs the full
+  // category tree whenever a product has a categoryId) doesn't have to
+  // wait on a slow browser->Firestore realtime channel anymore.
+  const categories = await getDocs(env, "categories");
+  return jsonResponse({ categories, generatedAt: new Date().toISOString() });
+}
+
 export async function onRequestGet(context) {
   const { request, env } = context;
   const type = new URL(request.url).searchParams.get("type");
@@ -122,13 +134,14 @@ export async function onRequestGet(context) {
   try {
     if (type === "products") return await handleProducts(env);
     if (type === "posts") return await handlePosts(env);
+    if (type === "categories") return await handleCategories(env);
     return jsonResponse({ error: "Unknown or missing 'type' query param." }, { status: 400, cache: "no-store" });
   } catch (err) {
     console.error(`api/list (type=${type}) failed:`, err.message);
     // Fail with a normal error response (not a 500 HTML page) so the
     // frontend's fallback-to-Firestore logic can detect this cleanly and
     // still work even if the service account isn't configured yet.
-    const service = type === "posts" ? "Blog" : "Products";
+    const service = type === "posts" ? "Blog" : type === "categories" ? "Category" : "Products";
     return jsonResponse(
       { error: `${service} service temporarily unavailable.` },
       { status: 503, cache: "no-store" }

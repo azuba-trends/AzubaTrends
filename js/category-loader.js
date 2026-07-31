@@ -20,6 +20,28 @@ const CategoryLoader = (function () {
     if (cached) return cached;
     if (inFlight) return inFlight;
     inFlight = (async () => {
+      // Fast path: the edge-cached /api/categories endpoint (same
+      // s-maxage=60 caching as /api/products). This is what makes new
+      // (categoryId-bearing) products' breadcrumb load as fast as legacy
+      // products' — previously this function went straight to a direct
+      // browser->Firestore realtime-channel read, which is genuinely slow
+      // (multi-second) and was blocking the whole product page.
+      try {
+        const res = await fetch("/api/categories");
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.categories)) {
+            cached = data.categories;
+            return cached;
+          }
+        }
+      } catch (err) {
+        console.warn("CategoryLoader: /api/categories fetch failed, falling back to direct Firestore:", err);
+      }
+
+      // Fallback: direct Firestore read (old behavior). Only reached if
+      // the API route is down/misconfigured (e.g. service account not
+      // set up yet), so the storefront still works either way.
       try {
         while (!window.FirebaseApp) { await new Promise((r) => setTimeout(r, 100)); }
         const { collection, getDocs } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js");
