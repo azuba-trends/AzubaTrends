@@ -71,8 +71,23 @@ async function handleProducts(env) {
   // products — so they're excluded here too. Everything else (plain
   // products AND variant products, which are ordinary docs with
   // isVariant:true/parentId set) passes through untouched.
+  // A variant doc (isVariant:true, parentId:<x>) is only a real, sellable
+  // product as long as its parent "template" doc still exists — the parent
+  // is what a shopper actually browses to get here (category/listing
+  // pages only ever show the parent's card), and it's also where the admin
+  // panel's product table anchors it (js/admin.js only renders variants
+  // nested under their parent row). If the parent was ever deleted without
+  // its children — e.g. the admin bulk-delete bug that only removed the
+  // parent, or a manual Firestore edit — the child becomes an orphan:
+  // still status:"active" in Firestore, but invisible/unmanageable from
+  // the admin panel and with no listing card that could have linked to
+  // it. Filtering those out here (rather than only fixing the bulk-delete
+  // button) means any orphan created any other way is also hidden, not
+  // just future ones from this one code path.
+  const parentIds = new Set(docs.filter((d) => d.hasVariants).map((d) => d.id));
   let products = docs
     .filter((d) => !d.hasVariants)
+    .filter((d) => !d.isVariant || parentIds.has(d.parentId))
     .map((d) => {
       const { costPrice, ratingSum, ratingCount, ...publicData } = d;
       // Store Margin markup applied here — this is what every shopper

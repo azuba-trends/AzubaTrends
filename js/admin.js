@@ -2400,7 +2400,28 @@ setTimeout(() => {
   document.getElementById("draft-prod-btn").addEventListener("click", () => handleProductSave("draft"));
 
   wireBulkSelect("products-table-body", "select-all-products", "bulk-delete-products-btn", async (ids) => {
-    for (const id of ids) await deleteDoc(doc(db, "products", id));
+    // Same cascade rule as the single-product Delete button (deleteProduct
+    // above): a selected parent (hasVariants:true) can never be deleted
+    // alone — its variant/child docs would become orphaned (still
+    // isVariant:true + status:"active" in Firestore, but with no parent
+    // to attach to in the admin table, and no parent-existence check on
+    // the storefront's /api/products or the direct-Firestore fallback —
+    // see functions/api/list.js and js/product-loader.js) so they'd keep
+    // showing up on the live site forever with no way to manage them from
+    // here. So: expand every selected parent into [parent, ...children]
+    // before deleting, and de-dupe in case a child was ALSO individually
+    // checked alongside its parent.
+    const idsToDelete = new Set();
+    for (const id of ids) {
+      idsToDelete.add(id);
+      const p = productsList.find((x) => x.id === id);
+      if (p && p.hasVariants) {
+        productsList
+          .filter((c) => c.isVariant && c.parentId === id)
+          .forEach((c) => idsToDelete.add(c.id));
+      }
+    }
+    for (const id of idsToDelete) await deleteDoc(doc(db, "products", id));
   });
 
   // ================================================================

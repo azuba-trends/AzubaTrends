@@ -58,9 +58,15 @@ const ProductLoader = (function () {
         // Store Margin applied here too — same markup api/list.js applies
         // server-side (see lib/pricing.js) — so prices stay consistent
         // even on this fallback path.
-        cachedProducts = snapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }))
+        const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Same orphan-variant guard as functions/api/list.js — a variant
+        // whose parent template no longer exists is hidden here too, so
+        // this fallback path never disagrees with the normal /api/products
+        // response.
+        const parentIds = new Set(allDocs.filter(d => d.hasVariants).map(d => d.id));
+        cachedProducts = allDocs
           .filter(p => !p.hasVariants)
+          .filter(p => !p.isVariant || parentIds.has(p.parentId))
           .map(p => ({
             ...p,
             sellingPrice: applyStoreMarginLocal(p.sellingPrice),

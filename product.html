@@ -374,7 +374,9 @@
     });
 
     // ---- Gallery ---------------------------------------------
-    const images = (product.images && product.images.length > 0) ? product.images : [""];
+    const images = (product.images && product.images.length > 0 && product.images[0])
+      ? product.images
+      : ["images/logo-placeholder.svg"];
     const mainImg = document.getElementById("gallery-main-img");
     const thumbsWrap = document.getElementById("gallery-thumbs");
     const galleryMain = document.getElementById("gallery-main");
