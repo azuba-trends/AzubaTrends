@@ -422,6 +422,8 @@
   font-weight: 600;
   color: var(--color-ink);
   line-height: 1.35;
+  overflow-wrap: break-word;
+  word-break: break-word;
   /* Fixed-height clamp so cards never resize based on title length */
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -727,12 +729,16 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--color-primary);
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .product-info__title {
   margin-top: 4px;
   margin-bottom: var(--space-2);
   font-size: clamp(1.25rem, 1.05rem + 1vw, 1.75rem);
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .product-info__price {
