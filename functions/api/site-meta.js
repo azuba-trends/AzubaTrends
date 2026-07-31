@@ -113,6 +113,12 @@ async function handleSitemap(request, env) {
       getDocs(env, "pages", { where: [["status", "==", "published"]] }),
     ]);
 
+    // Multiple Firestore docs (one per size row) can share the exact same
+    // parentId+variantSlug — they're the same storefront URL, just
+    // different stock/price rows behind it. Dedupe by `loc` so the
+    // sitemap doesn't repeat the same product URL many times over (bad
+    // for crawl budget and reads as duplicate-content noise to Google).
+    const productUrlsByLoc = new Map();
     for (const p of products) {
       if (p.status !== "active") continue;
       if (p.hasVariants) continue; // parent is a template only, never itself a real page
@@ -122,13 +128,15 @@ async function handleSitemap(request, env) {
           : p.slug
           ? `/products/${encodeURIComponent(p.slug)}`
           : `/product.html?id=${encodeURIComponent(p.id)}`;
-      productUrls.push({
-        loc,
-        priority: "0.8",
-        changefreq: "weekly",
-        lastmod: p.updatedAt || p.createdAt || undefined,
-      });
+      const lastmod = p.updatedAt || p.createdAt || undefined;
+      const existing = productUrlsByLoc.get(loc);
+      // Keep whichever row has the most recent lastmod, so a newer price/
+      // stock update on any size still bumps the shared URL's lastmod.
+      if (!existing || (lastmod && (!existing.lastmod || new Date(lastmod) > new Date(existing.lastmod)))) {
+        productUrlsByLoc.set(loc, { loc, priority: "0.8", changefreq: "weekly", lastmod });
+      }
     }
+    productUrls = Array.from(productUrlsByLoc.values());
 
     // Nested-category fullPath resolution — mirrors admin.js/category-
     // loader.js's parentId walk. Tolerant of categories that haven't been
