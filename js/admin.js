@@ -1,5 +1,5 @@
 import {
-  collection, addDoc, doc, deleteDoc, updateDoc, setDoc, getDoc, onSnapshot
+  collection, addDoc, doc, deleteDoc, updateDoc, setDoc, getDoc, onSnapshot, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
 const esc = (s) => (window.Security ? window.Security.escapeHTML(s) : String(s ?? ""));
@@ -133,7 +133,7 @@ setTimeout(() => {
       closeMobileSidebar();
 
       const fresh = e.currentTarget.dataset.freshForm;
-      if (fresh === "product") resetProductForm();
+      if (fresh === "product") { resetProductForm(); checkForProductDraft(); }
       if (fresh === "category") resetCategoryForm();
       if (fresh === "brand") resetBrandForm();
       if (fresh === "coupon") resetCouponForm();
@@ -604,6 +604,39 @@ setTimeout(() => {
     });
   }
 
+  // Shared by editProduct() and the auto-save draft restorer below —
+  // re-renders the existing-image previews from the current (text-only)
+  // #prod-existing-images / #prod-existing-delivery-img hidden inputs,
+  // wiring each preview's × button to splice that URL out and re-render.
+  // Removing an existing image is itself a form change, so it schedules
+  // a draft save too.
+  function refreshFeaturePreview() {
+    const imgs = JSON.parse(document.getElementById("prod-existing-images").value || "[]");
+    previewExistingImages(document.getElementById("prod-feature-preview"), imgs[0] ? [imgs[0]] : [], () => {
+      imgs[0] = "";
+      document.getElementById("prod-existing-images").value = JSON.stringify(imgs);
+      refreshFeaturePreview();
+      scheduleProductDraftSave();
+    });
+  }
+  function refreshGalleryExistingPreview() {
+    const imgs = JSON.parse(document.getElementById("prod-existing-images").value || "[]");
+    previewExistingImages(document.getElementById("prod-gallery-preview"), imgs.slice(1), (idx) => {
+      imgs.splice(1 + idx, 1);
+      document.getElementById("prod-existing-images").value = JSON.stringify(imgs);
+      refreshGalleryExistingPreview();
+      scheduleProductDraftSave();
+    });
+  }
+  function refreshDeliveryLogoPreview() {
+    const url = document.getElementById("prod-existing-delivery-img").value;
+    previewExistingImages(document.getElementById("prod-delivery-preview"), url ? [url] : [], () => {
+      document.getElementById("prod-existing-delivery-img").value = "";
+      refreshDeliveryLogoPreview();
+      scheduleProductDraftSave();
+    });
+  }
+
   // Generic bulk-select helper for a table: wires the header checkbox +
   // shows/hides a bulk-delete button when at least one row is checked.
   function wireBulkSelect(tableBodyId, selectAllId, bulkBtnId, onBulkDelete) {
@@ -635,15 +668,21 @@ setTimeout(() => {
   }
 
   // ================================================================
-  // CATEGORIES
+  // CATEGORIES — unlimited-depth nested tree
+  // ----------------------------------------------------------------
+  // Data model: every category doc has `parentId` (another category's id,
+  // or null for top-level) + its own leaf `slug` + a cached `fullPath`
+  // (the whole parent chain's slugs joined with "/", e.g.
+  // "men/clothing/shirts") that's recomputed for a category AND every one
+  // of its descendants whenever it's renamed, moved, or first created.
+  // Legacy docs (from the old flat type:"parent"|"child" + parentSlug
+  // model) are migrated to this automatically the moment this listener
+  // first loads them — no manual data step for the admin.
   // ================================================================
   let categoriesList = [];
 
   document.getElementById("cat-name").addEventListener("input", (e) => {
     document.getElementById("cat-slug").value = generateSlug(e.target.value);
-  });
-  document.getElementById("cat-type").addEventListener("change", (e) => {
-    document.getElementById("parent-cat-dropdown-container").style.display = e.target.value === "child" ? "block" : "none";
   });
   document.getElementById("cat-image").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("cat-image-preview"), 1));
 
@@ -651,50 +690,208 @@ setTimeout(() => {
     document.getElementById("category-form").reset();
     document.getElementById("cat-id").value = "";
     document.getElementById("cat-image-preview").innerHTML = "";
-    document.getElementById("parent-cat-dropdown-container").style.display = "none";
     document.getElementById("category-form-title").textContent = "Add New Category";
+    populateParentCategoryDropdown();
+  }
+
+  // ---- Tree helpers (id -> doc map, fullPath computation, descendants) ----
+  function categoriesById() {
+    const map = new Map();
+    categoriesList.forEach((c) => map.set(c.id, c));
+    return map;
+  }
+
+  // Walks the parentId chain to build "grandparent/parent/leaf". Cycle-
+  // guarded (a corrupted parentId loop just stops instead of hanging).
+  function computeFullPath(catId, byId) {
+    const seen = new Set();
+    const parts = [];
+    let cur = byId.get(catId);
+    while (cur) {
+      if (seen.has(cur.id)) break;
+      seen.add(cur.id);
+      parts.unshift(cur.slug || cur.id);
+      cur = cur.parentId ? byId.get(cur.parentId) : null;
+    }
+    return parts.join("/");
+  }
+
+  function getDescendantIds(catId, byId) {
+    const result = [];
+    const stack = categoriesList.filter((c) => c.parentId === catId).map((c) => c.id);
+    while (stack.length) {
+      const id = stack.pop();
+      if (result.includes(id)) continue;
+      result.push(id);
+      categoriesList.filter((c) => c.parentId === id).forEach((c) => stack.push(c.id));
+    }
+    return result;
+  }
+
+  // One-time, automatic conversion of legacy type:"parent"|"child" docs
+  // (parentSlug pointing at a sibling's OLD slug, and a child's slug
+  // already prefixed "parent-slug/leaf") into the new parentId/fullPath
+  // shape. Runs every time the categories snapshot loads; docs that
+  // already have a `parentId` key (even explicitly null) are left alone,
+  // so this never re-runs or clobbers anything once migrated.
+  async function migrateLegacyCategoriesIfNeeded(rawDocs) {
+    const legacy = rawDocs.filter((c) => c.parentId === undefined);
+    if (legacy.length === 0) return false;
+
+    const byOldSlug = new Map(rawDocs.map((c) => [c.slug, c]));
+    try {
+      const batch = writeBatch(db);
+      legacy.forEach((cat) => {
+        let parentId = null;
+        let leafSlug = cat.slug || "";
+        if (cat.type === "child" && cat.parentSlug) {
+          const parentDoc = byOldSlug.get(cat.parentSlug);
+          if (parentDoc) parentId = parentDoc.id;
+          // Old child slugs were stored as "parentSlug/leaf" — strip the
+          // prefix back down to just this category's own leaf segment.
+          const prefix = cat.parentSlug + "/";
+          if (leafSlug.startsWith(prefix)) leafSlug = leafSlug.slice(prefix.length);
+        }
+        batch.update(doc(db, "categories", cat.id), { parentId, slug: leafSlug || cat.id });
+      });
+      await batch.commit();
+      return true;
+    } catch (err) {
+      console.error("Category migration to parentId/fullPath failed (will retry on next load):", err);
+      return false;
+    }
+  }
+
+  // After any create/rename/move, this category's fullPath AND every
+  // descendant's fullPath (their slugs didn't change, but their ancestor
+  // chain's slugs might have) need recomputing and cascading down.
+  async function cascadeFullPathUpdate(rootId, latestDocsOverride) {
+    const source = latestDocsOverride || categoriesList;
+    const byId = new Map(source.map((c) => [c.id, c]));
+    const idsToUpdate = [rootId, ...getDescendantIds(rootId, byId)];
+    try {
+      const batch = writeBatch(db);
+      idsToUpdate.forEach((id) => {
+        const cat = byId.get(id);
+        if (!cat) return;
+        batch.update(doc(db, "categories", id), { fullPath: computeFullPath(id, byId) });
+      });
+      await batch.commit();
+    } catch (err) {
+      console.error("Cascading fullPath update failed:", err);
+    }
   }
 
   let unsubCategories = null;
   function listenCategories() {
     if (unsubCategories) return;
-    unsubCategories = onSnapshot(collection(db, "categories"), (snap) => {
-      categoriesList = [];
-      snap.forEach((d) => categoriesList.push({ id: d.id, ...d.data() }));
+    unsubCategories = onSnapshot(collection(db, "categories"), async (snap) => {
+      const rawDocs = [];
+      snap.forEach((d) => rawDocs.push({ id: d.id, ...d.data() }));
+      const migrated = await migrateLegacyCategoriesIfNeeded(rawDocs);
+      if (migrated) return; // onSnapshot fires again with the migrated docs
+      categoriesList = rawDocs;
       renderCategoriesTable();
       renderDashboard();
     }, (err) => console.error("categories listener error", err));
   }
 
-  function renderCategoriesTable() {
-    const tbody = document.getElementById("categories-table-body");
-    const parentSelect = document.getElementById("parent-cat-select");
-    tbody.innerHTML = "";
-    parentSelect.innerHTML = "";
+  // Indented "Men" / "— Clothing" / "—— Shirts" style option list, depth-
+  // first so children always sit right under their parent regardless of
+  // Firestore's arbitrary snapshot order. `excludeIds` keeps a category
+  // (and its own descendants) out of its own Parent Category dropdown —
+  // the cycle guard.
+  function buildCategoryTreeOptions(excludeIds) {
+    const exclude = excludeIds || new Set();
+    const byParent = new Map();
+    categoriesList.forEach((c) => {
+      const key = c.parentId || null;
+      if (!byParent.has(key)) byParent.set(key, []);
+      byParent.get(key).push(c);
+    });
+    byParent.forEach((list) => list.sort((a, b) => (a.name || "").localeCompare(b.name || "")));
 
-    categoriesList.forEach((cat) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td><input type="checkbox" class="row-select" data-id="${cat.id}"></td>
-        <td>${esc(cat.name)}</td>
-        <td>${esc((cat.type || "").toUpperCase())}</td>
-        <td>/${esc(cat.slug)}</td>
-        <td>
-          <button class="btn btn-outline edit-cat-btn" data-id="${cat.id}" style="padding:4px 8px; font-size:0.8rem;">Edit</button>
-          <button class="btn btn-outline del-cat-btn" data-id="${cat.id}" style="color:var(--color-danger); padding:4px 8px; font-size:0.8rem;">Delete</button>
-        </td>`;
-      tbody.appendChild(tr);
-      if (cat.type === "parent") {
-        const opt = document.createElement("option");
-        opt.value = cat.slug; opt.textContent = cat.name;
-        parentSelect.appendChild(opt);
+    const out = [];
+    function walk(parentKey, depth) {
+      (byParent.get(parentKey) || []).forEach((cat) => {
+        if (!exclude.has(cat.id)) {
+          out.push({ id: cat.id, depth, label: (depth > 0 ? "— ".repeat(depth) : "") + (cat.name || "") });
+        }
+        walk(cat.id, depth + 1);
+      });
+    }
+    walk(null, 0);
+    return out;
+  }
+
+  function populateParentCategoryDropdown() {
+    const sel = document.getElementById("parent-cat-select");
+    const current = sel.value;
+    const editingId = document.getElementById("cat-id").value;
+    const excludeIds = editingId ? new Set([editingId, ...getDescendantIds(editingId, categoriesById())]) : new Set();
+    sel.innerHTML = '<option value="">— Top Level (no parent) —</option>' +
+      buildCategoryTreeOptions(excludeIds).map((o) => `<option value="${esc(o.id)}">${esc(o.label)}</option>`).join("");
+    sel.value = current;
+  }
+
+  // Which parent category rows currently have their children expanded —
+  // module-level so re-renders (e.g. after a Firestore update) don't
+  // collapse everything the admin had open, same pattern as the products
+  // table's color-row expand/collapse.
+  const expandedCategoryIds = new Set();
+
+  function buildCategoryTreeRow(cat, depth, hasChildren) {
+    const isExpanded = expandedCategoryIds.has(cat.id);
+    const nameCell = `${hasChildren
+      ? `<button type="button" class="cat-expand-btn" data-id="${cat.id}" style="transform:rotate(${isExpanded ? "90deg" : "0deg"});">▸</button>`
+      : `<span style="display:inline-block; width:18px;"></span>`}${esc(cat.name)}`;
+    const tr = document.createElement("tr");
+    tr.className = "cat-tree-row";
+    tr.innerHTML = `
+      <td><input type="checkbox" class="row-select" data-id="${cat.id}"></td>
+      <td><span class="cat-tree-name" style="padding-left:${depth * 20}px;">${nameCell}</span></td>
+      <td>/${esc(cat.fullPath || cat.slug || "")}</td>
+      <td>
+        <button class="btn btn-outline edit-cat-btn" data-id="${cat.id}" style="padding:4px 8px; font-size:0.8rem;">Edit</button>
+        <button class="btn btn-outline del-cat-btn" data-id="${cat.id}" style="color:var(--color-danger); padding:4px 8px; font-size:0.8rem;">Delete</button>
+      </td>`;
+    return tr;
+  }
+
+  function renderCategoryTreeLevel(tbody, parentId, depth, byParent) {
+    (byParent.get(parentId || null) || []).forEach((cat) => {
+      const children = byParent.get(cat.id) || [];
+      tbody.appendChild(buildCategoryTreeRow(cat, depth, children.length > 0));
+      if (children.length > 0 && expandedCategoryIds.has(cat.id)) {
+        renderCategoryTreeLevel(tbody, cat.id, depth + 1, byParent);
       }
     });
+  }
 
+  function renderCategoriesTable() {
+    const tbody = document.getElementById("categories-table-body");
+    tbody.innerHTML = "";
+
+    const byParent = new Map();
+    categoriesList.forEach((c) => {
+      const key = c.parentId || null;
+      if (!byParent.has(key)) byParent.set(key, []);
+      byParent.get(key).push(c);
+    });
+    byParent.forEach((list) => list.sort((a, b) => (a.name || "").localeCompare(b.name || "")));
+
+    renderCategoryTreeLevel(tbody, null, 0, byParent);
+
+    tbody.querySelectorAll(".cat-expand-btn").forEach((b) => b.addEventListener("click", () => {
+      const id = b.dataset.id;
+      if (expandedCategoryIds.has(id)) expandedCategoryIds.delete(id); else expandedCategoryIds.add(id);
+      renderCategoriesTable();
+    }));
     tbody.querySelectorAll(".edit-cat-btn").forEach((b) => b.addEventListener("click", () => editCategory(b.dataset.id)));
     tbody.querySelectorAll(".del-cat-btn").forEach((b) => b.addEventListener("click", () => deleteCategory(b.dataset.id)));
 
     populateCategoryDropdown();
+    populateParentCategoryDropdown();
   }
 
   function editCategory(id) {
@@ -703,22 +900,24 @@ setTimeout(() => {
     document.getElementById("cat-id").value = cat.id;
     document.getElementById("cat-name").value = cat.name || "";
     document.getElementById("cat-slug").value = cat.slug || "";
-    document.getElementById("cat-type").value = cat.type || "parent";
-    document.getElementById("parent-cat-dropdown-container").style.display = cat.type === "child" ? "block" : "none";
     document.getElementById("cat-desc").value = cat.description || "";
     document.getElementById("cat-meta-title").value = cat.metaTitle || "";
     document.getElementById("cat-meta-desc").value = cat.metaDesc || "";
     previewExistingImages(document.getElementById("cat-image-preview"), cat.image ? [cat.image] : []);
-    if (cat.type === "child" && cat.parentSlug) {
-      setTimeout(() => { document.getElementById("parent-cat-select").value = cat.parentSlug; }, 50);
-    }
+    populateParentCategoryDropdown();
+    document.getElementById("parent-cat-select").value = cat.parentId || "";
     document.getElementById("category-form-title").textContent = "Edit Category";
     goToSection("store-add-category");
   }
 
   async function deleteCategory(id) {
-    if (!confirm("Delete this category?")) return;
-    await deleteDoc(doc(db, "categories", id));
+    const descendantCount = getDescendantIds(id, categoriesById()).length;
+    const msg = descendantCount > 0
+      ? `Delete this category AND its ${descendantCount} sub-categor${descendantCount === 1 ? "y" : "ies"}? This cannot be undone.`
+      : "Delete this category?";
+    if (!confirm(msg)) return;
+    const idsToDelete = [id, ...getDescendantIds(id, categoriesById())];
+    for (const delId of idsToDelete) await deleteDoc(doc(db, "categories", delId));
   }
 
   document.getElementById("category-form").addEventListener("submit", async (e) => {
@@ -726,19 +925,24 @@ setTimeout(() => {
     const btn = document.getElementById("save-cat-btn");
     btn.textContent = "Saving..."; btn.disabled = true;
     try {
-      let image = categoriesList.find((c) => c.id === document.getElementById("cat-id").value)?.image || "";
+      const id = document.getElementById("cat-id").value;
+      let image = categoriesList.find((c) => c.id === id)?.image || "";
       const file = document.getElementById("cat-image").files[0];
       if (file) image = await uploadToImgBB(file);
 
-      const isChild = document.getElementById("cat-type").value === "child";
-      const parentSlug = isChild ? document.getElementById("parent-cat-select").value : "";
-      const finalSlug = isChild ? `${parentSlug}/${document.getElementById("cat-slug").value}` : document.getElementById("cat-slug").value;
+      const parentId = document.getElementById("parent-cat-select").value || null;
+      // Cycle guard belt-and-suspenders: the dropdown already excludes self
+      // + descendants, but double-check here in case of a stale/edited DOM.
+      if (id && parentId && (parentId === id || getDescendantIds(id, categoriesById()).includes(parentId))) {
+        alert("A category can't be moved under itself or one of its own sub-categories.");
+        btn.textContent = "Save Category"; btn.disabled = false;
+        return;
+      }
 
       const data = {
         name: document.getElementById("cat-name").value,
-        slug: finalSlug,
-        parentSlug: parentSlug,
-        type: document.getElementById("cat-type").value,
+        slug: document.getElementById("cat-slug").value,
+        parentId: parentId,
         description: document.getElementById("cat-desc").value,
         metaTitle: document.getElementById("cat-meta-title").value,
         metaDesc: document.getElementById("cat-meta-desc").value,
@@ -746,13 +950,22 @@ setTimeout(() => {
         updatedAt: new Date().toISOString()
       };
 
-      const id = document.getElementById("cat-id").value;
+      let savedId = id;
       if (id) {
         await updateDoc(doc(db, "categories", id), data);
       } else {
         data.createdAt = new Date().toISOString();
-        await addDoc(collection(db, "categories"), data);
+        const ref = await addDoc(collection(db, "categories"), data);
+        savedId = ref.id;
       }
+
+      // Recompute + cascade fullPath for this category and (on a rename
+      // or move) every descendant, using an up-to-date doc list so the
+      // just-written name/slug/parentId is reflected immediately rather
+      // than waiting for the next onSnapshot tick.
+      const latestDocs = categoriesList.filter((c) => c.id !== savedId).concat([{ id: savedId, ...data }]);
+      await cascadeFullPathUpdate(savedId, latestDocs);
+
       resetCategoryForm();
       goToSection("store-categories");
     } catch (err) {
@@ -763,7 +976,9 @@ setTimeout(() => {
   });
 
   wireBulkSelect("categories-table-body", "select-all-categories", "bulk-delete-categories-btn", async (ids) => {
-    for (const id of ids) await deleteDoc(doc(db, "categories", id));
+    const allIds = new Set();
+    ids.forEach((id) => { allIds.add(id); getDescendantIds(id, categoriesById()).forEach((d) => allIds.add(d)); });
+    for (const id of allIds) await deleteDoc(doc(db, "categories", id));
   });
 
   // ================================================================
@@ -1505,6 +1720,8 @@ setTimeout(() => {
 
   function resetProductForm() {
     document.getElementById("product-form").reset();
+    const banner = document.getElementById("product-draft-banner");
+    if (banner) banner.style.display = "none";
     document.getElementById("prod-id").value = "";
     document.getElementById("prod-existing-images").value = "";
     document.getElementById("prod-existing-delivery-img").value = "";
@@ -1777,29 +1994,6 @@ setTimeout(() => {
     document.getElementById("prod-delivery-partner-name").value = p.deliveryPartnerName || "";
     document.getElementById("prod-existing-images").value = JSON.stringify(p.images || []);
     document.getElementById("prod-existing-delivery-img").value = p.deliveryPartnerImage || "";
-    function refreshFeaturePreview() {
-      const imgs = JSON.parse(document.getElementById("prod-existing-images").value || "[]");
-      previewExistingImages(document.getElementById("prod-feature-preview"), imgs[0] ? [imgs[0]] : [], () => {
-        imgs[0] = "";
-        document.getElementById("prod-existing-images").value = JSON.stringify(imgs);
-        refreshFeaturePreview();
-      });
-    }
-    function refreshGalleryExistingPreview() {
-      const imgs = JSON.parse(document.getElementById("prod-existing-images").value || "[]");
-      previewExistingImages(document.getElementById("prod-gallery-preview"), imgs.slice(1), (idx) => {
-        imgs.splice(1 + idx, 1);
-        document.getElementById("prod-existing-images").value = JSON.stringify(imgs);
-        refreshGalleryExistingPreview();
-      });
-    }
-    function refreshDeliveryLogoPreview() {
-      const url = document.getElementById("prod-existing-delivery-img").value;
-      previewExistingImages(document.getElementById("prod-delivery-preview"), url ? [url] : [], () => {
-        document.getElementById("prod-existing-delivery-img").value = "";
-        refreshDeliveryLogoPreview();
-      });
-    }
     refreshFeaturePreview();
     refreshGalleryExistingPreview();
     refreshDeliveryLogoPreview();
@@ -1860,6 +2054,7 @@ setTimeout(() => {
 
     document.getElementById("product-form-title").textContent = p.isVariant ? `Edit "${p.color || ""}"` : "Edit Product";
     renderSeoChecklist();
+    checkForProductDraft();
     goToSection("store-add-product");
   }
 
@@ -2017,6 +2212,11 @@ setTimeout(() => {
         seoTitle: document.getElementById("prod-seo-title").value.trim(),
         seoDesc: document.getElementById("prod-seo-desc").value.trim(),
         category: document.getElementById("prod-category").value,
+        // New tree-based link (Feature: nested categories) — kept alongside
+        // the legacy `category` name string above so old products and every
+        // existing name-based filter (search, listing filters, CSV export,
+        // related-products) keep working untouched.
+        categoryId: (categoriesList.find((c) => c.name === document.getElementById("prod-category").value) || {}).id || "",
         brand: document.getElementById("prod-brand").value,
         mrp: Number(document.getElementById("prod-mrp").value) || 0,
         sellingPrice: Number(document.getElementById("prod-price").value) || 0,
@@ -2183,6 +2383,7 @@ setTimeout(() => {
         }
       }
 
+      clearProductDraft(productDraftKey());
       pendingGalleryFiles = [];
       resetProductForm();
       goToSection("store-products");
@@ -2290,14 +2491,15 @@ setTimeout(() => {
       </div>
     `;
 
-    if (existingDoc) {
+    if (existingDoc && existingDoc.id) {
       row.querySelector(".sr-delete-btn").addEventListener("click", async () => {
         if (!confirm(`Delete the "${size}" size permanently? This cannot be undone.`)) return;
         await deleteDoc(doc(db, "products", existingDoc.id));
         row.remove();
+        scheduleProductDraftSave();
       });
     } else {
-      row.querySelector(".sr-delete-btn").addEventListener("click", () => row.remove());
+      row.querySelector(".sr-delete-btn").addEventListener("click", () => { row.remove(); scheduleProductDraftSave(); });
     }
     return row;
   }
@@ -2349,6 +2551,7 @@ setTimeout(() => {
 
     box.querySelector(".vc-add-size-btn").addEventListener("click", () => {
       rowsWrap.appendChild(buildSizeRow("", null));
+      scheduleProductDraftSave();
     });
 
     // Shortcut only — flips every visible size row's own Pause checkbox.
@@ -2361,6 +2564,7 @@ setTimeout(() => {
       if (checkboxes.length === 0) return;
       const shouldPause = checkboxes.some((cb) => !cb.checked);
       checkboxes.forEach((cb) => { cb.checked = shouldPause; });
+      scheduleProductDraftSave();
     });
 
     box.querySelector(".vc-remove-color-btn").addEventListener("click", async () => {
@@ -2370,6 +2574,7 @@ setTimeout(() => {
       }
       box.remove();
       refreshVariantSlugPreviews();
+      scheduleProductDraftSave();
     });
 
     return box;
@@ -2389,6 +2594,7 @@ setTimeout(() => {
       existingColors.add(color.toLowerCase());
     });
     refreshVariantSlugPreviews();
+    scheduleProductDraftSave();
   });
 
   function populateVariantBoxesForParent(parentId) {
@@ -2402,6 +2608,167 @@ setTimeout(() => {
     });
     byColor.forEach((docs, color) => variantBoxesContainer.appendChild(buildColorBox(color, docs)));
     refreshVariantSlugPreviews();
+  }
+
+  // ================================================================
+  // FEATURE: Admin Panel — Auto-Save Draft (Add/Edit Product form)
+  // ----------------------------------------------------------------
+  // Continuous silent auto-save to localStorage (~800ms debounce on any
+  // input/change) so an accidental reload/close never loses in-progress
+  // work. Image FILES are never draft-saved (unsafe/too large to hold as
+  // a blob in localStorage) — only already-uploaded image URLs (plain
+  // text, sitting in #prod-existing-images / #prod-existing-delivery-img)
+  // are restored; newly-selected files must be re-picked by the admin
+  // after Restore (the banner doesn't hide this — see product-save-status
+  // note rendered on restore, if any file was pending it's simply gone).
+  // Every localStorage call is wrapped in try/catch so a private-browsing
+  // or quota failure never breaks the normal save flow.
+  // ================================================================
+  function productDraftKey() {
+    const id = document.getElementById("prod-id").value;
+    return id ? `admin_draft:product:${id}` : "admin_draft:new-product";
+  }
+
+  function safeLSGet(key) {
+    try { return localStorage.getItem(key); } catch (err) { return null; }
+  }
+  function safeLSSet(key, value) {
+    try { localStorage.setItem(key, value); return true; } catch (err) { return false; }
+  }
+  function safeLSRemove(key) {
+    try { localStorage.removeItem(key); } catch (err) { /* private browsing / quota — ignore */ }
+  }
+
+  // Variant color/size boxes are dynamic DOM, not real form fields — they
+  // need their own (de)serializer alongside the generic field walk below.
+  function serializeVariantBoxesForDraft() {
+    return Array.from(variantBoxesContainer.children).map((box) => ({
+      color: box.querySelector(".vc-color-input") ? box.querySelector(".vc-color-input").value : "",
+      sizes: Array.from(box.querySelectorAll(".size-row")).map((row) => ({
+        existingId: row.dataset.existingId || "",
+        size: row.querySelector(".sr-size").value,
+        mrp: row.querySelector(".sr-mrp").value,
+        price: row.querySelector(".sr-price").value,
+        hsn: row.querySelector(".sr-hsn").value,
+        source: row.querySelector(".sr-source").value,
+        stock: row.querySelector(".sr-stock").value,
+        paused: row.querySelector(".sr-paused").checked === true
+      }))
+    }));
+  }
+
+  // Rebuilds the color/size boxes from a draft. Rows that came from a
+  // real saved product doc (existingId present) still get wired up to
+  // deleteDoc via the shim object passed to buildSizeRow (see the
+  // `existingDoc && existingDoc.id` guard on that function above) — a
+  // brand-new not-yet-saved row (existingId "") just behaves like any
+  // other newly-added row.
+  function restoreVariantBoxesFromDraft(boxesData) {
+    variantBoxesContainer.innerHTML = "";
+    (boxesData || []).forEach((boxData) => {
+      const fakeDocs = (boxData.sizes || []).map((s) => ({
+        id: s.existingId || "",
+        size: s.size, mrp: s.mrp, sellingPrice: s.price,
+        hsnCode: s.hsn, sourcePlatformUrl: s.source, stock: s.stock, paused: !!s.paused
+      }));
+      variantBoxesContainer.appendChild(buildColorBox(boxData.color, fakeDocs));
+    });
+    refreshVariantSlugPreviews();
+  }
+
+  function serializeProductFormForDraft() {
+    const fields = {};
+    document.querySelectorAll('#product-form input[id], #product-form select[id], #product-form textarea[id]').forEach((el) => {
+      if (el.type === "file") return; // never draft-saved — files aren't safe/possible in localStorage
+      fields[el.id] = el.type === "checkbox" ? el.checked : el.value;
+    });
+    return {
+      savedAt: new Date().toISOString(),
+      fields,
+      shortDescriptionHTML: sdRTE.getHTML(),
+      descriptionHTML: ldRTE.getHTML(),
+      variantBoxes: serializeVariantBoxesForDraft()
+    };
+  }
+
+  function applyProductDraftToForm(draft) {
+    Object.entries(draft.fields || {}).forEach(([id, val]) => {
+      const el = document.getElementById(id);
+      if (!el || el.type === "file") return;
+      if (el.type === "checkbox") el.checked = !!val;
+      else el.value = val;
+    });
+    if (draft.shortDescriptionHTML !== undefined) sdRTE.setHTML(draft.shortDescriptionHTML);
+    if (draft.descriptionHTML !== undefined) ldRTE.setHTML(draft.descriptionHTML);
+
+    // Existing (already-uploaded) image URLs are plain text, restored by
+    // the generic field walk above (#prod-existing-images / #prod-existing-
+    // delivery-img are just hidden text inputs) — just re-render their
+    // (removable) previews here, same as a normal Edit-product open.
+    // Newly-picked files are never restorable.
+    refreshFeaturePreview();
+    refreshGalleryExistingPreview();
+    refreshDeliveryLogoPreview();
+
+    restoreVariantBoxesFromDraft(draft.variantBoxes || []);
+    const showVariants = document.getElementById("prod-has-variants").checked || document.getElementById("prod-is-variant").value === "1";
+    document.getElementById("variants-section").style.display = showVariants ? "" : "none";
+    updateProductPricePreview();
+    renderSeoChecklist();
+    document.getElementById("product-save-status").textContent = "Draft restored — naye select ki gayi image files dobara select karni hongi.";
+  }
+
+  let productDraftSaveTimer = null;
+  function scheduleProductDraftSave() {
+    clearTimeout(productDraftSaveTimer);
+    productDraftSaveTimer = setTimeout(() => {
+      safeLSSet(productDraftKey(), JSON.stringify(serializeProductFormForDraft()));
+    }, 800);
+  }
+  document.getElementById("product-form").addEventListener("input", scheduleProductDraftSave);
+  document.getElementById("product-form").addEventListener("change", scheduleProductDraftSave);
+
+  function clearProductDraft(key) {
+    safeLSRemove(key || productDraftKey());
+  }
+
+  const productDraftBanner = document.getElementById("product-draft-banner");
+  const productDraftBannerText = document.getElementById("product-draft-banner-text");
+  let pendingProductDraft = null;
+
+  function checkForProductDraft() {
+    if (!productDraftBanner) return;
+    const raw = safeLSGet(productDraftKey());
+    if (!raw) { productDraftBanner.style.display = "none"; pendingProductDraft = null; return; }
+    try {
+      pendingProductDraft = JSON.parse(raw);
+    } catch (err) {
+      safeLSRemove(productDraftKey());
+      productDraftBanner.style.display = "none";
+      pendingProductDraft = null;
+      return;
+    }
+    const time = pendingProductDraft.savedAt
+      ? new Date(pendingProductDraft.savedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+      : "";
+    productDraftBannerText.textContent = `Aapka pichla unsaved kaam mila (${time}) — Restore karein ya Discard?`;
+    productDraftBanner.style.display = "flex";
+  }
+
+  const productDraftRestoreBtn = document.getElementById("product-draft-restore-btn");
+  const productDraftDiscardBtn = document.getElementById("product-draft-discard-btn");
+  if (productDraftRestoreBtn) {
+    productDraftRestoreBtn.addEventListener("click", () => {
+      if (pendingProductDraft) applyProductDraftToForm(pendingProductDraft);
+      productDraftBanner.style.display = "none";
+    });
+  }
+  if (productDraftDiscardBtn) {
+    productDraftDiscardBtn.addEventListener("click", () => {
+      clearProductDraft();
+      pendingProductDraft = null;
+      productDraftBanner.style.display = "none";
+    });
   }
 
   // Shared by the "🔄 Auto Sync from Parent" button inside Edit (below)

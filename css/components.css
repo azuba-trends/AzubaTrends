@@ -1778,3 +1778,56 @@
   animation: global-loading-spin 0.75s linear infinite;
 }
 @keyframes global-loading-spin { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   Admin: Auto-Save Draft restore banner (Add/Edit Product form)
+   ============================================================ */
+.draft-restore-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--color-surface-sunken, #F2EEE5);
+  border: 1px solid var(--color-accent, #E8A33D);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 0.9rem;
+  color: var(--color-ink, #1C2B39);
+}
+
+/* ============================================================
+   Admin: Categories tree table (nested categories)
+   ============================================================ */
+.cat-tree-row td:first-of-type { white-space: nowrap; }
+.cat-expand-btn {
+  background: none; border: none; cursor: pointer; font-size: 0.85rem;
+  margin-right: 6px; transition: transform .15s;
+}
+.cat-tree-name { display: inline-flex; align-items: center; }
+
+/* ============================================================
+   Storefront: category breadcrumb trail + child-category tiles
+   ============================================================ */
+.category-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+  margin: 20px 0 28px;
+}
+.category-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 16px 10px; text-align: center; text-decoration: none;
+  color: var(--color-ink, #1C2B39);
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #E4E0D4);
+  border-radius: 10px;
+  transition: box-shadow .15s, transform .15s;
+}
+.category-tile:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.08); transform: translateY(-2px); }
+.category-tile img {
+  width: 56px; height: 56px; object-fit: cover; border-radius: 50%;
+  background: var(--color-surface-sunken, #F2EEE5);
+}
+.category-tile span { font-weight: 600; font-size: 0.92rem; }

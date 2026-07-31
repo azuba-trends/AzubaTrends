@@ -4,6 +4,6 @@
 # behavior. More specific routes must come before the general ones.
 /products/:parentId/:variantSlug /product 200
 /products/:slug /product 200
-/category/:slug /category 200
+/category/* /category 200
 /blog/category/:slug /blog 200
 /blog/:slug /blog-post 200

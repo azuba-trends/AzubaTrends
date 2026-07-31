@@ -21,6 +21,9 @@ Disallow: /share-preview-tester.html
 Disallow: /product-import-tester.html
 Disallow: /api/
 
+# AI/LLM-friendly site map (static file, no per-request generation)
+Allow: /llms.txt
+
 Sitemap: ${origin}/sitemap.xml
 `;
 

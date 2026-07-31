@@ -130,9 +130,28 @@ async function handleSitemap(request, env) {
       });
     }
 
+    // Nested-category fullPath resolution — mirrors admin.js/category-
+    // loader.js's parentId walk. Tolerant of categories that haven't been
+    // through the admin-panel migration yet (no `parentId` key): those
+    // just fall back to their own stored `slug`, same as before.
+    const categoryById = new Map(categories.map((c) => [c.id, c]));
+    function resolveCategoryFullPath(cat) {
+      if (cat.fullPath) return cat.fullPath;
+      if (cat.parentId === undefined) return cat.slug || cat.id; // legacy, un-migrated
+      const seen = new Set();
+      const parts = [];
+      let cur = cat;
+      while (cur) {
+        if (seen.has(cur.id)) break;
+        seen.add(cur.id);
+        parts.unshift(cur.slug || cur.id);
+        cur = cur.parentId ? categoryById.get(cur.parentId) : null;
+      }
+      return parts.join("/");
+    }
     for (const c of categories) {
       categoryUrls.push({
-        loc: `/category/${encodeURIComponent(c.slug || c.id)}`,
+        loc: `/category/${resolveCategoryFullPath(c)}`,
         priority: "0.6",
         changefreq: "weekly",
       });
