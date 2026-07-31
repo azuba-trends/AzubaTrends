@@ -1,0 +1,9 @@
+# Path-only rewrites (no query param needed) — recreates vercel.json's
+# `rewrites` for these five clean URLs. Status 200 = proxy/rewrite (URL
+# stays the same in the browser), matching Vercel's rewrite (not redirect)
+# behavior. More specific routes must come before the general ones.
+/products/:parentId/:variantSlug /product 200
+/products/:slug /product 200
+/category/* /category 200
+/blog/category/:slug /blog 200
+/blog/:slug /blog-post 200

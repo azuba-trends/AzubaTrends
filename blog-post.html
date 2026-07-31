@@ -8,18 +8,19 @@
 <link rel="apple-touch-icon" href="/images/icons/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#1F3A5F">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="AzubaTrends" id="apple-app-title-meta">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title id="page-title">Blog — AzubaTrends</title>
 <meta id="page-description" name="description" content="Stories, guides and updates from AzubaTrends.">
-<link id="page-canonical" rel="canonical" href="https://azuba-trends.vercel.app/blog">
+<link id="page-canonical" rel="canonical" href="https://azubatrends.pages.dev/blog">
 <meta id="og-title" property="og:title" content="Blog — AzubaTrends">
 <meta id="og-description" property="og:description" content="Stories, guides and updates from AzubaTrends.">
 <meta id="og-image" property="og:image" content="">
 <meta property="og:type" content="article">
-<meta id="og-url" property="og:url" content="https://azuba-trends.vercel.app/blog">
+<meta id="og-url" property="og:url" content="https://azubatrends.pages.dev/blog">
 <meta property="og:site_name" content="AzubaTrends">
 <meta name="twitter:card" content="summary_large_image">
 <meta id="twitter-title" name="twitter:title" content="Blog — AzubaTrends">
@@ -90,10 +91,10 @@
 
     document.title = `${title} — AzubaTrends Blog`;
     document.getElementById("page-description").setAttribute("content", description);
-    document.getElementById("page-canonical").setAttribute("href", `https://azuba-trends.vercel.app/blog/${post.slug}`);
+    document.getElementById("page-canonical").setAttribute("href", `${window.location.origin}/blog/${post.slug}`);
     document.getElementById("og-title").setAttribute("content", title);
     document.getElementById("og-description").setAttribute("content", description);
-    document.getElementById("og-url").setAttribute("content", `https://azuba-trends.vercel.app/blog/${post.slug}`);
+    document.getElementById("og-url").setAttribute("content", `${window.location.origin}/blog/${post.slug}`);
     document.getElementById("twitter-title").setAttribute("content", title);
     document.getElementById("twitter-description").setAttribute("content", description);
     if (post.coverImage) {
@@ -124,11 +125,11 @@
       publisher: {
         "@type": "Organization",
         name: "AzubaTrends",
-        logo: { "@type": "ImageObject", url: "https://azuba-trends.vercel.app/images/icons/icon-512.png" }
+        logo: { "@type": "ImageObject", url: `${window.location.origin}/images/icons/icon-512.png` }
       },
       mainEntityOfPage: {
         "@type": "WebPage",
-        "@id": `https://azuba-trends.vercel.app/blog/${post.slug}`
+        "@id": `${window.location.origin}/blog/${post.slug}`
       }
     };
     const schemaScript = document.createElement("script");

@@ -7,4 +7,12 @@ Disallow: /share-preview-tester.html
 Disallow: /product-import-tester.html
 Disallow: /api/
 
+# Public, read-only endpoints storefront pages need for rendering — see
+# functions/robots.txt.js (the file actually served live) for details.
+Allow: /api/products
+Allow: /api/blog-posts
+
+# AI/LLM-friendly site map (static file, see llms.txt for details)
+Allow: /llms.txt
+
 Sitemap: https://azuba-trends.vercel.app/sitemap.xml

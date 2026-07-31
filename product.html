@@ -8,13 +8,14 @@
 <link rel="apple-touch-icon" href="/images/icons/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#1F3A5F">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="AzubaTrends" id="apple-app-title-meta">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title id="page-title">Product — AzubaTrends</title>
 <meta id="page-description" name="description" content="Shop handmade home goods at AzubaTrends.">
-<link id="page-canonical" rel="canonical" href="https://azuba-trends.vercel.app/">
+<link id="page-canonical" rel="canonical" href="https://azubatrends.pages.dev/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -35,10 +36,14 @@
     </div>
 
     <div id="product-root" hidden>
-      <div class="breadcrumb">
-        <a href="/" id="product-back-btn">← Back</a> &nbsp;/&nbsp;
-        <a href="/">Home</a> / <a href="/category" id="breadcrumb-category">Category</a>
-      </div>
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="/" id="product-back-btn">← Back</a>
+        <span class="breadcrumb__sep" aria-hidden="true">/</span>
+        <a href="/">Home</a>
+        <span class="breadcrumb__sep" aria-hidden="true">/</span>
+        <span id="breadcrumb-ancestors"></span>
+        <a href="/category" id="breadcrumb-category">Category</a>
+      </nav>
 
       <div class="product-detail">
         <!-- Gallery -->
@@ -47,6 +52,7 @@
             <img id="gallery-main-img" src="" alt="">
           </div>
           <div class="gallery__thumbs" id="gallery-thumbs"></div>
+          <div id="gallery-color-variants" class="gallery-color-variants" hidden></div>
         </div>
 
         <!-- Info (right column) — everything Meesho stacks on the right:
@@ -167,7 +173,7 @@
 
       <!-- Long Description — full width, collapsible. -->
       <section class="product-description-section" id="product-description-section" hidden>
-        <h2>Description</h2>
+        <h2 style="margin: 0 0 15px 0;">Description</h2>
         <div class="product-description-section__body" id="product-description"></div>
         <button type="button" class="product-description-section__toggle" id="product-description-toggle" hidden>Show more</button>
       </section>
@@ -176,7 +182,7 @@
            category first, then the shopper's own browsing interest
            (cookie), see ProductLoader.mountRelatedProducts -->
       <section aria-labelledby="related-heading" style="margin-top: var(--space-8);">
-        <h2 id="related-heading">You might also like</h2>
+        <h2 style="margin: 0 0 15px 0;" id="related-heading">You might also like</h2>
         <div class="product-grid" id="related-products-grid"></div>
       </section>
     </div>
@@ -222,6 +228,7 @@
     <script src="/js/cart-button-ui.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
 <script src="/js/product-loader.js"></script>
+<script src="/js/category-loader.js"></script>
 <script src="/js/search.js"></script>
 <script src="/js/geo-restriction.js"></script>
 <script src="/js/reviews.js"></script>
@@ -229,6 +236,14 @@
   window.addEventListener("layout:ready", () => ProductLoader.initHeader());
 
   document.addEventListener("DOMContentLoaded", async () => {
+    
+    // FIX: Hardware-accelerated transforms ki wajah se hone wale "Scroll Bleed" ko global level pe lock karna.
+    // Yeh kisi bhi child element ko viewport stretch karne se completely block kar dega.
+    document.documentElement.style.overflowX = "hidden";
+    document.body.style.overflowX = "hidden";
+    document.body.style.position = "relative";
+    document.body.style.maxWidth = "100vw";
+
     if (window.LoadingOverlay) window.LoadingOverlay.show();
 
     // ---- Back button ---------------------------------------------
@@ -283,7 +298,7 @@
     // ---- SEO meta tags ---------------------------------------------
     document.title = product.seoTitle || `${product.title} — ${SITE_CONFIG.siteName}`;
     document.getElementById("page-description").setAttribute("content", product.seoDesc || product.shortDescription || product.title);
-    document.getElementById("page-canonical").setAttribute("href", `https://azuba-trends.vercel.app${ProductLoader.productUrl(product)}`);
+    document.getElementById("page-canonical").setAttribute("href", `${window.location.origin}${ProductLoader.productUrl(product)}`);
 
     if (window.Tracking) {
       window.Tracking.trackEvent({
@@ -304,15 +319,73 @@
 
     // ---- Breadcrumb ---------------------------------------------
     const catLink = document.getElementById("breadcrumb-category");
-    Security.setTextSafely(catLink, product.category || "Category");
-    catLink.href = product.category ? `/category/${encodeURIComponent(product.category)}` : "/category";
+    const ancestorsEl = document.getElementById("breadcrumb-ancestors");
+    ancestorsEl.innerHTML = "";
+
+    const breadcrumbItems = [
+      { name: "Home", url: window.location.origin + "/" }
+    ];
+
+    if (product.categoryId) {
+      try {
+        const categories = await CategoryLoader.loadAllCategories();
+        const tree = CategoryLoader.buildTree(categories);
+        const node = tree.byId.get(product.categoryId);
+        if (node) {
+          const chain = CategoryLoader.breadcrumbChain(tree, node);
+          chain.forEach((n, i) => {
+            if (i < chain.length - 1) {
+              const a = document.createElement("a");
+              a.href = `/category/${n.fullPath}`;
+              a.textContent = n.name;
+              ancestorsEl.appendChild(a);
+              ancestorsEl.appendChild(document.createTextNode(" / "));
+              breadcrumbItems.push({ name: n.name, url: `${window.location.origin}/category/${n.fullPath}` });
+            }
+          });
+          Security.setTextSafely(catLink, node.name || "Category");
+          catLink.href = `/category/${node.fullPath}`;
+          breadcrumbItems.push({ name: node.name, url: `${window.location.origin}/category/${node.fullPath}` });
+        }
+      } catch (err) {
+        console.error("Breadcrumb category-tree lookup failed, falling back to flat category name:", err);
+      }
+    }
+    if (!product.categoryId || catLink.textContent === "Category") {
+      // Legacy fallback: no categoryId (pre-migration product), or the
+      // tree lookup above didn't find a match.
+      Security.setTextSafely(catLink, product.category || "Category");
+      catLink.href = product.category ? `/category/${encodeURIComponent(product.category)}` : "/category";
+      if (product.category) breadcrumbItems.push({ name: product.category, url: `${window.location.origin}/category/${encodeURIComponent(product.category)}` });
+    }
+    breadcrumbItems.push({ name: product.title || "Product", url: window.location.href });
+
+    let breadcrumbJsonLdEl = document.getElementById("breadcrumb-jsonld");
+    if (!breadcrumbJsonLdEl) {
+      breadcrumbJsonLdEl = document.createElement("script");
+      breadcrumbJsonLdEl.type = "application/ld+json";
+      breadcrumbJsonLdEl.id = "breadcrumb-jsonld";
+      document.head.appendChild(breadcrumbJsonLdEl);
+    }
+    breadcrumbJsonLdEl.textContent = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: breadcrumbItems.map((item, i) => ({ "@type": "ListItem", position: i + 1, name: item.name, item: item.url }))
+    });
 
     // ---- Gallery ---------------------------------------------
     const images = (product.images && product.images.length > 0) ? product.images : [""];
     const mainImg = document.getElementById("gallery-main-img");
     const thumbsWrap = document.getElementById("gallery-thumbs");
     const galleryMain = document.getElementById("gallery-main");
+    
+    // FIX: Parent container ko 'relative' set karna zaroori hai taaki 'overflow: hidden' 
+    // absolute positioned child images ko properly clip kar sake aur width stretch na ho.
+    galleryMain.style.position = "relative";
+    galleryMain.style.overflow = "hidden";
+    
     let currentImageIndex = 0;
+    let wasDragged = false; // set by the swipe handler below; read by the lightbox click handler
 
     function showImage(index, { fromLightbox } = {}) {
       currentImageIndex = ((index % images.length) + images.length) % images.length;
@@ -343,19 +416,68 @@
         thumbsWrap.appendChild(thumb);
       });
 
+      // NEW: Arrow click slide animation logic
+      let isAnimating = false;
+      function slideWithAnimation(dir) {
+        if (isAnimating) return; // Prevent spam clicks
+        isAnimating = true;
+
+        const width = galleryMain.getBoundingClientRect().width || 1;
+        const nextIndex = currentImageIndex + dir;
+        
+        // Create incoming peer image
+        const peer = document.createElement("img");
+        peer.src = images[((nextIndex % images.length) + images.length) % images.length];
+        peer.alt = "";
+        peer.style.position = "absolute";
+        peer.style.top = "0";
+        peer.style.left = "0";
+        peer.style.width = "100%";
+        peer.style.height = "100%";
+        peer.style.objectFit = "contain";
+        peer.style.objectPosition = "center";
+        peer.style.pointerEvents = "none";
+        
+        // Position peer off-screen
+        peer.style.transform = `translateX(${dir * width}px)`;
+        galleryMain.insertBefore(peer, mainImg);
+
+        // Force browser repaint to avoid CSS batching
+        void peer.offsetWidth;
+
+        // Apply transitions
+        mainImg.style.transition = "transform 0.25s ease";
+        peer.style.transition = "transform 0.25s ease";
+        
+        // Slide both images
+        mainImg.style.transform = `translateX(${-dir * width}px)`;
+        peer.style.transform = "translateX(0px)";
+
+        // Cleanup
+        setTimeout(() => {
+          showImage(nextIndex);
+          mainImg.style.transition = "none";
+          mainImg.style.transform = "translateX(0px)";
+          peer.remove();
+          isAnimating = false;
+        }, 250);
+      }
+
       const prevBtn = document.createElement("button");
       prevBtn.type = "button";
       prevBtn.className = "gallery__nav gallery__nav--prev";
       prevBtn.setAttribute("aria-label", "Previous image");
       prevBtn.innerHTML = "&#10094;";
-      prevBtn.addEventListener("click", (e) => { e.stopPropagation(); showImage(currentImageIndex - 1); });
+      // FIX: Use animation function for Prev button
+      prevBtn.addEventListener("click", (e) => { e.stopPropagation(); slideWithAnimation(-1); });
 
       const nextBtn = document.createElement("button");
       nextBtn.type = "button";
       nextBtn.className = "gallery__nav gallery__nav--next";
       nextBtn.setAttribute("aria-label", "Next image");
       nextBtn.innerHTML = "&#10095;";
-      nextBtn.addEventListener("click", (e) => { e.stopPropagation(); showImage(currentImageIndex + 1); });
+      // FIX: Use animation function for Next button
+      nextBtn.addEventListener("click", (e) => { e.stopPropagation(); slideWithAnimation(1); });
 
       galleryMain.appendChild(prevBtn);
       galleryMain.appendChild(nextBtn);
@@ -370,39 +492,153 @@
       });
       galleryMain.appendChild(dots);
 
+      // ---- Drag-follow swipe -----------------------------------
+      // The image tracks the pointer 1:1 while dragging (instead of
+      // only reacting on release), and a peer image slides in from
+      // the side being revealed. On release it either finishes the
+      // slide (past the threshold) or springs back to place.
       let dragStartX = null;
       let dragStartY = null;
       let dragging = false;
+      let dragLocked = false; // true once we've decided this is a horizontal drag
+      let peerImg = null;
+      let peerDir = 0; // -1 = peer is the previous image (entering from left), 1 = next image (entering from right)
       const SWIPE_THRESHOLD = 40; // px
+      const galleryWidth = () => galleryMain.getBoundingClientRect().width || 1;
+
+      mainImg.style.position = "absolute";
+      mainImg.style.top = "0";
+      mainImg.style.left = "0";
+      mainImg.style.width = "100%";
+      mainImg.style.height = "100%";
+      
+      // FIX 1: Native browser drag disable kiya main image pe taaki pointer events interrupt na ho
+      mainImg.ondragstart = () => false;
+
+      function makePeer(index) {
+        const img = document.createElement("img");
+        img.src = images[((index % images.length) + images.length) % images.length];
+        img.alt = "";
+        img.style.position = "absolute";
+        img.style.top = "0";
+        img.style.left = "0";
+        img.style.width = "100%";
+        img.style.height = "100%";
+        img.style.objectFit = "contain";
+        img.style.objectPosition = "center";
+        img.style.pointerEvents = "none";
+        
+        // FIX 2: Native browser drag disable kiya peer image pe bhi
+        img.ondragstart = () => false;
+        
+        return img;
+      }
+
+      function clearPeer() {
+        if (peerImg && peerImg.parentNode) peerImg.parentNode.removeChild(peerImg);
+        peerImg = null;
+        peerDir = 0;
+      }
 
       function attachSwipe(el, onSwipeLeft, onSwipeRight) {
         el.addEventListener("pointerdown", (e) => {
+          if (e.target.closest(".gallery__nav")) return;
           dragStartX = e.clientX;
           dragStartY = e.clientY;
           dragging = true;
+          dragLocked = false;
+          wasDragged = false;
         });
-        el.addEventListener("pointerup", (e) => {
+
+        el.addEventListener("pointermove", (e) => {
+          if (!dragging || dragStartX === null) return;
+          const dx = e.clientX - dragStartX;
+          const dy = e.clientY - dragStartY;
+
+          if (!dragLocked) {
+            if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return; // not enough movement yet to decide
+            if (Math.abs(dy) > Math.abs(dx)) { dragging = false; return; } // vertical scroll, let the page handle it
+            dragLocked = true;
+            el.setPointerCapture(e.pointerId);
+          }
+
+          wasDragged = true;
+          mainImg.style.transition = "none";
+          mainImg.style.transform = `translateX(${dx}px)`;
+
+          const wantDir = dx < 0 ? 1 : -1; // dragging left reveals the next image, dragging right reveals the previous
+          if (peerImg && peerDir !== wantDir) clearPeer();
+          if (!peerImg) {
+            peerDir = wantDir;
+            peerImg = makePeer(currentImageIndex + wantDir);
+            galleryMain.insertBefore(peerImg, mainImg);
+          }
+          peerImg.style.transition = "none";
+          peerImg.style.transform = `translateX(${wantDir * galleryWidth() + dx}px)`;
+        });
+
+        function finishDrag(e) {
           if (!dragging || dragStartX === null) return;
           const dx = e.clientX - dragStartX;
           const dy = e.clientY - dragStartY;
           dragging = false;
-          if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
-            if (dx < 0) onSwipeLeft(); else onSwipeRight();
-          }
           dragStartX = null;
           dragStartY = null;
-        });
-        el.addEventListener("pointercancel", () => { dragging = false; dragStartX = null; });
+
+          if (!dragLocked) return;
+          dragLocked = false;
+
+          const width = galleryWidth();
+          const settled = Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy);
+
+          mainImg.style.transition = "transform 0.25s ease";
+          if (peerImg) peerImg.style.transition = "transform 0.25s ease";
+
+          if (settled && peerImg) {
+            // FIX 3: Direction correct math (-1 for left swipe, 1 for right swipe)
+            const exitDir = dx < 0 ? -1 : 1; 
+            mainImg.style.transform = `translateX(${exitDir * width}px)`;
+            peerImg.style.transform = "translateX(0px)";
+            
+            // Track next image index based on swipe direction
+            const dir = dx < 0 ? 1 : -1;
+            const nextIndex = currentImageIndex + dir;
+            
+            setTimeout(() => {
+              showImage(nextIndex);
+              mainImg.style.transition = "none";
+              mainImg.style.transform = "translateX(0px)";
+              clearPeer();
+              if (dx < 0) onSwipeLeft(); else onSwipeRight();
+            }, 250);
+          } else {
+            mainImg.style.transform = "translateX(0px)";
+            if (peerImg) {
+              const dir = peerDir;
+              peerImg.style.transform = `translateX(${dir * width}px)`;
+            }
+            setTimeout(() => {
+              mainImg.style.transition = "none";
+              clearPeer();
+            }, 250);
+          }
+        }
+
+        el.addEventListener("pointerup", finishDrag);
+        el.addEventListener("pointercancel", finishDrag);
+        
+        // FIX 4: Mobile pe browser ko strictly batana ki yaha vertical pan allowed hai but horizontal hum handle karenge
         el.style.touchAction = "pan-y";
       }
 
-      attachSwipe(galleryMain, () => showImage(currentImageIndex + 1), () => showImage(currentImageIndex - 1));
+      attachSwipe(galleryMain, () => {}, () => {});
     }
 
     const lightbox = document.getElementById("lightbox");
     const lightboxImg = document.getElementById("lightbox-img");
     galleryMain.addEventListener("click", (e) => {
       if (e.target.closest(".gallery__nav")) return;
+      if (wasDragged) { wasDragged = false; return; }
       lightboxImg.src = mainImg.src;
       lightboxImg.alt = mainImg.alt;
       document.getElementById("lightbox-caption").hidden = true;
@@ -530,7 +766,7 @@
       notifySubmitBtn.textContent = "Notify Me";
 
       stockStatusEl.innerHTML = "";
-      if (vp.stock === 0) {
+      if (ProductLoader.isUnavailable(vp)) {
         stockStatusEl.innerHTML = '<span class="oos-pill">Out of Stock</span>';
 
         // No Add to Cart / Buy Now while out of stock — Notify Me instead.
@@ -627,25 +863,52 @@
           window.location.href = ProductLoader.productUrl(sibling);
         }
 
-        if (colors.length > 0) {
+        // Colors render in TWO places in the markup — a desktop copy
+        // sitting right under the gallery thumbnails, and a mobile copy
+        // in its usual spot above Size in the right-hand info column.
+        // CSS (not JS) decides which one is actually visible at a given
+        // viewport width, so both are always built identically here.
+        function buildColorGroup() {
           const group = document.createElement("div");
-          group.className = "variant-selector-group";
-          group.innerHTML = `<span class="variant-selector-group__label">Color</span>`;
+          group.className = "variant-selector-group variant-selector-group--color";
+          group.innerHTML = `<span class="variant-selector-group__label">${colors.length} Similar Product${colors.length === 1 ? "" : "s"}</span>`;
           const row = document.createElement("div");
           row.className = "variant-color-row";
           colors.forEach((color) => {
+            const sibling = findAnySiblingForColor(color);
+            const imgSrc = (sibling && sibling.images && sibling.images[0]) ? sibling.images[0] : "images/logo-placeholder.svg";
+            // A color is "out of stock" only once EVERY size under it is
+            // unavailable (naturally out of stock or manually paused).
+            // Still clickable — same as any other sold-out product on this
+            // site, its page just opens straight into the Notify Me state —
+            // just visually dimmed here so shoppers see it before clicking.
+            const colorSizes = siblings.filter((s) => s.color === color);
+            const colorIsOut = colorSizes.length > 0 && colorSizes.every((s) => ProductLoader.isUnavailable(s));
             const swatch = document.createElement("button");
             swatch.type = "button";
-            swatch.className = "variant-color-swatch" + (color === product.color ? " is-active" : "");
-            swatch.style.background = /^#|^rgb|^hsl/i.test(color) ? color : (color || "").toLowerCase();
-            swatch.title = color;
-            swatch.setAttribute("aria-label", color);
+            swatch.className = "variant-color-swatch" + (color === product.color ? " is-active" : "") + (colorIsOut ? " is-oos" : "");
+            swatch.title = color + (colorIsOut ? " (Out of Stock)" : "");
+            swatch.setAttribute("aria-label", color + (colorIsOut ? " (Out of Stock)" : ""));
+            const img = document.createElement("img");
+            img.src = imgSrc;
+            img.alt = color;
+            img.loading = "lazy";
+            swatch.appendChild(img);
             // Picking a different color is a different product page.
-            swatch.addEventListener("click", () => goToVariant(findAnySiblingForColor(color)));
+            swatch.addEventListener("click", () => goToVariant(sibling));
             row.appendChild(swatch);
           });
           group.appendChild(row);
-          wrap.appendChild(group);
+          return group;
+        }
+
+        if (colors.length > 0) {
+          wrap.appendChild(buildColorGroup());
+
+          const galleryColorWrap = document.getElementById("gallery-color-variants");
+          galleryColorWrap.innerHTML = "";
+          galleryColorWrap.appendChild(buildColorGroup());
+          galleryColorWrap.hidden = false;
         }
 
         if (sizes.length > 0) {
@@ -660,7 +923,7 @@
             btn.type = "button";
             btn.className = "variant-size-btn" + (size === product.size ? " is-active" : "");
             btn.textContent = size;
-            if (!match || match.stock === 0) btn.disabled = true;
+            if (!match || ProductLoader.isUnavailable(match)) btn.disabled = true;
             // Picking a different size stays on THIS product page — it just
             // swaps which underlying size's price/stock is shown.
             btn.addEventListener("click", () => {
@@ -701,9 +964,13 @@
       const METRO_DISTRICTS = ["kolkata", "howrah", "north 24 parganas", "south 24 parganas", "hooghly"];
       function estimateWindow(district) {
         const dispatchDays = 1;
-        const isMetro = METRO_DISTRICTS.includes(String(district || "").toLowerCase());
-        const transitMin = isMetro ? 2 : 3;
-        const transitMax = isMetro ? 3 : 6;
+        
+        // FIX: Transit time adjust kiya gaya hai. 
+        // 1 day dispatch + 6 days transit = 7 days minimum.
+        // 1 day dispatch + 9 days transit = 10 days maximum.
+        const transitMin = 6;
+        const transitMax = 9;
+        
         const fmt = (d) => d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
         const from = new Date(); from.setDate(from.getDate() + dispatchDays + transitMin);
         const to = new Date(); to.setDate(to.getDate() + dispatchDays + transitMax);
@@ -754,7 +1021,7 @@
           return;
         }
 
-        if (product.stock === 0) {
+        if (ProductLoader.isUnavailable(product)) {
           resultEl.dataset.status = "error";
           resultEl.innerHTML = `
             <p class="delivery-checker__result-row"><span class="delivery-checker__icon">✅</span><span>We deliver to <strong>${district ? Security.escapeHTML(district) : pin}</strong>.</span></p>
@@ -791,7 +1058,7 @@
           url: window.location.href,
           priceCurrency: "INR",
           price: Number(product.sellingPrice).toFixed(2),
-          availability: product.stock === 0 ? "https://schema.org/OutOfStock" : "https://schema.org/InStock"
+          availability: ProductLoader.isUnavailable(product) ? "https://schema.org/OutOfStock" : "https://schema.org/InStock"
         }
       };
       if (ratingInfo && ratingInfo.count > 0) {

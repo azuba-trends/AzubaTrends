@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "include": ["/*"],
+  "exclude": [
+    "/css/*",
+    "/js/*",
+    "/images/*",
+    "/config/*",
+    "/partials/*",
+    "/favicon.ico",
+    "/firestore.rules",
+    "/about",
+    "/admin",
+    "/blog",
+    "/blog-post",
+    "/cart",
+    "/category",
+    "/checkout",
+    "/product",
+    "/search",
+    "/terms",
+    "/product-import-tester",
+    "/share-preview-tester"
+  ]
+}

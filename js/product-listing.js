@@ -72,32 +72,32 @@ const ProductListing = (function () {
       <div class="filter-bar">
         <div class="filter-bar__row">
           ${categories.length > 1 ? `
-          <select class="filter-select" data-filter="category">
+          <select class="filter-select" data-filter="category" id="filter-category" name="category">
             <option value="All"${state.category === "All" ? " selected" : ""}>All Categories</option>
             ${categories.map((c) => `<option value="${c}"${state.category === c ? " selected" : ""}>${c}</option>`).join("")}
           </select>` : ""}
           ${sizes.length > 0 ? `
-          <select class="filter-select" data-filter="size">
+          <select class="filter-select" data-filter="size" id="filter-size" name="size">
             <option value="All">Any Size</option>
             ${sizes.map((s) => `<option value="${s}">${s}</option>`).join("")}
           </select>` : ""}
           ${colors.length > 0 ? `
-          <select class="filter-select" data-filter="color">
+          <select class="filter-select" data-filter="color" id="filter-color" name="color">
             <option value="All">Any Color</option>
             ${colors.map((c) => `<option value="${c}">${c}</option>`).join("")}
           </select>` : ""}
-          <select class="filter-select" data-filter="minRating">
+          <select class="filter-select" data-filter="minRating" id="filter-min-rating" name="minRating">
             <option value="0">Any Rating</option>
             <option value="4">4★ &amp; up</option>
             <option value="3">3★ &amp; up</option>
           </select>
-          <input type="number" min="0" class="filter-price" data-filter="priceMin" placeholder="Min ₹">
-          <input type="number" min="0" class="filter-price" data-filter="priceMax" placeholder="Max ₹">
+          <input type="number" min="0" class="filter-price" data-filter="priceMin" id="filter-price-min" name="priceMin" placeholder="Min ₹">
+          <input type="number" min="0" class="filter-price" data-filter="priceMax" id="filter-price-max" name="priceMax" placeholder="Max ₹">
           <label class="filter-checkbox">
-            <input type="checkbox" data-filter="inStockOnly"> In Stock Only
+            <input type="checkbox" data-filter="inStockOnly" id="filter-in-stock" name="inStockOnly"> In Stock Only
           </label>
           <button type="button" class="filter-clear" data-action="clear">Clear Filters</button>
-          <select class="filter-select filter-select--sort" data-filter="sort">
+          <select class="filter-select filter-select--sort" data-filter="sort" id="filter-sort" name="sort">
             ${sortChoices.map((s) => `<option value="${s.value}">${s.label}</option>`).join("")}
           </select>
         </div>
@@ -136,7 +136,7 @@ const ProductListing = (function () {
         if (state.size !== "All" && p.size !== state.size) return false;
         if (state.color !== "All" && p.color !== state.color) return false;
         if (state.minRating > 0 && Number(p.rating || 0) < state.minRating) return false;
-        if (state.inStockOnly && p.stock === 0) return false;
+        if (state.inStockOnly && ProductLoader.isUnavailable(p)) return false;
         if (state.priceMin !== "" && Number(p.sellingPrice) < Number(state.priceMin)) return false;
         if (state.priceMax !== "" && Number(p.sellingPrice) > Number(state.priceMax)) return false;
         return true;

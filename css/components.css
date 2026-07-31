@@ -313,7 +313,24 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   overflow: hidden;
+  position: relative;
   transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+/* Whole-card click target: the existing link around the image is
+   stretched (via ::after) to cover the entire card, so tapping the
+   title, price, or empty space also opens the product — not just the
+   photo. The Add to Cart / CTA button sits in its own stacking context
+   above this overlay so it keeps working as its own, separate click. */
+.product-card__link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.product-card__cta {
+  position: relative;
+  z-index: 2;
 }
 
 .product-card:hover {
@@ -405,6 +422,8 @@
   font-weight: 600;
   color: var(--color-ink);
   line-height: 1.35;
+  overflow-wrap: break-word;
+  word-break: break-word;
   /* Fixed-height clamp so cards never resize based on title length */
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -710,11 +729,16 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--color-primary);
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .product-info__title {
   margin-top: 4px;
   margin-bottom: var(--space-2);
+  font-size: clamp(1.25rem, 1.05rem + 1vw, 1.75rem);
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .product-info__price {
@@ -1606,6 +1630,20 @@
   flex-wrap: wrap;
   gap: var(--space-2);
 }
+
+/* Colors: small feature-image thumbnails, not plain color-fill circles.
+   Mobile keeps a single scrollable row (page width never grows to fit
+   more variants); desktop wraps onto extra rows instead of scrolling. */
+.variant-color-row {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+@media (min-width: 860px) {
+  .variant-color-row { flex-wrap: wrap; overflow-x: visible; }
+}
 .variant-size-btn {
   padding: 7px 14px;
   border-radius: var(--radius-sm, 6px);
@@ -1629,18 +1667,34 @@
   text-decoration: line-through;
 }
 .variant-color-swatch {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
+  flex: 0 0 auto;
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-sm, 6px);
   border: 2px solid var(--color-border);
   cursor: pointer;
   position: relative;
   padding: 0;
+  overflow: hidden;
+  background: var(--color-surface-sunken);
   transition: border-color 0.15s ease, transform 0.1s ease;
 }
-.variant-color-swatch:hover:not(:disabled) { transform: scale(1.08); }
+.variant-color-swatch img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.variant-color-swatch:hover:not(:disabled) { transform: scale(1.05); }
 .variant-color-swatch.is-active { border-color: var(--color-primary); box-shadow: 0 0 0 2px var(--color-primary); }
 .variant-color-swatch:disabled { opacity: 0.3; cursor: not-allowed; }
+.variant-color-swatch.is-oos { opacity: 0.45; }
+.variant-color-swatch.is-oos::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top right, transparent calc(50% - 1px), var(--color-danger, #d33) calc(50% - 1px), var(--color-danger, #d33) calc(50% + 1px), transparent calc(50% + 1px));
+}
 .variant-color-swatch__label {
   position: absolute;
   bottom: -18px;
@@ -1649,6 +1703,16 @@
   font-size: 0.68rem;
   color: var(--color-ink-soft);
   white-space: nowrap;
+}
+
+/* Desktop: colors move under the gallery thumbnails instead of sitting
+   in the right-hand info column (Size stays put, right column, as-is). */
+.gallery-color-variants { margin-top: var(--space-3); }
+@media (min-width: 860px) {
+  #product-variant-selector .variant-selector-group--color { display: none; }
+}
+@media (max-width: 859.98px) {
+  .gallery-color-variants { display: none !important; }
 }
 
 /* Compact variant of .rte-editor for Product > Short Description — same
@@ -1720,3 +1784,56 @@
   animation: global-loading-spin 0.75s linear infinite;
 }
 @keyframes global-loading-spin { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   Admin: Auto-Save Draft restore banner (Add/Edit Product form)
+   ============================================================ */
+.draft-restore-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--color-surface-sunken, #F2EEE5);
+  border: 1px solid var(--color-accent, #E8A33D);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 0.9rem;
+  color: var(--color-ink, #1C2B39);
+}
+
+/* ============================================================
+   Admin: Categories tree table (nested categories)
+   ============================================================ */
+.cat-tree-row td:first-of-type { white-space: nowrap; }
+.cat-expand-btn {
+  background: none; border: none; cursor: pointer; font-size: 0.85rem;
+  margin-right: 6px; transition: transform .15s;
+}
+.cat-tree-name { display: inline-flex; align-items: center; }
+
+/* ============================================================
+   Storefront: category breadcrumb trail + child-category tiles
+   ============================================================ */
+.category-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+  margin: 20px 0 28px;
+}
+.category-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 16px 10px; text-align: center; text-decoration: none;
+  color: var(--color-ink, #1C2B39);
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #E4E0D4);
+  border-radius: 10px;
+  transition: box-shadow .15s, transform .15s;
+}
+.category-tile:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.08); transform: translateY(-2px); }
+.category-tile img {
+  width: 56px; height: 56px; object-fit: cover; border-radius: 50%;
+  background: var(--color-surface-sunken, #F2EEE5);
+}
+.category-tile span { font-weight: 600; font-size: 0.92rem; }

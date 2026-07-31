@@ -92,7 +92,7 @@
   function buildSuggestionRow(product, rawQuery) {
     const row = document.createElement("a");
     row.href = ProductLoader.productUrl(product);
-    row.className = "search-suggestion" + (product.stock === 0 ? " is-out-of-stock" : "");
+    row.className = "search-suggestion" + (ProductLoader.isUnavailable(product) ? " is-out-of-stock" : "");
     row.setAttribute("role", "option");
 
     const img = document.createElement("img");
@@ -112,7 +112,7 @@
     const sub = document.createElement("div");
     sub.className = "search-suggestion__sub";
     const variantLabel = product.color ? `${product.color} · ` : "";
-    sub.textContent = product.stock === 0
+    sub.textContent = ProductLoader.isUnavailable(product)
       ? `${variantLabel}${product.category || ""} · Out of stock`
       : `${variantLabel}${product.category || ""} · ${ProductLoader.formatPrice(product.sellingPrice)}`;
 
@@ -135,7 +135,7 @@
     let highlightedIndex = -1;
 
     function goToResultsPage(query) {
-      window.location.href = `/search.html?q=${encodeURIComponent(query)}`;
+      window.location.href = `/search?q=${encodeURIComponent(query)}`;
     }
 
     function closeDropdown() {
@@ -158,7 +158,7 @@
       });
       if (currentTotal > 0) {
         const seeAll = document.createElement("a");
-        seeAll.href = `/search.html?q=${encodeURIComponent(query)}`;
+        seeAll.href = `/search?q=${encodeURIComponent(query)}`;
         seeAll.className = "search-see-all";
         seeAll.textContent = `See all ${currentTotal} result${currentTotal === 1 ? "" : "s"} for "${query}"`;
         dropdown.appendChild(seeAll);

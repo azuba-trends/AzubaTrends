@@ -8,27 +8,28 @@
 <link rel="apple-touch-icon" href="/images/icons/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#1F3A5F">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="AzubaTrends" id="apple-app-title-meta">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title id="page-title">Categories — AzubaTrends</title>
 <meta id="page-description" name="description" content="Browse AzubaTrends's home goods by category — decor, lighting, kitchen, textiles, and storage.">
-<link id="page-canonical" rel="canonical" href="https://azuba-trends.vercel.app/category">
+<link id="page-canonical" rel="canonical" href="https://azubatrends.pages.dev/category">
 
 <!-- OPEN GRAPH (Facebook, WhatsApp) -->
 <meta property="og:type" content="website">
-<meta id="og-url" property="og:url" content="https://azuba-trends.vercel.app/category">
+<meta id="og-url" property="og:url" content="https://azubatrends.pages.dev/category">
 <meta id="og-title" property="og:title" content="Categories — AzubaTrends">
 <meta id="og-description" property="og:description" content="Browse AzubaTrends's home goods by category — decor, lighting, kitchen, textiles, and storage.">
-<meta property="og:image" content="https://azuba-trends.vercel.app/images/icons/icon-512.png">
+<meta property="og:image" content="https://azubatrends.pages.dev/images/icons/icon-512.png">
 <meta property="og:site_name" content="AzubaTrends">
 
 <!-- TWITTER -->
 <meta name="twitter:card" content="summary_large_image">
 <meta id="twitter-title" name="twitter:title" content="Categories — AzubaTrends">
 <meta id="twitter-description" name="twitter:description" content="Browse AzubaTrends's home goods by category — decor, lighting, kitchen, textiles, and storage.">
-<meta name="twitter:image" content="https://azuba-trends.vercel.app/images/icons/icon-512.png">
+<meta name="twitter:image" content="https://azubatrends.pages.dev/images/icons/icon-512.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,10 +44,12 @@
 <main>
   <div class="container">
     <section class="page-header">
-      <div class="breadcrumb"><a href="/">Home</a> / Categories</div>
+      <nav class="breadcrumb" id="category-breadcrumb" aria-label="Breadcrumb"><a href="/">Home</a> / Categories</nav>
       <h1 id="category-title">All Categories</h1>
       <p id="category-subtitle">Browse everything we carry.</p>
     </section>
+
+    <div class="category-tiles" id="category-child-tiles" hidden></div>
 
     <div id="filter-bar-mount"></div>
 
@@ -66,31 +69,123 @@
     <script src="js/cart-button-ui.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
 <script src="js/product-loader.js"></script>
+<script src="js/category-loader.js"></script>
 <script src="js/product-listing.js"></script>
 <script src="js/search.js"></script>
 <script>
   window.addEventListener("layout:ready", () => ProductLoader.initHeader());
+
+  // Injects/updates the BreadcrumbList JSON-LD block for the current
+  // breadcrumb chain (Home + every ancestor + the current category).
+  function setBreadcrumbJsonLd(items) {
+    let scriptEl = document.getElementById("breadcrumb-jsonld");
+    if (!scriptEl) {
+      scriptEl = document.createElement("script");
+      scriptEl.type = "application/ld+json";
+      scriptEl.id = "breadcrumb-jsonld";
+      document.head.appendChild(scriptEl);
+    }
+    scriptEl.textContent = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: items.map((item, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        name: item.name,
+        item: item.url
+      }))
+    });
+  }
+
+  function renderBreadcrumbNav(chainLinks) {
+    const nav = document.getElementById("category-breadcrumb");
+    nav.innerHTML = "";
+    chainLinks.forEach((item, i) => {
+      if (i > 0) nav.appendChild(document.createTextNode(" / "));
+      if (item.url && i < chainLinks.length - 1) {
+        const a = document.createElement("a");
+        a.href = item.url;
+        a.textContent = item.name;
+        nav.appendChild(a);
+      } else {
+        const span = document.createElement("span");
+        span.textContent = item.name;
+        nav.appendChild(span);
+      }
+    });
+  }
+
+  function renderChildTiles(node) {
+    const wrap = document.getElementById("category-child-tiles");
+    wrap.innerHTML = "";
+    if (!node || node.children.length === 0) { wrap.hidden = true; return; }
+    wrap.hidden = false;
+    node.children
+      .slice()
+      .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+      .forEach((child) => {
+        const a = document.createElement("a");
+        a.className = "category-tile";
+        a.href = `/category/${child.fullPath}`;
+        a.innerHTML = `
+          <img src="${child.image ? window.Security.escapeHTML(child.image) : "images/logo-placeholder.svg"}" alt="" loading="lazy">
+          <span>${window.Security.escapeHTML(child.name || "")}</span>
+        `;
+        wrap.appendChild(a);
+      });
+  }
 
   document.addEventListener("DOMContentLoaded", async () => {
 
     const grid = document.getElementById("product-grid");
     ProductLoader.renderSkeletonGrid(grid, 8);
 
-    const products = await ProductLoader.loadAllProducts();
+    const [products, categories] = await Promise.all([
+      ProductLoader.loadAllProducts(),
+      CategoryLoader.loadAllCategories()
+    ]);
+    const tree = CategoryLoader.buildTree(categories);
     const titleEl = document.getElementById("category-title");
     const subtitleEl = document.getElementById("category-subtitle");
 
-    // Clean URL is /category/some-slug (see vercel.json rewrite -> this
-    // file), same technique product.html and blog-post.html use. Old
-    // ?category= links (e.g. from the sitemap cache or bookmarks) still
-    // work as a fallback so nothing breaks.
+    // Clean URL is /category/some/nested/path (see _redirects' /category/*
+    // rewrite -> this file), same technique product.html and blog-post.html
+    // use. Every segment after "category" joins back into the fullPath the
+    // nested-category tree above uses to resolve a node.
     const pathParts = window.location.pathname.split("/").filter(Boolean);
-    const pathSlug = pathParts[0] === "category" ? pathParts[1] : null;
+    const fullPathFromUrl = pathParts[0] === "category" ? pathParts.slice(1).join("/") : "";
     const params = new URLSearchParams(window.location.search);
-    let activeCategory = pathSlug || params.get("category") || "All";
-    // Guard against a stale/typo'd category value in the URL.
-    const knownCategories = ["All", ...ProductLoader.getCategories(products)];
-    if (!knownCategories.includes(activeCategory)) activeCategory = "All";
+    const legacyCategoryName = params.get("category") || "";
+
+    const node = fullPathFromUrl ? CategoryLoader.findByFullPath(tree, decodeURIComponent(fullPathFromUrl)) : null;
+
+    let visibleProducts;
+    let activeLabel;
+    let breadcrumbChain;
+
+    if (node) {
+      // Tree mode: this category + every descendant's products, plus any
+      // legacy product that only has the flat `category` name matching
+      // this exact node (no categoryId yet — pre-migration data).
+      const idSet = new Set([node.id, ...CategoryLoader.getDescendantIds(node)]);
+      visibleProducts = products.filter((p) => (p.categoryId && idSet.has(p.categoryId)) || (!p.categoryId && p.category === node.name));
+      activeLabel = node.name;
+      breadcrumbChain = [{ name: "Home", url: "/" }, ...CategoryLoader.breadcrumbChain(tree, node).map((n) => ({ name: n.name, url: `/category/${n.fullPath}` }))];
+    } else if (legacyCategoryName && legacyCategoryName !== "All") {
+      // Backward-compat: an old ?category=Name bookmark/link with no
+      // matching tree node — same flat name-matching behaviour as before.
+      visibleProducts = products.filter((p) => p.category === legacyCategoryName);
+      activeLabel = legacyCategoryName;
+      breadcrumbChain = [{ name: "Home", url: "/" }, { name: legacyCategoryName, url: "" }];
+    } else {
+      visibleProducts = products;
+      activeLabel = "All";
+      breadcrumbChain = [{ name: "Home", url: "/" }, { name: "Categories", url: "" }];
+    }
+
+    renderBreadcrumbNav(breadcrumbChain);
+    setBreadcrumbJsonLd(breadcrumbChain.map((b) => ({ name: b.name, url: b.url ? `${window.location.origin}${b.url}` : window.location.href })));
+    renderChildTiles(node);
 
     function updateSeoAndHeading(category, visibleCount) {
       Security.setTextSafely(titleEl, category === "All" ? "All Categories" : category);
@@ -103,14 +198,14 @@
 
       // SEO: each category gets its own canonical URL, title and meta
       // description so Google can index it as a distinct page instead of
-      // every ?category= value collapsing onto one canonical.
+      // every URL collapsing onto one canonical.
       const pageTitle = category === "All" ? "Categories — AzubaTrends" : `${category} — AzubaTrends`;
       const pageDesc = category === "All"
         ? "Browse AzubaTrends's home goods by category — decor, lighting, kitchen, textiles, and storage."
         : `Shop ${category} at AzubaTrends — browse our full ${category.toLowerCase()} collection.`;
       const canonicalUrl = category === "All"
-        ? "https://azuba-trends.vercel.app/category"
-        : `https://azuba-trends.vercel.app/category/${encodeURIComponent(category)}`;
+        ? `${window.location.origin}/category`
+        : `${window.location.origin}/category/${node ? node.fullPath : encodeURIComponent(category)}`;
 
       document.getElementById("page-title").textContent = pageTitle;
       document.getElementById("page-description").setAttribute("content", pageDesc);
@@ -125,17 +220,13 @@
     const listing = ProductListing.mount(
       document.getElementById("filter-bar-mount"),
       grid,
-      products,
+      visibleProducts,
       {
-        initialCategory: activeCategory,
-        emptyMessage: "No products in this category yet — try another filter.",
-        onCategoryChange: (cat) => {
-          const path = cat === "All" ? "/category" : `/category/${encodeURIComponent(cat)}`;
-          history.replaceState(null, "", path);
-        }
+        initialCategory: "All",
+        emptyMessage: "No products in this category yet — try another filter."
       }
     );
-    updateSeoAndHeading(activeCategory, products.filter((p) => activeCategory === "All" || p.category === activeCategory).length);
+    updateSeoAndHeading(activeLabel, visibleProducts.length);
   });
 </script>
 </body>

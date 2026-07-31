@@ -27,7 +27,7 @@
  */
 
 const GeoRestriction = (function () {
-  const CONFIG_PATH = "config/geo-config.json";
+  const CONFIG_PATH = "/config/geo-config.json";
   let cachedConfig = null;
 
   /**

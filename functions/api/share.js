@@ -1,4 +1,9 @@
-// api/share.js
+// functions/api/share.js
+//
+// CLOUDFLARE PAGES FUNCTIONS PORT of api/share.js.
+// Response HTML, headers, and behavior are unchanged from the Vercel
+// version — only the data-access layer and request/response plumbing
+// have been swapped.
 //
 // Merged replacement for the old api/product.js + api/blog-post.js.
 // Both did the exact same job for a different collection (WhatsApp/
@@ -7,14 +12,14 @@
 // scripts run are invisible to them — this route builds that HTML
 // server-side instead, then bounces real browsers on to the real page).
 //
-// Combined into one function so a new api/page.js (full server-rendering
-// for the Pages feature) fits under Vercel Hobby's 12-serverless-function
-// cap without dropping anything that already worked. Routing is via a
-// `type` query param set by the matching vercel.json rewrite:
+// Routing is via a `type` query param, same as before:
 //   /share       -> /api/share?type=product
 //   /share-blog  -> /api/share?type=blog
+// (The _redirects/_routes.json rewrites that map those clean URLs to this
+// function are routing config, not covered by lib/firestore-rest.js's
+// contract or this worker's assigned files — same note as api/page.js.)
 
-import { getDb } from "../lib/firebase-admin.js";
+import { getDocs, getDoc } from "../../lib/firestore-rest.js";
 
 function escapeHtml(str) {
   return String(str ?? "")
@@ -32,15 +37,13 @@ function escapeForScript(str) {
   return String(str ?? "").replace(/[<>&'"\\]/g, (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"));
 }
 
-function sendPreviewHtml(res, { title, description, imageUrl, redirectPath, ogType, canonicalUrl }) {
+function previewResponse({ title, description, imageUrl, redirectPath, ogType, canonicalUrl }) {
   const safeTitle = escapeHtml(title);
   const safeDescription = escapeHtml(description);
   const safeImage = escapeHtml(imageUrl);
   const safeRedirectForScript = escapeForScript(redirectPath);
 
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.setHeader("Cache-Control", "public, s-maxage=60, stale-while-revalidate=30");
-  return res.status(200).send(`
+  const html = `
     <!doctype html>
     <html lang="en">
     <head>
@@ -73,49 +76,66 @@ function sendPreviewHtml(res, { title, description, imageUrl, redirectPath, ogTy
       </script>
     </body>
     </html>
-  `);
+  `;
+
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "public, s-maxage=60, stale-while-revalidate=30"
+    }
+  });
 }
 
-async function handleProduct(req, res) {
-  const { id, slug, parentId, variantSlug } = req.query;
-  if (!id && !slug && !(parentId && variantSlug)) return res.redirect(301, "/");
+function redirect(path, request) {
+  // Resolve against the incoming request's own origin (rather than a
+  // hardcoded domain) so this works the same on a preview deployment,
+  // the production domain, or a custom domain — Response.redirect needs
+  // an absolute URL.
+  return Response.redirect(new URL(path, request.url).toString(), 301);
+}
 
-  const db = getDb();
+async function handleProduct(url, env, request) {
+  const id = url.searchParams.get("id");
+  const slug = url.searchParams.get("slug");
+  const parentId = url.searchParams.get("parentId");
+  const variantSlug = url.searchParams.get("variantSlug");
+  if (!id && !slug && !(parentId && variantSlug)) return redirect("/", request);
+
   let product;
   let resolvedSlug = slug;
 
   if (parentId && variantSlug) {
-    const snap = await db.collection("products")
-      .where("parentId", "==", parentId).where("variantSlug", "==", variantSlug).limit(1).get();
-    product = snap.empty ? null : snap.docs[0].data();
+    const matches = await getDocs(env, "products", {
+      where: [["parentId", "==", parentId], ["variantSlug", "==", variantSlug]]
+    });
+    product = matches[0] || null;
   } else if (slug) {
-    const snap = await db.collection("products").where("slug", "==", slug).limit(1).get();
-    product = snap.empty ? null : snap.docs[0].data();
+    const matches = await getDocs(env, "products", { where: [["slug", "==", slug]] });
+    product = matches[0] || null;
   } else {
-    const docSnap = await db.collection("products").doc(id).get();
-    product = docSnap.exists ? docSnap.data() : null;
+    product = await getDoc(env, `products/${id}`);
     resolvedSlug = product?.slug || null;
   }
 
   const title = product?.seoTitle || product?.title || "AzubaTrends Product";
   const description = product?.seoDesc || product?.shortDescription || "Buy amazing products on AzubaTrends.";
-  const imageUrl = (Array.isArray(product?.images) && product.images[0]) || "https://azuba-trends.vercel.app/images/logo-placeholder.png";
+  const imageUrl = (Array.isArray(product?.images) && product.images[0]) || `${url.origin}/images/logo-placeholder.png`;
   const redirectPath = (product?.isVariant && product?.parentId && product?.variantSlug)
     ? `/products/${encodeURIComponent(product.parentId)}/${encodeURIComponent(product.variantSlug)}`
     : (resolvedSlug ? `/products/${encodeURIComponent(resolvedSlug)}` : `/?id=${encodeURIComponent(id || "")}`);
 
-  return sendPreviewHtml(res, { title, description, imageUrl, redirectPath, ogType: "product" });
+  return previewResponse({ title, description, imageUrl, redirectPath, ogType: "product" });
 }
 
-async function handleBlog(req, res) {
-  const { slug } = req.query;
-  if (!slug) return res.redirect(301, "/blog");
+async function handleBlog(url, env, request) {
+  const slug = url.searchParams.get("slug");
+  if (!slug) return redirect("/blog", request);
 
-  const db = getDb();
-  const snap = await db.collection("blogPosts").where("slug", "==", slug).limit(1).get();
-  if (snap.empty) return res.redirect(301, "/blog");
+  const matches = await getDocs(env, "blogPosts", { where: [["slug", "==", slug]] });
+  const post = matches[0];
+  if (!post) return redirect("/blog", request);
 
-  const post = snap.docs[0].data();
   const title = post.seoTitle || post.title || "AzubaTrends Blog";
   let fallbackText = "";
   if (post.content) {
@@ -126,21 +146,24 @@ async function handleBlog(req, res) {
   }
   const rawDescription = post.seoDesc || fallbackText || "Read this post on the AzubaTrends blog.";
   const description = rawDescription.length > 160 ? rawDescription.slice(0, 160).trim() + "…" : rawDescription;
-  const imageUrl = post.coverImage || "https://azuba-trends.vercel.app/images/logo-placeholder.png";
+  const imageUrl = post.coverImage || `${url.origin}/images/logo-placeholder.png`;
   const redirectPath = `/blog/${encodeURIComponent(slug)}`;
-  const canonicalUrl = `https://azuba-trends.vercel.app${redirectPath}`;
+  const canonicalUrl = `${url.origin}${redirectPath}`;
 
-  return sendPreviewHtml(res, { title, description, imageUrl, redirectPath, ogType: "article", canonicalUrl });
+  return previewResponse({ title, description, imageUrl, redirectPath, ogType: "article", canonicalUrl });
 }
 
-export default async function handler(req, res) {
-  const { type } = req.query;
+export async function onRequestGet(context) {
+  const { request, env } = context;
+  const url = new URL(request.url);
+  const type = url.searchParams.get("type");
+
   try {
-    if (type === "blog") return await handleBlog(req, res);
-    if (type === "product") return await handleProduct(req, res);
-    return res.redirect(301, "/");
+    if (type === "blog") return await handleBlog(url, env, request);
+    if (type === "product") return await handleProduct(url, env, request);
+    return redirect("/", request);
   } catch (error) {
     console.error("api/share failed:", error);
-    return res.redirect(301, "/");
+    return redirect("/", request);
   }
 }

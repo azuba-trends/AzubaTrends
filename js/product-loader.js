@@ -76,6 +76,16 @@ const ProductLoader = (function () {
     return inFlightRequest;
   }
 
+  // A product/variant is unavailable either because it's naturally out of
+  // stock (stock <= 0) OR because the admin manually paused it (paused ===
+  // true) — a manual "take this size/color off sale" switch that does NOT
+  // touch the real stock number, so turning it back on (Resume) restores
+  // the exact stock count that was there before. Every place on the site
+  // that used to check `stock === 0` should check this instead.
+  function isUnavailable(p) {
+    return !p || Number(p.stock) <= 0 || p.paused === true;
+  }
+
   async function getProductById(id) {
     const products = await loadAllProducts();
     return products.find((p) => p.id === id) || null;
@@ -107,27 +117,55 @@ const ProductLoader = (function () {
     const products = await loadAllProducts();
     const matches = products.filter((p) => p.isVariant && p.parentId === parentId && p.variantSlug === variantSlug);
     if (matches.length === 0) return null;
-    return matches.find((p) => p.stock > 0) || matches[0];
+    return pickDefaultVariant(matches);
+  }
+
+  // Picks which size should be treated as "the" price/default for a group
+  // of same-color size docs — used both for the listing-card price and for
+  // which size lands selected when a color's product page first opens.
+  // Rule: among the AVAILABLE sizes (in stock and not manually paused),
+  // pick the smallest by the standard apparel order (XS, S, M, L...);
+  // numeric/free-text sizes sort after the known ones, smallest first.
+  // If nothing in the group is available, fall back to the smallest size
+  // overall, so an all-sold-out group still picks a consistent size
+  // instead of whichever happened to be first/random.
+  function pickDefaultVariant(list) {
+    if (!list || list.length === 0) return null;
+    const available = list.filter((p) => !isUnavailable(p));
+    const pool = available.length > 0 ? available : list;
+    return sortBySize(pool)[0];
+  }
+
+  function sortBySize(list) {
+    return [...(list || [])].sort((a, b) => {
+      const ra = sizeSortRank(a.size), rb = sizeSortRank(b.size);
+      if (ra !== null && rb !== null) return ra - rb;
+      if (ra !== null) return -1;
+      if (rb !== null) return 1;
+      const na = parseFloat(a.size), nb = parseFloat(b.size);
+      const aIsNum = !isNaN(na) && /^\s*[\d.]+\s*$/.test(String(a.size || ""));
+      const bIsNum = !isNaN(nb) && /^\s*[\d.]+\s*$/.test(String(b.size || ""));
+      if (aIsNum && bIsNum) return na - nb;
+      if (aIsNum) return -1;
+      if (bIsNum) return 1;
+      return String(a.size || "").localeCompare(String(b.size || ""));
+    });
   }
 
   // Collapses same-color sibling docs (one per size) down to a single
   // representative for grid/listing display, so a color with 5 sizes shows
   // as ONE card, not 5. Non-variant products and each distinct color still
-  // get their own card. Prefers an in-stock size as the representative.
+  // get their own card. The representative is picked by pickDefaultVariant
+  // above (smallest AVAILABLE size — not just "first found" / random).
   function dedupeVariantGroups(products) {
-    const bestByKey = new Map();
+    const groups = new Map();
     const order = [];
     (products || []).forEach((p) => {
       const key = (p.isVariant && p.parentId && p.variantSlug) ? `${p.parentId}::${p.variantSlug}` : `single::${p.id}`;
-      const cur = bestByKey.get(key);
-      if (!cur) {
-        bestByKey.set(key, p);
-        order.push(key);
-      } else if (cur.stock === 0 && p.stock > 0) {
-        bestByKey.set(key, p);
-      }
+      if (!groups.has(key)) { groups.set(key, []); order.push(key); }
+      groups.get(key).push(p);
     });
-    return order.map((k) => bestByKey.get(k));
+    return order.map((k) => pickDefaultVariant(groups.get(k)));
   }
 
   // Every other variant of the same product (siblings), used to build
@@ -184,8 +222,9 @@ const ProductLoader = (function () {
 
   function sortByStock(products) {
     return products.sort((a, b) => {
-      if(a.stock === 0 && b.stock > 0) return 1;
-      if(b.stock === 0 && a.stock > 0) return -1;
+      const aOut = isUnavailable(a), bOut = isUnavailable(b);
+      if (aOut && !bOut) return 1;
+      if (bOut && !aOut) return -1;
       return 0;
     });
   }
@@ -195,8 +234,9 @@ const ProductLoader = (function () {
   }
 
   function renderProductCard(product) {
+    const unavailable = isUnavailable(product);
     const card = document.createElement("article");
-    card.className = "product-card" + (product.stock === 0 ? " is-out-of-stock" : "");
+    card.className = "product-card" + (unavailable ? " is-out-of-stock" : "");
 
     const discount = calcDiscount(product);
     const image = (product.images && product.images[0]) ? product.images[0] : "images/logo-placeholder.svg";
@@ -224,7 +264,7 @@ const ProductLoader = (function () {
     card.innerHTML = `
       <a href="${productUrl(product)}" class="product-card__link">
         <div class="product-card__media">
-          ${product.stock === 0 ? `<span class="price-tag price-tag--stock">Out of Stock</span>` : ''}
+          ${unavailable ? `<span class="price-tag price-tag--stock">Out of Stock</span>` : ''}
           <img src="${safeImage}" alt="${safeTitle}" loading="lazy">
         </div>
       </a>
@@ -237,13 +277,13 @@ const ProductLoader = (function () {
         <div class="product-card__price-row">
           <span class="price-current">${formatPrice(product.sellingPrice)}</span>
           ${discount > 0 ? `<span class="price-mrp">${formatPrice(product.mrp)}</span>` : ''}
-          ${discount > 0 && product.stock > 0 ? `<span class="price-tag price-tag--inline">${discount}% OFF</span>` : ''}
+          ${discount > 0 && !unavailable ? `<span class="price-tag price-tag--inline">${discount}% OFF</span>` : ''}
         </div>
         <div class="product-card__cta" data-cta-mount></div>
       </div>
     `;
 
-    if (product.stock !== 0) {
+    if (!unavailable) {
       const ctaMount = card.querySelector("[data-cta-mount]");
       window.CartButtonUI && window.CartButtonUI.mount(ctaMount, {
         productId: product.id,
@@ -333,10 +373,20 @@ const ProductLoader = (function () {
    *  from the interest cookie, then just newest-in-stock as a last resort —
    *  so this never comes up empty as long as *some* other product exists. */
   function pickRelatedProducts(allProducts, { excludeId, excludeParentId, category, limit = 8 } = {}) {
+    // The product's own other colors/sizes always show here — a shopper
+    // looking at one color should always see the other colors as options,
+    // whether or not the store has any other unrelated products yet.
+    const siblings = excludeParentId
+      ? dedupeVariantGroups(allProducts.filter((p) =>
+          p.isVariant && String(p.parentId) === String(excludeParentId) && String(p.id) !== String(excludeId)
+        ))
+      : [];
+
     const pool = dedupeVariantGroups(allProducts.filter((p) => {
       if (String(p.id) === String(excludeId)) return false;
-      // Don't recommend a product's own other sizes/colors as "related" —
-      // those belong in the variant selector, not this grid.
+      // Genuinely different products only here — this product's own
+      // colors/sizes are handled separately above so they're never lost,
+      // but they also shouldn't be double-counted in this "other" pool.
       if (excludeParentId && p.isVariant && String(p.parentId) === String(excludeParentId)) return false;
       return true;
     }));
@@ -347,6 +397,12 @@ const ProductLoader = (function () {
 
     const seen = new Set();
     const result = [];
+    for (const p of siblings) {
+      if (seen.has(p.id)) continue;
+      seen.add(p.id);
+      result.push(p);
+      if (result.length >= limit) return result;
+    }
     for (const bucket of buckets) {
       for (const p of bucket) {
         if (seen.has(p.id)) continue;
@@ -414,7 +470,7 @@ const ProductLoader = (function () {
     window.addEventListener("cart:updated", (e) => setBadge(e.detail.count));
   }
 
-  const API = { loadAllProducts, getProductById, getProductBySlug, getProductByParentAndVariantSlug, getVariantSiblings, dedupeVariantGroups, productUrl, calcDiscount, formatPrice, sortByStock, sortSizes, getCategories, renderProductCard, renderGrid, renderSkeletonGrid, renderCategoryChips, initHeader, trackCategoryInterest, mountRelatedProducts };
+  const API = { loadAllProducts, getProductById, getProductBySlug, getProductByParentAndVariantSlug, getVariantSiblings, dedupeVariantGroups, pickDefaultVariant, isUnavailable, productUrl, calcDiscount, formatPrice, sortByStock, sortSizes, getCategories, renderProductCard, renderGrid, renderSkeletonGrid, renderCategoryChips, initHeader, trackCategoryInterest, mountRelatedProducts };
   window.ProductLoader = API;
   return API;
 })();
