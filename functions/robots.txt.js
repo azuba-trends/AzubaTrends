@@ -21,6 +21,17 @@ Disallow: /share-preview-tester.html
 Disallow: /product-import-tester.html
 Disallow: /api/
 
+# These two are public, read-only, and are what storefront pages actually
+# fetch client-side to render their content (see js/product-loader.js and
+# js/blog-loader.js) — blocking them under the blanket /api/ rule above
+# stops Googlebot's own renderer from seeing product/blog content when it
+# renders a page for indexing, even though the page itself indexes fine.
+# Every other /api/ route stays blocked (admin tools, order actions,
+# review/notify submissions — none of them are fetched passively while a
+# page renders, so blocking them costs nothing).
+Allow: /api/products
+Allow: /api/blog-posts
+
 # AI/LLM-friendly site map (static file, no per-request generation)
 Allow: /llms.txt
 
