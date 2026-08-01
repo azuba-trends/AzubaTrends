@@ -26,7 +26,7 @@
 
 .btn-accent {
   background: var(--color-accent);
-  color: var(--color-primary-dark);
+  color: #fff;
 }
 .btn-accent:hover { background: var(--color-accent-dark); color: #fff; }
 
@@ -97,7 +97,7 @@
   gap: var(--space-2);
   background: var(--color-surface-sunken);
   border: 1px solid var(--color-border);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   padding: 8px 14px;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
@@ -312,6 +312,7 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
   position: relative;
   transition: box-shadow 0.15s ease, transform 0.15s ease;
@@ -413,7 +414,7 @@
   color: var(--color-ink-soft);
   white-space: nowrap;
 }
-.product-card__rating svg { width: 12px; height: 12px; flex-shrink: 0; fill: #e8a33d; }
+.product-card__rating svg { width: 12px; height: 12px; flex-shrink: 0; fill: var(--color-star); }
 .product-card__rating .product-card__rating-count { font-weight: 400; color: var(--color-muted); }
 
 .product-card__title {
@@ -443,7 +444,7 @@
 .price-current {
   font-weight: 700;
   font-size: 1rem;
-  color: var(--color-primary-dark);
+  color: var(--color-ink);
 }
 
 .price-mrp {
@@ -456,36 +457,22 @@
   margin-top: 8px;
 }
 
-/* Signature element: a hand-tied market price tag, used for the discount
-   badge and the out-of-stock badge. The clip-path notch + punched "hole"
-   nods to Angan's courtyard-market positioning without being a generic
-   ribbon/pill badge. */
+/* Discount / status badge — clean minimal pill per design system §2.3
+   ("discount % badge: accent fill, white text, small pill"). Kept the
+   original .price-tag class name since JS/other pages reference it. */
 .price-tag {
   position: absolute;
-  top: 10px;
-  left: 0;
+  top: var(--space-2);
+  left: var(--space-2);
   z-index: 2;
   display: inline-flex;
   align-items: center;
-  padding: 5px 12px 5px 18px;
+  padding: 4px 10px;
   font-size: 0.72rem;
   font-weight: 700;
   color: #fff;
-  background: var(--color-clay);
-  clip-path: polygon(14px 0, 100% 0, 100% 100%, 14px 100%, 0 50%);
-  filter: drop-shadow(0 2px 3px rgba(28,43,57,0.18));
-}
-
-.price-tag::after {
-  content: "";
-  position: absolute;
-  left: 7px;
-  top: 50%;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--color-surface);
-  transform: translateY(-50%);
+  background: var(--color-accent);
+  border-radius: var(--radius-pill);
 }
 
 .price-tag--stock {
@@ -500,16 +487,8 @@
    communicates the discount when paired with the strikethrough MRP. */
 .price-tag--inline {
   position: static;
-  padding: 3px 10px 3px 14px;
+  padding: 3px 9px;
   font-size: 0.68rem;
-  clip-path: polygon(10px 0, 100% 0, 100% 100%, 10px 100%, 0 50%);
-  filter: none;
-}
-
-.price-tag--inline::after {
-  left: 5px;
-  width: 3px;
-  height: 3px;
 }
 
 /* ---------- Out of stock overlay/state ---------- */
@@ -542,7 +521,7 @@
   position: absolute;
   top: 0; left: 0;
   overflow: hidden;
-  color: var(--color-accent-dark);
+  color: var(--color-star);
   white-space: nowrap;
 }
 
@@ -571,7 +550,7 @@
 .star-input button.is-filled,
 .star-input button:hover,
 .star-input button:focus-visible {
-  color: var(--color-accent-dark);
+  color: var(--color-star);
 }
 
 .star-input button:hover ~ button { color: var(--color-border); }

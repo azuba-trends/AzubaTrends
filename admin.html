@@ -17,15 +17,16 @@
 
   /* Admin Layout */
   #admin-layout { display: none; height: 100vh; }
-  .sidebar { width: 250px; background: var(--color-primary-dark); color: white; display: flex; flex-direction: column; overflow: hidden; }
-  .sidebar-header { padding: 20px; font-size: 1.2rem; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; }
+  .sidebar { width: 250px; background: var(--admin-sidebar-bg); color: white; display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar-header { padding: 20px; font-size: 1.2rem; font-weight: bold; border-bottom: 1px solid var(--admin-sidebar-border); flex-shrink: 0; }
   /* Only this middle area scrolls — header stays on top, footer (View Site +
      Logout) stays pinned to the bottom and is never pushed off-screen. */
   .sidebar-nav { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 10px 0; }
-  .nav-group-title { padding: 16px 20px 6px; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: #7f93a8; }
-  .sidebar-nav button { width: 100%; text-align: left; padding: 11px 20px; color: #cbd5e1; background: none; border: none; font-size: 0.95rem; cursor: pointer; transition: 0.15s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .sidebar-nav button:hover, .sidebar-nav button.active { background: var(--color-primary); color: white; }
-  .sidebar-footer { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+  .nav-group-title { padding: 16px 20px 6px; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--admin-sidebar-text-dim); }
+  .sidebar-nav button { width: 100%; text-align: left; padding: 11px 20px; color: var(--admin-sidebar-text); background: none; border: none; border-left: 3px solid transparent; font-size: 0.95rem; cursor: pointer; transition: 0.15s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sidebar-nav button:hover { background: var(--admin-sidebar-bg-active); color: white; }
+  .sidebar-nav button.active { background: var(--admin-sidebar-bg-active); color: white; border-left-color: var(--color-accent); }
+  .sidebar-footer { padding: 16px 20px; border-top: 1px solid var(--admin-sidebar-border); flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
 
   /* Collapsible "All X" -> "Add X" nav groups. The arrow is just an inline
      indicator overlaid on the button itself — it has no separate clickable
@@ -174,7 +175,7 @@
 
     .mobile-topbar {
       display: flex; align-items: center; gap: 14px;
-      background: var(--color-primary-dark); color: white;
+      background: var(--admin-sidebar-bg); color: white;
       padding: 14px 16px; position: sticky; top: 0; z-index: 40;
       flex-shrink: 0;
     }

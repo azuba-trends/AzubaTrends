@@ -2,53 +2,67 @@
    main.css — global layout, typography, responsive breakpoints
    ==========================================================================
    Design tokens (see also components.css, which shares this :root):
-   - Palette is deep indigo + turmeric-yellow + clay red, on a warm
-     near-white paper background — a nod to indigo dye and terracotta
-     craft traditions from West Bengal, without leaning on a stock
-     "cream + terracotta" template.
-   - Display face: Fraunces (soft-serif, characterful, used for the
-     logo wordmark and headings only).
-   - Body/UI face: Inter (neutral workhorse for everything else).
+   - AzubaTrends Design System — clean, minimal, premium (Meesho-inspired).
+   - Single accent colour (terracotta-rust) across the whole storefront.
+   - Single type family (Inter) everywhere — no serif/decorative faces.
+   - Variable NAMES are kept stable on purpose (--color-primary,
+     --color-clay, --color-accent-dark, etc.) because several JS files
+     (admin.js, checkout.js, reviews.js, product-loader.js) set inline
+     styles referencing these custom properties by name. Only the VALUES
+     below have been updated to the new palette, so behaviour/backend is
+     untouched while the whole site reskins from one place.
    ========================================================================== */
 
 :root {
-  /* Colour */
-  --color-bg: #FAF8F4;
+  /* Colour — AzubaTrends Design System */
+  --color-bg: #FFFFFF;
   --color-surface: #FFFFFF;
-  --color-surface-sunken: #F2EEE5;
-  --color-ink: #1C2B39;
-  --color-ink-soft: #4B5A68;
-  --color-muted: #7A8791;
-  --color-border: #E4E0D4;
+  --color-surface-sunken: #FAFAFA;
+  --color-ink: #181818;
+  --color-ink-soft: #6B6B6B;
+  --color-muted: #6B6B6B;
+  --color-border: #E8E8E8;
 
-  --color-primary: #1F3A5F;
-  --color-primary-dark: #142639;
-  --color-primary-tint: #EAF0F6;
+  /* "Primary" = the single storefront accent (terracotta-rust) */
+  --color-primary: #C1502E;
+  --color-primary-dark: #A8431F;
+  --color-primary-tint: #FBEAE3;
 
-  --color-accent: #E8A33D;
-  --color-accent-dark: #C97F1E;
+  --color-accent: #C1502E;
+  --color-accent-dark: #A8431F;
 
-  --color-clay: #B8441E;
-  --color-clay-tint: #FBEAE2;
+  /* Folded into the single accent — kept as aliases for JS compatibility */
+  --color-clay: #C1502E;
+  --color-clay-tint: #FBEAE3;
 
-  --color-success: #2F7A4D;
-  --color-success-tint: #E8F3EC;
-  --color-danger: #B3261E;
+  --color-success: #1E8E3E;
+  --color-success-tint: #E6F4EA;
+  --color-danger: #D33;
   --color-danger-tint: #FBEAEA;
+  --color-star: #F5A623;
 
-  /* Type */
-  --font-display: "Fraunces", Georgia, serif;
+  /* Admin Panel shell — a separate dark-neutral system (§5.1), never the
+     storefront's terracotta/white theme. Only used inside admin.html. */
+  --admin-sidebar-bg: #181A20;
+  --admin-sidebar-bg-active: #262933;
+  --admin-sidebar-border: rgba(255,255,255,0.08);
+  --admin-sidebar-text: #C7CBD4;
+  --admin-sidebar-text-dim: #7C8291;
+
+  /* Type — Inter everywhere, no serif */
+  --font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
   /* Layout */
-  --header-height: 64px;
+  --header-height: 72px;
   --bottom-nav-height: 60px;
-  --max-width: 1200px;
-  --radius-sm: 6px;
-  --radius-md: 12px;
-  --radius-lg: 20px;
-  --shadow-sm: 0 1px 3px rgba(28, 43, 57, 0.08);
-  --shadow-md: 0 6px 20px rgba(28, 43, 57, 0.10);
+  --max-width: 1440px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.10);
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -103,14 +117,20 @@ body {
 
 h1, h2, h3, h4 {
   font-family: var(--font-display);
-  color: var(--color-primary-dark);
-  line-height: 1.15;
-  font-weight: 600;
+  color: var(--color-ink);
+  line-height: 1.2;
+  font-weight: 700;
 }
 
-h1 { font-size: clamp(1.9rem, 1.5rem + 2vw, 2.75rem); }
-h2 { font-size: clamp(1.5rem, 1.3rem + 1vw, 2rem); }
-h3 { font-size: 1.25rem; }
+h1 { font-size: 22px; }
+h2 { font-size: 18px; }
+h3 { font-size: 16px; font-weight: 600; }
+
+@media (min-width: 768px) {
+  h1 { font-size: 32px; }
+  h2 { font-size: 24px; }
+  h3 { font-size: 18px; }
+}
 
 p { color: var(--color-ink-soft); }
 
@@ -413,8 +433,9 @@ main { flex: 1; }
 
 /* ---------- Footer ---------- */
 .site-footer {
-  background: var(--color-primary-dark);
-  color: #DDE6EE;
+  background: var(--color-surface-sunken);
+  color: var(--color-ink);
+  border-top: 1px solid var(--color-border);
   margin-top: var(--space-8);
 }
 
@@ -428,7 +449,7 @@ main { flex: 1; }
 }
 
 .site-footer h4 {
-  color: #fff;
+  color: var(--color-ink);
   font-family: var(--font-body);
   font-size: 0.8rem;
   letter-spacing: 0.08em;
@@ -439,18 +460,18 @@ main { flex: 1; }
 .site-footer ul { display: flex; flex-direction: column; gap: var(--space-2); }
 
 .site-footer a {
-  color: #C3D2DE;
+  color: var(--color-ink-soft);
   font-size: 0.92rem;
 }
 
 .site-footer a:hover { color: var(--color-accent); }
 
 .site-footer__bottom {
-  border-top: 1px solid rgba(255,255,255,0.12);
+  border-top: 1px solid var(--color-border);
   padding: var(--space-4);
   text-align: center;
   font-size: 0.8rem;
-  color: #93A6B5;
+  color: var(--color-muted);
 }
 
 /* ---------- Page header (About/Terms/Category/etc.) ---------- */
@@ -538,6 +559,7 @@ main { flex: 1; }
    (mobile only) already has a Cart tab with its own live badge — showing
    the count in two places at once on a small screen was redundant. */
 @media (max-width: 767px) {
+  .site-header__bar { min-height: 56px; }
   .header-cart { display: none; }
   .site-header__bar .search-wrap {
     order: 3;
