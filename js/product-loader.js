@@ -252,6 +252,7 @@ const ProductLoader = (function () {
     // untrusted the same way user-typed text would be.
     const safeTitle = window.Security ? window.Security.escapeHTML(product.title) : String(product.title || "");
     const safeCategory = window.Security ? window.Security.escapeHTML(product.category) : String(product.category || "");
+    const safeBrand = window.Security ? window.Security.escapeHTML(product.brand || "") : String(product.brand || "");
     const safeImage = window.Security ? window.Security.escapeHTML(image) : image;
     // This card represents the whole color (every size of it), not one
     // specific size, so only the color is shown here — the size itself is
@@ -260,13 +261,20 @@ const ProductLoader = (function () {
       ? `<span class="product-card__variant" style="color:var(--color-ink-soft); font-size:0.8em;"> — ${window.Security ? window.Security.escapeHTML(product.color) : product.color}</span>`
       : "";
 
-    const ratingBadge = (product.reviewCount > 0)
+    const ratingRow = (product.reviewCount > 0)
       ? `<span class="product-card__rating">
           <svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 1.5l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.2-5.4 3.2 1.3-6L1.3 7.7l6.1-.6z"/></svg>
           ${Number(product.rating).toFixed(1)} <span class="product-card__rating-count">(${product.reviewCount})</span>
         </span>`
       : "";
 
+    const isSaved = window.Wishlist ? window.Wishlist.has(product.id) : false;
+
+    // Simple card, image-forward, no Add to Cart button — that lives on
+    // the product page only now. Category (left) and Brand (right) sit on
+    // their own row under the image; each is capped to roughly half the
+    // card width and ellipsizes ("...") instead of wrapping/overlapping
+    // when a name runs long (see .product-card__top-row in components.css).
     card.innerHTML = `
       <a href="${productUrl(product)}" class="product-card__link">
         <div class="product-card__media">
@@ -274,13 +282,13 @@ const ProductLoader = (function () {
           <img src="${safeImage}" alt="${safeTitle}" loading="lazy">
         </div>
       </a>
-      <button type="button" class="product-card__wishlist" aria-label="Save to wishlist" aria-pressed="false">
+      <button type="button" class="product-card__wishlist${isSaved ? " is-active" : ""}" aria-label="Save to wishlist" aria-pressed="${isSaved ? "true" : "false"}" data-product-id="${window.Security ? window.Security.escapeHTML(String(product.id)) : product.id}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
       </button>
       <div class="product-card__body">
         <div class="product-card__top-row">
-          <span class="product-card__category">${safeCategory}</span>
-          ${ratingBadge}
+          <span class="product-card__category" title="${safeCategory}">${safeCategory}</span>
+          ${safeBrand ? `<span class="product-card__brand" title="${safeBrand}">${safeBrand}</span>` : ""}
         </div>
         <h3 class="product-card__title">${safeTitle}${variantBadge}</h3>
         <div class="product-card__price-row">
@@ -288,36 +296,36 @@ const ProductLoader = (function () {
           ${discount > 0 ? `<span class="price-mrp">${formatPrice(product.mrp)}</span>` : ''}
           ${discount > 0 && !unavailable ? `<span class="price-tag price-tag--inline">${discount}% OFF</span>` : ''}
         </div>
-        <div class="product-card__cta" data-cta-mount></div>
+        ${ratingRow}
       </div>
     `;
 
-    // Wishlist heart is a visual save-state toggle only (design system
-    // §3.3) — no wishlist page/backend exists yet, so this intentionally
-    // doesn't persist anywhere; it just gives tap feedback in place.
+    // Wishlist heart persists via the shared Wishlist module (localStorage
+    // — see js/wishlist.js) so the saved state survives a refresh and
+    // shows up on /wishlist too, instead of just being local tap feedback.
     const wishlistBtn = card.querySelector(".product-card__wishlist");
-    if (wishlistBtn) {
+    if (wishlistBtn && window.Wishlist) {
       wishlistBtn.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const pressed = wishlistBtn.getAttribute("aria-pressed") === "true";
-        wishlistBtn.setAttribute("aria-pressed", pressed ? "false" : "true");
-        wishlistBtn.classList.toggle("is-active", !pressed);
+        const nowSaved = window.Wishlist.toggle(product.id, {
+          id: product.id,
+          title: product.title,
+          category: product.category,
+          brand: product.brand || "",
+          image,
+          sellingPrice: product.sellingPrice,
+          mrp: product.mrp,
+          rating: product.rating,
+          reviewCount: product.reviewCount,
+          slug: product.slug || "",
+          stock: product.stock
+        });
+        wishlistBtn.setAttribute("aria-pressed", nowSaved ? "true" : "false");
+        wishlistBtn.classList.toggle("is-active", nowSaved);
       });
     }
 
-    if (!unavailable) {
-      const ctaMount = card.querySelector("[data-cta-mount]");
-      window.CartButtonUI && window.CartButtonUI.mount(ctaMount, {
-        productId: product.id,
-        title: safeTitle,
-        price: product.sellingPrice,
-        image: safeImage,
-        stock: product.stock
-      });
-    } else {
-      card.querySelector("[data-cta-mount]").innerHTML = `<button class="btn btn-outline btn-block" disabled>Out of Stock</button>`;
-    }
     return card;
   }
 
@@ -330,10 +338,14 @@ const ProductLoader = (function () {
       card.innerHTML = `
         <div class="skeleton skeleton--media"></div>
         <div class="product-card__body">
-          <div class="skeleton skeleton--line" style="width:40%;"></div>
-          <div class="skeleton skeleton--line" style="width:80%; height:1.1em;"></div>
-          <div class="skeleton skeleton--line" style="width:55%;"></div>
-          <div class="skeleton skeleton--line skeleton--btn"></div>
+          <div class="product-card__top-row">
+            <div class="skeleton skeleton--line" style="width:38%;"></div>
+            <div class="skeleton skeleton--line" style="width:28%;"></div>
+          </div>
+          <div class="skeleton skeleton--line" style="width:85%; height:1.1em;"></div>
+          <div class="skeleton skeleton--line" style="width:60%; height:1.1em;"></div>
+          <div class="skeleton skeleton--line" style="width:50%;"></div>
+          <div class="skeleton skeleton--line" style="width:35%;"></div>
         </div>`;
       container.appendChild(card);
     }

@@ -44,9 +44,15 @@
 <main>
   <div class="container">
     <section class="page-header">
-      <nav class="breadcrumb" id="category-breadcrumb" aria-label="Breadcrumb"><a href="/">Home</a> / Categories</nav>
-      <h1 id="category-title">All Categories</h1>
-      <p id="category-subtitle">Browse everything we carry.</p>
+      <nav class="breadcrumb" id="category-breadcrumb" aria-label="Breadcrumb">
+        <span class="skeleton skeleton--line" style="width:140px; display:inline-block; vertical-align:middle;"></span>
+      </nav>
+      <h1 id="category-title">
+        <span class="skeleton skeleton--line" style="width:220px; height:1.4em; display:inline-block; vertical-align:middle;"></span>
+      </h1>
+      <p id="category-subtitle">
+        <span class="skeleton skeleton--line" style="width:180px; display:inline-block; vertical-align:middle;"></span>
+      </p>
     </section>
 
     <div class="category-tiles" id="category-child-tiles" hidden></div>
@@ -67,6 +73,7 @@
 <script src="js/a2hs.js"></script>
     <script src="js/cart.js"></script>
     <script src="js/cart-button-ui.js"></script>
+<script src="js/wishlist.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
 <script src="js/product-loader.js"></script>
 <script src="js/category-loader.js"></script>

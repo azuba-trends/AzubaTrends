@@ -61,8 +61,10 @@
     const devModalText = document.getElementById("account-dev-modal-text");
     const devTriggers = [
       { el: document.getElementById("bottom-nav-account"), msg: "Accounts are currently in development — you can order without one." },
-      { el: document.getElementById("header-account-btn"), msg: "Accounts are currently in development — you can order without one." },
-      { el: document.getElementById("bottom-nav-wishlist"), msg: "Wishlist is coming soon — for now, items stay easy to find in your cart." }
+      { el: document.getElementById("header-account-btn"), msg: "Accounts are currently in development — you can order without one." }
+      // Wishlist now has a real page (backed by localStorage) — no longer
+      // routed through this "coming soon" notice, see partials/header.html
+      // and partials/footer.html.
     ];
     if (devModal) {
       devTriggers.forEach(({ el, msg }) => {

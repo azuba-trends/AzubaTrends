@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/images/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/images/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="/images/icons/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1F3A5F">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="AzubaTrends" id="apple-app-title-meta">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Your Wishlist - AzubaTrends</title>
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+
+<div id="header-mount"></div>
+
+<main class="container" style="padding: 32px 20px 60px; min-height: 60vh;">
+  <div class="section-heading-row" style="margin-top:0;">
+    <h2>Your Wishlist</h2>
+    <span id="wishlist-count-label" style="font-size:0.85rem; color:var(--color-muted);"></span>
+  </div>
+
+  <div id="wishlist-empty" class="empty-state" hidden>
+    <h2>Your wishlist is empty</h2>
+    <p>Tap the heart on any product to save it here — it stays saved on this device even after you refresh.</p>
+    <a href="/" class="btn btn-primary" style="margin-top: 16px;">Start Browsing</a>
+  </div>
+
+  <div class="product-grid" id="wishlist-grid" aria-live="polite"></div>
+</main>
+
+<div id="footer-mount"></div>
+
+<script src="js/site-config.js"></script>
+<script src="js/site-flags.js"></script>
+<script src="js/tracking.js"></script>
+<script src="js/security.js"></script>
+<script src="js/wishlist.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/loading-overlay.js"></script>
+<script src="js/a2hs.js"></script>
+<script src="js/cart.js"></script>
+<script src="js/cart-button-ui.js"></script>
+<script src="js/product-loader.js"></script>
+<script>
+  window.addEventListener("layout:ready", () => ProductLoader.initHeader());
+
+  document.addEventListener("DOMContentLoaded", async () => {
+    const grid = document.getElementById("wishlist-grid");
+    const emptyState = document.getElementById("wishlist-empty");
+    const countLabel = document.getElementById("wishlist-count-label");
+
+    async function render() {
+      const saved = window.Wishlist.getAll();
+      countLabel.textContent = saved.length ? `${saved.length} item${saved.length === 1 ? "" : "s"}` : "";
+
+      if (saved.length === 0) {
+        grid.innerHTML = "";
+        emptyState.hidden = false;
+        return;
+      }
+      emptyState.hidden = true;
+
+      // Skeletons first so the page never feels like it's just sitting
+      // blank while the (small, already-cached) product list loads.
+      ProductLoader.renderSkeletonGrid(grid, Math.min(saved.length, 6));
+
+      // Prefer live product data (current price/stock/rating) — fall back
+      // to the saved snapshot for anything that's since been removed from
+      // the catalog, so a wishlisted item never just vanishes silently.
+      let liveProducts = [];
+      try {
+        liveProducts = await ProductLoader.loadAllProducts();
+      } catch (err) {
+        console.error("Wishlist: failed to load live product data", err);
+      }
+      const liveById = new Map(liveProducts.map((p) => [String(p.id), p]));
+
+      grid.innerHTML = "";
+      saved.forEach((snap) => {
+        const product = liveById.get(String(snap.id)) || snap;
+        grid.appendChild(ProductLoader.renderProductCard(product));
+      });
+    }
+
+    window.addEventListener("wishlist:changed", render);
+    render();
+  });
+</script>
+</body>
+</html>

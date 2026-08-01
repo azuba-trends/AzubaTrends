@@ -31,8 +31,6 @@
           <a href="/terms#reviews-policy" role="menuitem">Reviews Policy</a>
         </div>
       </div>
-
-      <a href="#" id="become-seller-link">Become a Seller</a>
     </nav>
 
     <div class="header-icon-group">
@@ -42,6 +40,14 @@
       <button type="button" class="header-icon-btn" id="header-account-btn" aria-label="Account">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       </button>
+
+      <!-- Desktop-only wishlist entry point (mobile has its own tab in the
+           bottom nav) — links straight to the wishlist page, no "coming
+           soon" modal anymore now that it's backed by localStorage. -->
+      <a href="/wishlist" class="header-icon-btn header-icon-btn--wishlist" aria-label="View wishlist">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
+        <span class="header-icon-btn__badge" data-wishlist-count hidden>0</span>
+      </a>
 
       <!-- FIXED: Link to cart.html -->
       <a href="/cart" class="header-cart" aria-label="View cart">

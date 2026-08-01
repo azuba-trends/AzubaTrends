@@ -5,6 +5,12 @@ window.SITE_CONFIG = {
   logoUrl: "", 
   codExtraCharge: 30,
   upiAutoConfirmSeconds: 180,
+  // Single switch for the "offers" strip (FREE Delivery / Extra 10% OFF /
+  // Sustainable Picks cards). Hidden, not deleted — the markup + CSS stay
+  // in place on every page (mobile and desktop both), so flipping this
+  // one flag back to `true` brings it back everywhere with no other
+  // changes needed. See js/site-flags.js, which reads this on every page.
+  showOffers: false,
   // IMPORTANT: this MUST always have a value, even before the Firestore
   // settings doc has loaded (or if it fails to load). Previously there was
   // no default here at all — if settings/store_config didn't exist yet or

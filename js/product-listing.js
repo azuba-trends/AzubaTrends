@@ -168,10 +168,14 @@ const ProductListing = (function () {
         card.innerHTML = `
           <div class="skeleton skeleton--media"></div>
           <div class="product-card__body">
-            <div class="skeleton skeleton--line" style="width:40%;"></div>
-            <div class="skeleton skeleton--line" style="width:80%; height:1.1em;"></div>
-            <div class="skeleton skeleton--line" style="width:55%;"></div>
-            <div class="skeleton skeleton--line skeleton--btn"></div>
+            <div class="product-card__top-row">
+              <div class="skeleton skeleton--line" style="width:38%;"></div>
+              <div class="skeleton skeleton--line" style="width:28%;"></div>
+            </div>
+            <div class="skeleton skeleton--line" style="width:85%; height:1.1em;"></div>
+            <div class="skeleton skeleton--line" style="width:60%; height:1.1em;"></div>
+            <div class="skeleton skeleton--line" style="width:50%;"></div>
+            <div class="skeleton skeleton--line" style="width:35%;"></div>
           </div>`;
         frag.appendChild(card);
       }

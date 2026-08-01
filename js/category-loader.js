@@ -16,8 +16,41 @@ const CategoryLoader = (function () {
   let cached = null;
   let inFlight = null;
 
+  // Short-lived sessionStorage cache — the real fix for the visible
+  // breadcrumb/category loading delay, which was every single page load
+  // re-fetching the whole `categories` collection from Firestore from
+  // scratch. Within this TTL, navigating between category pages (or back
+  // to one already visited) reads from sessionStorage instead and renders
+  // instantly; the very first category page visited in a session still
+  // does one real fetch. Cleared automatically when the tab closes.
+  const SESSION_CACHE_KEY = "azuba_categories_cache_v1";
+  const SESSION_CACHE_TTL_MS = 5 * 60 * 1000;
+
+  function readSessionCache() {
+    try {
+      const raw = sessionStorage.getItem(SESSION_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || (Date.now() - parsed.savedAt) > SESSION_CACHE_TTL_MS) return null;
+      return parsed.categories;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function writeSessionCache(categories) {
+    try {
+      sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), categories }));
+    } catch (err) {
+      // Storage full/unavailable — fine, this cache is purely an
+      // optimization, everything still works without it.
+    }
+  }
+
   async function loadAllCategories() {
     if (cached) return cached;
+    const fromSession = readSessionCache();
+    if (fromSession) { cached = fromSession; return cached; }
     if (inFlight) return inFlight;
     inFlight = (async () => {
       try {
@@ -26,6 +59,7 @@ const CategoryLoader = (function () {
         const db = window.FirebaseApp.db;
         const snap = await getDocs(collection(db, "categories"));
         cached = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        writeSessionCache(cached);
         return cached;
       } catch (err) {
         console.error("CategoryLoader Error:", err);
@@ -34,6 +68,14 @@ const CategoryLoader = (function () {
       }
     })();
     return inFlight;
+  }
+
+  /** Call after an admin edit so the next page load doesn't serve a stale
+   *  cached tree — not wired up to anything yet (admin panel is next
+   *  update's work), just exposed for that to call later. */
+  function invalidateCache() {
+    cached = null;
+    try { sessionStorage.removeItem(SESSION_CACHE_KEY); } catch (err) {}
   }
 
   function computeFullPath(catId, byId) {
@@ -103,7 +145,7 @@ const CategoryLoader = (function () {
     return chain;
   }
 
-  const API = { loadAllCategories, buildTree, findByFullPath, getDescendantIds, breadcrumbChain };
+  const API = { loadAllCategories, buildTree, findByFullPath, getDescendantIds, breadcrumbChain, invalidateCache };
   window.CategoryLoader = API;
   return API;
 })();

@@ -31,12 +31,23 @@ const CategoryChips = (function () {
     return ICONS[key] || ICONS.default;
   }
 
-  function chipHTML(label, href, iconPath, isAll) {
+  // A category can optionally carry a custom icon (image URL) saved by the
+  // admin panel — checked under a couple of likely field names since that
+  // form doesn't have an icon field wired up yet. When present, it's shown
+  // in place of the default icon set below; everything else keeps working
+  // exactly the same either way.
+  function customIconUrl(c) {
+    return c.icon || c.iconUrl || c.image || null;
+  }
+
+  function chipHTML(label, href, iconPath, isAll, customIcon) {
+    const safeLabel = window.Security ? window.Security.escapeHTML(label) : label;
+    const iconMarkup = customIcon
+      ? `<img src="${customIcon}" alt="" loading="lazy">`
+      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${iconPath}</svg>`;
     return `<a class="category-chip${isAll ? " category-chip--all" : ""}" href="${href}">
-      <span class="category-chip__icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${iconPath}</svg>
-      </span>
-      <span class="category-chip__label">${label}</span>
+      <span class="category-chip__icon" aria-hidden="true">${iconMarkup}</span>
+      <span class="category-chip__label"><span class="category-chip__label-text">${safeLabel}</span></span>
     </a>`;
   }
 
@@ -59,17 +70,14 @@ const CategoryChips = (function () {
 
     if (!cats.length) { row.hidden = true; return; }
 
-    const MAX_VISIBLE = window.innerWidth < 768 ? 5 : 10;
-    const visible = cats.slice(0, MAX_VISIBLE);
-    const overflowCount = cats.length - visible.length;
-
+    // Show every real category the store actually has — no cap, no "More"
+    // overflow chip. The row itself scrolls horizontally (see
+    // .category-chip-row__inner in components.css) so this works fine
+    // whether there are 4 categories or 40.
     let html = chipHTML("All Categories", "/category", ICONS.default, true);
-    html += visible
-      .map((c) => chipHTML(c.name || c.slug, `/category/${c.fullPath || c.slug}`, iconFor(c.name || c.slug)))
+    html += cats
+      .map((c) => chipHTML(c.name || c.slug, `/category/${c.fullPath || c.slug}`, iconFor(c.name || c.slug), false, customIconUrl(c)))
       .join("");
-    if (overflowCount > 0) {
-      html += chipHTML("More", "/category", '<circle cx="6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/>');
-    }
 
     list.innerHTML = html;
     row.hidden = false;
