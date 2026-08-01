@@ -686,6 +686,29 @@ setTimeout(() => {
   });
   document.getElementById("cat-image").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("cat-image-preview"), 1));
 
+  // Existing (already-saved) category image preview, with a × remove
+  // button — same pattern as refreshFeaturePreview/refreshDeliveryLogoPreview
+  // above. Clearing this is what lets an admin remove a category icon
+  // entirely (previously there was no way to un-set one once uploaded —
+  // picking a new file was the only option).
+  function refreshCategoryImagePreview() {
+    const url = document.getElementById("cat-existing-image").value;
+    previewExistingImages(document.getElementById("cat-image-preview"), url ? [url] : [], () => {
+      document.getElementById("cat-existing-image").value = "";
+      document.getElementById("cat-image").value = "";
+      refreshCategoryImagePreview();
+      categoryDraft.scheduleSave();
+    });
+  }
+  // A newly chosen file should take over the preview from (and implicitly
+  // replace) whatever existing image was there — clear the "existing"
+  // pointer so submit doesn't get confused about which one wins, then
+  // show the freshly picked file's own preview via previewFileList as
+  // before.
+  document.getElementById("cat-image").addEventListener("change", (e) => {
+    if (e.target.files[0]) document.getElementById("cat-existing-image").value = "";
+  });
+
   const categoryDraft = setupSimpleFormDraft({
     formSelector: "#category-form",
     keyFn: () => `admin_draft:category:${document.getElementById("cat-id").value || "new"}`,
@@ -698,6 +721,7 @@ setTimeout(() => {
   function resetCategoryForm() {
     document.getElementById("category-form").reset();
     document.getElementById("cat-id").value = "";
+    document.getElementById("cat-existing-image").value = "";
     document.getElementById("cat-image-preview").innerHTML = "";
     document.getElementById("category-form-title").textContent = "Add New Category";
     populateParentCategoryDropdown();
@@ -914,7 +938,8 @@ setTimeout(() => {
     document.getElementById("cat-desc").value = cat.description || "";
     document.getElementById("cat-meta-title").value = cat.metaTitle || "";
     document.getElementById("cat-meta-desc").value = cat.metaDesc || "";
-    previewExistingImages(document.getElementById("cat-image-preview"), cat.image ? [cat.image] : []);
+    document.getElementById("cat-existing-image").value = cat.image || "";
+    refreshCategoryImagePreview();
     populateParentCategoryDropdown();
     document.getElementById("parent-cat-select").value = cat.parentId || "";
     document.getElementById("category-form-title").textContent = "Edit Category";
@@ -938,7 +963,14 @@ setTimeout(() => {
     btn.textContent = "Saving..."; btn.disabled = true;
     try {
       const id = document.getElementById("cat-id").value;
-      let image = categoriesList.find((c) => c.id === id)?.image || "";
+      // Reads from the existing-image hidden field, NOT categoriesList —
+      // that field is exactly what tracks "does this category still have
+      // an image right now" (cleared by the × remove button in
+      // refreshCategoryImagePreview, or by picking a new file). Reading
+      // categoriesList here would silently undo a remove, since the old
+      // image is still sitting in that in-memory list until the next
+      // Firestore sync.
+      let image = document.getElementById("cat-existing-image").value || "";
       const file = document.getElementById("cat-image").files[0];
       if (file) image = await uploadToImgBB(file);
 
