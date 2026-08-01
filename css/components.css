@@ -3,6 +3,12 @@
    ========================================================================== */
 
 /* ---------- Buttons ---------- */
+
+html {
+  scroll-behavior: smooth;
+}
+
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -2324,6 +2330,18 @@
   background: linear-gradient(115deg, #F3E7DD 0%, #EFDDCB 45%, #E7CBAE 100%);
 }
 
+.hero-banner__bg-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* Ensures image maintains aspect ratio and completely fills the section without stretching */
+  object-position: bottom; /* Image ka focal point center me rakhega */
+  z-index: 0; 
+}
+
+
 .hero-banner__decor {
   position: absolute;
   inset: 0;
@@ -2370,10 +2388,29 @@
 }
 
 @media (max-width: 767px) {
-  .hero-banner { min-height: 260px; margin-top: var(--space-4); }
-  .hero-banner__content { padding: var(--space-6) var(--space-4); max-width: 100%; }
-  .hero-banner__title { font-size: 1.5rem; }
-  .hero-banner__subtitle { font-size: 0.9rem; max-width: 30ch; }
+  /* 1. Banner ko fluid banaya taki text shrink na ho */
+  .hero-banner { 
+      min-height: auto; 
+      padding: 40px 20px; 
+      margin-top: var(--space-4); 
+      align-items: flex-start; 
+  }
+  
+  /* 2. Image ko mobile pe center me lane ka hack (Taki image gayab na ho) */
+  .hero-banner__bg-image {
+      object-position: 80% center !important; 
+  }
+
+  /* 3. Text container ki padding hatayi taki pura space use ho */
+  .hero-banner__content { 
+      padding: 0; 
+      max-width: 100%; 
+  }
+  
+  /* 4. Font sizes ko mobile ke hisaab se perfect scale kiya */
+  .hero-banner__eyebrow { font-size: 0.75rem; }
+  .hero-banner__title { font-size: 1.2rem; line-height: 1.2; margin-bottom: 12px; }
+  .hero-banner__subtitle { font-size: 0.65rem; line-height: 1.4; max-width: 70%; }
 }
 
 /* ---------- Promotional offers strip (horizontally scrollable, all
