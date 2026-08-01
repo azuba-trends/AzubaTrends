@@ -53,6 +53,28 @@ const CategoryLoader = (function () {
     if (fromSession) { cached = fromSession; return cached; }
     if (inFlight) return inFlight;
     inFlight = (async () => {
+      // Fast path first: /api/categories is the same edge-cached endpoint
+      // functions/api/list.js already serves for the rest of the site, so
+      // this is a plain fetch — no waiting on the Firebase SDK to
+      // initialize, no separate Firestore round trip from the browser,
+      // which is what caused the visible breadcrumb/category loading
+      // delay. Falls back to the old direct-Firestore read only if the API
+      // is unavailable (e.g. hosted somewhere without Pages Functions).
+      try {
+        const res = await fetch("/api/categories");
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.categories)) {
+            cached = data.categories;
+            writeSessionCache(cached);
+            return cached;
+          }
+        }
+        console.warn("CategoryLoader: /api/categories unavailable (status " + res.status + "), falling back to direct Firestore read.");
+      } catch (err) {
+        console.warn("CategoryLoader: /api/categories fetch failed, falling back to direct Firestore read.", err);
+      }
+
       try {
         while (!window.FirebaseApp) { await new Promise((r) => setTimeout(r, 100)); }
         const { collection, getDocs } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js");

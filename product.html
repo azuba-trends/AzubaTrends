@@ -361,11 +361,21 @@
 
       if (product.categoryId) {
         try {
-          const categories = await CategoryLoader.loadAllCategories();
-          const tree = CategoryLoader.buildTree(categories);
-          const node = tree.byId.get(product.categoryId);
-          if (node) {
-            const chain = CategoryLoader.breadcrumbChain(tree, node);
+          // Already resolved server-side by the fast /api/product lookup
+          // that found this product (see functions/api/product.js) — no
+          // second fetch, no wait, this paints in the same frame as the
+          // rest of the page. Only if that lookup didn't run (e.g. the
+          // slow full-catalog fallback path was used instead) do we fall
+          // back to CategoryLoader's own tree resolution below.
+          let chain = window.ProductLoader.getFastBreadcrumb(product);
+          if (!chain) {
+            const categories = await CategoryLoader.loadAllCategories();
+            const tree = CategoryLoader.buildTree(categories);
+            const node = tree.byId.get(product.categoryId);
+            chain = node ? CategoryLoader.breadcrumbChain(tree, node) : null;
+          }
+          if (chain && chain.length > 0) {
+            const node = chain[chain.length - 1];
             chain.forEach((n, i) => {
               if (i < chain.length - 1) {
                 const a = document.createElement("a");
