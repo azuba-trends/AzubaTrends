@@ -651,6 +651,15 @@
             </div>
           </div>
 
+          <div class="form-field full-width" style="border:1px solid var(--color-border); border-radius:8px; padding:12px;">
+            <label style="display:flex; align-items:center; gap:8px; font-weight:600;">
+              <input type="checkbox" id="prod-custom-availability">
+              Customize availability for this product
+            </label>
+            <p class="form-hint" style="margin-top:4px;">Off by default — the product follows its Brand's availability (or "everywhere in West Bengal" if the brand has none). Turn this on to set a specific availability just for this product, overriding the brand.</p>
+            <div id="prod-availability-mount" hidden style="margin-top:8px;"></div>
+          </div>
+
           <div class="form-field full-width upload-box">
             <div class="upload-box__title"><span class="upload-icon">🖼️</span> Feature Image <span class="field-hint" style="margin:0;">(main product photo, max 2MB)</span></div>
             <input type="file" id="prod-feature-img" accept="image/*">
@@ -702,6 +711,13 @@
     <!-- ============ STORE: ADD / EDIT CATEGORY ============ -->
     <div id="store-add-category" class="section">
       <h2 id="category-form-title">Add New Category</h2>
+      <div id="category-draft-banner" class="draft-restore-banner" style="display:none;">
+        <span id="category-draft-banner-text"></span>
+        <div style="display:flex; gap:8px;">
+          <button type="button" id="category-draft-restore-btn" class="btn btn-primary" style="padding:4px 12px; font-size:0.85rem;">Restore</button>
+          <button type="button" id="category-draft-discard-btn" class="btn btn-outline" style="padding:4px 12px; font-size:0.85rem;">Discard</button>
+        </div>
+      </div>
       <div class="card">
         <form id="category-form" class="form-grid">
           <input type="hidden" id="cat-id">
@@ -765,6 +781,13 @@
     <!-- ============ STORE: ADD / EDIT BRAND ============ -->
     <div id="store-add-brand" class="section">
       <h2 id="brand-form-title">Add New Brand</h2>
+      <div id="brand-draft-banner" class="draft-restore-banner" style="display:none;">
+        <span id="brand-draft-banner-text"></span>
+        <div style="display:flex; gap:8px;">
+          <button type="button" id="brand-draft-restore-btn" class="btn btn-primary" style="padding:4px 12px; font-size:0.85rem;">Restore</button>
+          <button type="button" id="brand-draft-discard-btn" class="btn btn-outline" style="padding:4px 12px; font-size:0.85rem;">Discard</button>
+        </div>
+      </div>
       <div class="card">
         <form id="brand-form" class="form-grid">
           <input type="hidden" id="brand-id">
@@ -792,6 +815,10 @@
             <div class="upload-box__title"><span class="upload-icon">🖼️</span> Brand Logo <span class="field-hint" style="margin:0;">(optional)</span></div>
             <input type="file" id="brand-image" accept="image/*">
             <div class="img-preview-row" id="brand-image-preview"></div>
+          </div>
+          <div class="form-field full-width">
+            <label>Availability <span class="field-hint" style="display:inline;">(which cities/pincodes this brand's products can be sold in — a product can override this individually)</span></label>
+            <div id="brand-availability-mount"></div>
           </div>
           <div class="form-field full-width" style="display: flex; gap: 10px;">
             <button type="submit" class="btn btn-primary" id="save-brand-btn">Save Brand</button>

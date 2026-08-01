@@ -255,6 +255,72 @@ export async function onRequestPost(context) {
       });
     }
 
+    // 1b. WHOLE-STORE geo check — this store only delivers within West
+    // Bengal (see config/geo-config.json). This was previously ONLY
+    // enforced client-side (checkout.js / js/geo-restriction.js), which
+    // means anyone could bypass it entirely by calling this API directly.
+    // env.ASSETS.fetch reads the same static config file Cloudflare Pages
+    // already serves — no Firestore read, no extra cost.
+    try {
+      const configRes = await env.ASSETS.fetch(new URL("/config/geo-config.json", request.url));
+      const geoConfig = await configRes.json();
+      const pinNum = parseInt(String(deliveryDetails.pincode || "").replace(/\D/g, ""), 10);
+      const inRange = (geoConfig.pincodeRanges || []).some((r) => pinNum >= r.min && pinNum <= r.max);
+      if (!pinNum || !inRange) {
+        return json({ error: "Sorry, we don't deliver to this pincode. We currently only ship within West Bengal." }, 400);
+      }
+    } catch (err) {
+      console.error("place-order: geo-config check failed, rejecting order to be safe:", err);
+      return json({ error: "Could not verify delivery availability right now. Please try again in a moment." }, 400);
+    }
+
+    // 1c. PER-PRODUCT / PER-BRAND availability — a product (or its whole
+    // brand) can be restricted to specific cities/pincodes even within
+    // West Bengal (set in the admin panel). Reuses the exact product docs
+    // already fetched above for price/stock (zero extra reads) and only
+    // fetches the DISTINCT brand docs this specific order actually needs
+    // (deduped — two items from the same brand = one read, not two), so
+    // this stays cheap on the Firestore free tier no matter how big the
+    // catalog is.
+    {
+      const orderPincode = String(deliveryDetails.pincode || "").replace(/\D/g, "");
+      const neededBrandIds = [...new Set(
+        Object.values(productsById)
+          .filter((p) => !p.hasCustomAvailability) // only need the brand if the product itself doesn't override
+          .map((p) => p.brandId)
+          .filter(Boolean)
+      )];
+      let brandsById = {};
+      if (neededBrandIds.length > 0) {
+        const brandDocs = await getAll(env, neededBrandIds.map((id) => `brands/${id}`));
+        neededBrandIds.forEach((id, i) => { if (brandDocs[i]) brandsById[id] = brandDocs[i]; });
+      }
+
+      function flattenAllowedPincodes(availability) {
+        const set = new Set();
+        Object.values((availability && availability.pincodesByCity) || {}).forEach((entry) => {
+          (entry.codes || []).forEach((c) => set.add(c));
+        });
+        return set;
+      }
+      function resolveAvailability(product) {
+        if (product.hasCustomAvailability && product.availability) return product.availability;
+        const brand = product.brandId ? brandsById[product.brandId] : null;
+        if (brand && brand.availability && !brand.availability.allCities) return brand.availability;
+        return { allCities: true };
+      }
+
+      for (const reqItem of items) {
+        const product = productsById[reqItem.productId];
+        if (!product) continue; // already rejected above if missing
+        const availability = resolveAvailability(product);
+        if (availability.allCities) continue;
+        if (!flattenAllowedPincodes(availability).has(orderPincode)) {
+          return json({ error: `"${product.title}" is not available for delivery to pincode ${orderPincode}. Please remove it from your cart or change your delivery pincode.` }, 400);
+        }
+      }
+    }
+
     // 2. Re-validate the coupon server-side, same rules coupon.js uses.
     // (Coupons collection is small and this mirrors the original's
     // case-insensitive-code matching, which a simple `where` equality

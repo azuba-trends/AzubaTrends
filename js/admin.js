@@ -134,8 +134,8 @@ setTimeout(() => {
 
       const fresh = e.currentTarget.dataset.freshForm;
       if (fresh === "product") { resetProductForm(); checkForProductDraft(); }
-      if (fresh === "category") resetCategoryForm();
-      if (fresh === "brand") resetBrandForm();
+      if (fresh === "category") { resetCategoryForm(); categoryDraft.checkDraft(); }
+      if (fresh === "brand") { resetBrandForm(); brandDraft.checkDraft(); }
       if (fresh === "coupon") resetCouponForm();
       if (fresh === "blogpost") resetBlogPostForm();
       if (fresh === "blogcategory") resetBlogCategoryForm();
@@ -686,12 +686,23 @@ setTimeout(() => {
   });
   document.getElementById("cat-image").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("cat-image-preview"), 1));
 
+  const categoryDraft = setupSimpleFormDraft({
+    formSelector: "#category-form",
+    keyFn: () => `admin_draft:category:${document.getElementById("cat-id").value || "new"}`,
+    bannerEl: document.getElementById("category-draft-banner"),
+    bannerTextEl: document.getElementById("category-draft-banner-text"),
+    restoreBtn: document.getElementById("category-draft-restore-btn"),
+    discardBtn: document.getElementById("category-draft-discard-btn")
+  });
+
   function resetCategoryForm() {
     document.getElementById("category-form").reset();
     document.getElementById("cat-id").value = "";
     document.getElementById("cat-image-preview").innerHTML = "";
     document.getElementById("category-form-title").textContent = "Add New Category";
     populateParentCategoryDropdown();
+    const banner = document.getElementById("category-draft-banner");
+    if (banner) banner.style.display = "none";
   }
 
   // ---- Tree helpers (id -> doc map, fullPath computation, descendants) ----
@@ -907,6 +918,7 @@ setTimeout(() => {
     populateParentCategoryDropdown();
     document.getElementById("parent-cat-select").value = cat.parentId || "";
     document.getElementById("category-form-title").textContent = "Edit Category";
+    categoryDraft.checkDraft();
     goToSection("store-add-category");
   }
 
@@ -966,6 +978,7 @@ setTimeout(() => {
       const latestDocs = categoriesList.filter((c) => c.id !== savedId).concat([{ id: savedId, ...data }]);
       await cascadeFullPathUpdate(savedId, latestDocs);
 
+      categoryDraft.clearDraft();
       resetCategoryForm();
       goToSection("store-categories");
     } catch (err) {
@@ -1122,20 +1135,314 @@ setTimeout(() => {
   }
 
   // ================================================================
+  // ================================================================
+  // AVAILABILITY PICKER — shared widget (Cities + Pincodes)
+  // ----------------------------------------------------------------
+  // Used by both the Brand form and the Product form's availability
+  // override. Cities come from config/geo-config.json's curated
+  // `allowedCities` list (static, no API call). Pincodes for a given
+  // city are fetched live from India Post's free public API
+  // (api.postalpincode.in — the same one already used elsewhere in
+  // this codebase) the first time that city is expanded, then cached
+  // in-memory for the rest of the admin session so re-opening the
+  // same city (in this form or another) never re-fetches.
+  //
+  // Stored shape on a brand/product doc:
+  //   {
+  //     allCities: boolean,
+  //     cities: string[],                 // only meaningful if !allCities
+  //     pincodesByCity: {
+  //       [cityName]: { all: boolean, codes: string[] }
+  //     }
+  //   }
+  // ================================================================
+  let wbCitiesCache = null;
+  async function loadWbCities() {
+    if (wbCitiesCache) return wbCitiesCache;
+    try {
+      const res = await fetch("/config/geo-config.json");
+      const cfg = await res.json();
+      wbCitiesCache = (cfg.allowedCities || []).slice().sort();
+    } catch (err) {
+      console.error("Could not load config/geo-config.json for the availability picker:", err);
+      wbCitiesCache = [];
+    }
+    return wbCitiesCache;
+  }
+
+  const pincodesByCityCache = new Map(); // cityName -> string[] (pincodes), shared across every picker instance this session
+  async function fetchPincodesForCity(cityName) {
+    if (pincodesByCityCache.has(cityName)) return pincodesByCityCache.get(cityName);
+    try {
+      const res = await fetch(`https://api.postalpincode.in/postoffice/${encodeURIComponent(cityName)}`);
+      const data = await res.json();
+      const offices = (data && data[0] && data[0].Status === "Success" && data[0].PostOffice) || [];
+      const codes = Array.from(new Set(
+        offices.filter((o) => (o.State || "").toLowerCase() === "west bengal").map((o) => o.Pincode)
+      )).sort();
+      pincodesByCityCache.set(cityName, codes);
+      return codes;
+    } catch (err) {
+      console.error(`Could not fetch pincodes for "${cityName}" from India Post API:`, err);
+      pincodesByCityCache.set(cityName, []);
+      return [];
+    }
+  }
+
+  // Builds the two-column widget inside `mountEl` and returns
+  // { getValue(), destroy() }. `initialValue` follows the stored shape
+  // above (or null/undefined for "not set yet" — defaults to allCities).
+  function createAvailabilityPicker(mountEl, initialValue, onChange) {
+    const notifyChange = typeof onChange === "function" ? onChange : () => {};
+    const state = {
+      allCities: initialValue ? !!initialValue.allCities : true,
+      cities: new Set(initialValue && !initialValue.allCities ? initialValue.cities || [] : []),
+      // cityName -> { all: boolean, codes: Set<string> }
+      pincodesByCity: new Map()
+    };
+    if (initialValue && initialValue.pincodesByCity) {
+      Object.entries(initialValue.pincodesByCity).forEach(([city, v]) => {
+        state.pincodesByCity.set(city, { all: !!v.all, codes: new Set(v.codes || []) });
+      });
+    }
+
+    mountEl.innerHTML = `
+      <div class="availability-picker">
+        <div class="availability-picker__col">
+          <div class="availability-picker__col-title">Cities</div>
+          <input type="text" class="availability-picker__search ap-city-search" placeholder="Search city...">
+          <div class="availability-picker__list ap-city-list">
+            <label class="availability-picker__all-row">
+              <input type="checkbox" class="ap-all-cities"> All Cities (everywhere in West Bengal)
+            </label>
+            <div class="ap-city-options"></div>
+          </div>
+        </div>
+        <div class="availability-picker__col">
+          <div class="availability-picker__col-title">Pincodes</div>
+          <input type="text" class="availability-picker__search ap-pincode-search" placeholder="Search pincode...">
+          <button type="button" class="ap-select-all-btn ap-select-all-pincodes">Select All Pincodes (in selected cities)</button>
+          <div class="availability-picker__list ap-pincode-sections"></div>
+        </div>
+      </div>`;
+
+    const allCitiesCb = mountEl.querySelector(".ap-all-cities");
+    const cityOptionsEl = mountEl.querySelector(".ap-city-options");
+    const citySearchEl = mountEl.querySelector(".ap-city-search");
+    const pincodeSearchEl = mountEl.querySelector(".ap-pincode-search");
+    const pincodeSectionsEl = mountEl.querySelector(".ap-pincode-sections");
+    const selectAllPincodesBtn = mountEl.querySelector(".ap-select-all-pincodes");
+
+    function citySelected(city) { return state.cities.has(city); }
+
+    function renderCityOptions(cities) {
+      cityOptionsEl.innerHTML = cities.map((city) => `
+        <label data-city="${esc(city)}">
+          <input type="checkbox" class="ap-city-cb" value="${esc(city)}" ${citySelected(city) ? "checked" : ""} ${state.allCities ? "disabled" : ""}>
+          ${esc(city)}
+        </label>`).join("");
+      cityOptionsEl.querySelectorAll(".ap-city-cb").forEach((cb) => {
+        cb.addEventListener("change", () => {
+          if (cb.checked) state.cities.add(cb.value); else { state.cities.delete(cb.value); state.pincodesByCity.delete(cb.value); }
+          renderPincodeSections();
+          notifyChange();
+        });
+      });
+    }
+
+    async function renderPincodeSections() {
+      if (state.allCities || state.cities.size === 0) {
+        pincodeSectionsEl.innerHTML = state.allCities
+          ? `<div class="ap-empty-note">All cities selected — every pincode in West Bengal is available, nothing to pick here.</div>`
+          : `<div class="ap-empty-note">Select at least one city on the left to choose its pincodes.</div>`;
+        return;
+      }
+      const cities = Array.from(state.cities).sort();
+      pincodeSectionsEl.innerHTML = cities.map((city) => `
+        <div class="ap-pincode-section" data-city="${esc(city)}">
+          <div class="ap-pincode-section__header">
+            <label><input type="checkbox" class="ap-city-select-all"> ${esc(city)} — Select All</label>
+          </div>
+          <div class="ap-pincode-section__loading">Loading pincodes...</div>
+          <div class="ap-pincode-section__list" hidden></div>
+        </div>`).join("");
+
+      for (const city of cities) {
+        const codes = await fetchPincodesForCity(city);
+        const sectionEl = pincodeSectionsEl.querySelector(`.ap-pincode-section[data-city="${CSS.escape(city)}"]`);
+        if (!sectionEl) continue; // city was deselected while this fetch was in flight
+        const loadingEl = sectionEl.querySelector(".ap-pincode-section__loading");
+        const listEl = sectionEl.querySelector(".ap-pincode-section__list");
+        const selectAllCb = sectionEl.querySelector(".ap-city-select-all");
+        const entry = state.pincodesByCity.get(city) || { all: false, codes: new Set() };
+        state.pincodesByCity.set(city, entry);
+
+        if (codes.length === 0) {
+          loadingEl.textContent = "No pincodes found for this city from India Post — you can still mark it fully available below.";
+          entry.all = true; // nothing to individually pick, so treat as fully available for this city
+          selectAllCb.checked = true;
+          continue;
+        }
+        loadingEl.hidden = true;
+        listEl.hidden = false;
+        listEl.innerHTML = codes.map((code) => `
+          <label data-code="${esc(code)}"><input type="checkbox" class="ap-pincode-cb" value="${esc(code)}" ${entry.codes.has(code) || entry.all ? "checked" : ""}> ${esc(code)}</label>
+        `).join("");
+        selectAllCb.checked = entry.all || codes.every((c) => entry.codes.has(c));
+
+        listEl.querySelectorAll(".ap-pincode-cb").forEach((cb) => {
+          cb.addEventListener("change", () => {
+            if (cb.checked) entry.codes.add(cb.value); else entry.codes.delete(cb.value);
+            entry.all = codes.every((c) => entry.codes.has(c));
+            selectAllCb.checked = entry.all;
+            notifyChange();
+          });
+        });
+        selectAllCb.addEventListener("change", () => {
+          entry.all = selectAllCb.checked;
+          if (selectAllCb.checked) codes.forEach((c) => entry.codes.add(c)); else entry.codes.clear();
+          listEl.querySelectorAll(".ap-pincode-cb").forEach((cb) => { cb.checked = selectAllCb.checked; });
+          notifyChange();
+        });
+      }
+    }
+
+    allCitiesCb.checked = state.allCities;
+    allCitiesCb.addEventListener("change", () => {
+      state.allCities = allCitiesCb.checked;
+      cityOptionsEl.querySelectorAll(".ap-city-cb").forEach((cb) => { cb.disabled = state.allCities; });
+      renderPincodeSections();
+      notifyChange();
+    });
+
+    citySearchEl.addEventListener("input", () => {
+      const q = citySearchEl.value.trim().toLowerCase();
+      cityOptionsEl.querySelectorAll("label[data-city]").forEach((lbl) => {
+        lbl.classList.toggle("is-hidden", q.length > 0 && !lbl.dataset.city.toLowerCase().includes(q));
+      });
+    });
+    pincodeSearchEl.addEventListener("input", () => {
+      const q = pincodeSearchEl.value.trim().toLowerCase();
+      pincodeSectionsEl.querySelectorAll("label[data-code]").forEach((lbl) => {
+        lbl.classList.toggle("is-hidden", q.length > 0 && !lbl.dataset.code.toLowerCase().includes(q));
+      });
+    });
+    selectAllPincodesBtn.addEventListener("click", () => {
+      pincodeSectionsEl.querySelectorAll(".ap-city-select-all").forEach((cb) => {
+        if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event("change")); }
+      });
+    });
+
+    loadWbCities().then((cities) => { renderCityOptions(cities); renderPincodeSections(); });
+
+    return {
+      getValue() {
+        const pincodesByCity = {};
+        state.pincodesByCity.forEach((v, city) => {
+          if (state.cities.has(city)) pincodesByCity[city] = { all: v.all, codes: Array.from(v.codes) };
+        });
+        return { allCities: state.allCities, cities: Array.from(state.cities), pincodesByCity };
+      },
+      destroy() { mountEl.innerHTML = ""; }
+    };
+  }
+
+  // ================================================================
+  // Generic auto-save draft helper for simpler forms (Brand, Category)
+  // — same localStorage pattern/safety as the Product form's bespoke
+  // version above, minus variant boxes / rich-text editors. Returns
+  // {scheduleSave, checkDraft, clearDraft} — call scheduleSave() on
+  // every input/change, checkDraft() when the form opens fresh or for
+  // edit, clearDraft() after a successful save.
+  // ================================================================
+  function setupSimpleFormDraft({ formSelector, keyFn, bannerEl, bannerTextEl, restoreBtn, discardBtn, serializeExtra, applyExtra }) {
+    const formEl = document.querySelector(formSelector);
+    let pendingDraft = null;
+    let saveTimer = null;
+
+    function serialize() {
+      const fields = {};
+      formEl.querySelectorAll("input[id], select[id], textarea[id]").forEach((el) => {
+        if (el.type === "file") return;
+        fields[el.id] = el.type === "checkbox" ? el.checked : el.value;
+      });
+      const draft = { savedAt: new Date().toISOString(), fields };
+      if (serializeExtra) Object.assign(draft, serializeExtra());
+      return draft;
+    }
+
+    function scheduleSave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => { safeLSSet(keyFn(), JSON.stringify(serialize())); }, 800);
+    }
+
+    function clearDraft(key) { safeLSRemove(key || keyFn()); if (bannerEl) bannerEl.style.display = "none"; }
+
+    function checkDraft() {
+      if (!bannerEl) return;
+      const raw = safeLSGet(keyFn());
+      if (!raw) { bannerEl.style.display = "none"; pendingDraft = null; return; }
+      try { pendingDraft = JSON.parse(raw); } catch (err) { safeLSRemove(keyFn()); bannerEl.style.display = "none"; pendingDraft = null; return; }
+      const time = pendingDraft.savedAt ? new Date(pendingDraft.savedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "";
+      if (bannerTextEl) bannerTextEl.textContent = `Aapka pichla unsaved kaam mila (${time}) — Restore karein ya Discard?`;
+      bannerEl.style.display = "flex";
+    }
+
+    formEl.addEventListener("input", scheduleSave);
+    formEl.addEventListener("change", scheduleSave);
+    if (restoreBtn) restoreBtn.addEventListener("click", () => {
+      if (!pendingDraft) return;
+      Object.entries(pendingDraft.fields || {}).forEach(([id, val]) => {
+        const el = document.getElementById(id);
+        if (!el || el.type === "file") return;
+        if (el.type === "checkbox") el.checked = !!val; else el.value = val;
+      });
+      if (applyExtra) applyExtra(pendingDraft);
+      bannerEl.style.display = "none";
+    });
+    if (discardBtn) discardBtn.addEventListener("click", () => clearDraft());
+
+    return { scheduleSave, checkDraft, clearDraft };
+  }
+
   // BRANDS
   // ================================================================
   let brandsList = [];
+  let brandAvailabilityPicker = null;
 
   document.getElementById("brand-name").addEventListener("input", (e) => {
     document.getElementById("brand-slug").value = generateSlug(e.target.value);
   });
   document.getElementById("brand-image").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("brand-image-preview"), 1));
 
+  const brandDraft = setupSimpleFormDraft({
+    formSelector: "#brand-form",
+    keyFn: () => `admin_draft:brand:${document.getElementById("brand-id").value || "new"}`,
+    bannerEl: document.getElementById("brand-draft-banner"),
+    bannerTextEl: document.getElementById("brand-draft-banner-text"),
+    restoreBtn: document.getElementById("brand-draft-restore-btn"),
+    discardBtn: document.getElementById("brand-draft-discard-btn"),
+    serializeExtra: () => ({ availability: brandAvailabilityPicker ? brandAvailabilityPicker.getValue() : null }),
+    applyExtra: (draft) => { if (draft.availability) mountBrandAvailabilityPicker(draft.availability); }
+  });
+
+  function mountBrandAvailabilityPicker(initialValue) {
+    if (brandAvailabilityPicker) brandAvailabilityPicker.destroy();
+    brandAvailabilityPicker = createAvailabilityPicker(
+      document.getElementById("brand-availability-mount"),
+      initialValue,
+      () => brandDraft.scheduleSave()
+    );
+  }
+
   function resetBrandForm() {
     document.getElementById("brand-form").reset();
     document.getElementById("brand-id").value = "";
     document.getElementById("brand-image-preview").innerHTML = "";
     document.getElementById("brand-form-title").textContent = "Add New Brand";
+    mountBrandAvailabilityPicker(null);
+    const banner = document.getElementById("brand-draft-banner");
+    if (banner) banner.style.display = "none";
   }
 
   let unsubBrands = null;
@@ -1153,10 +1460,11 @@ setTimeout(() => {
     const tbody = document.getElementById("brands-table-body");
     tbody.innerHTML = "";
     brandsList.forEach((b) => {
+      const restricted = b.availability && !b.availability.allCities;
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td><input type="checkbox" class="row-select" data-id="${b.id}"></td>
-        <td>${esc(b.name)}</td>
+        <td>${esc(b.name)}${restricted ? ' <span class="field-hint" style="display:inline; color:var(--color-accent-dark);">(restricted availability)</span>' : ""}</td>
         <td>/${esc(b.slug)}</td>
         <td>
           <button class="btn btn-outline edit-brand-btn" data-id="${b.id}" style="padding:4px 8px; font-size:0.8rem;">Edit</button>
@@ -1180,7 +1488,9 @@ setTimeout(() => {
     document.getElementById("brand-meta-title").value = b.metaTitle || "";
     document.getElementById("brand-meta-desc").value = b.metaDesc || "";
     previewExistingImages(document.getElementById("brand-image-preview"), b.image ? [b.image] : []);
+    mountBrandAvailabilityPicker(b.availability || null);
     document.getElementById("brand-form-title").textContent = "Edit Brand";
+    brandDraft.checkDraft();
     goToSection("store-add-brand");
   }
 
@@ -1205,6 +1515,7 @@ setTimeout(() => {
         metaTitle: document.getElementById("brand-meta-title").value,
         metaDesc: document.getElementById("brand-meta-desc").value,
         image: image,
+        availability: brandAvailabilityPicker ? brandAvailabilityPicker.getValue() : { allCities: true, cities: [], pincodesByCity: {} },
         updatedAt: new Date().toISOString()
       };
 
@@ -1215,6 +1526,7 @@ setTimeout(() => {
         data.createdAt = new Date().toISOString();
         await addDoc(collection(db, "brands"), data);
       }
+      brandDraft.clearDraft();
       resetBrandForm();
       goToSection("store-brands");
     } catch (err) {
@@ -1406,6 +1718,22 @@ setTimeout(() => {
   // PRODUCTS
   // ================================================================
   let productsList = [];
+  let productAvailabilityPicker = null;
+
+  function mountProductAvailabilityPicker(initialValue) {
+    if (productAvailabilityPicker) productAvailabilityPicker.destroy();
+    productAvailabilityPicker = createAvailabilityPicker(
+      document.getElementById("prod-availability-mount"),
+      initialValue,
+      () => scheduleProductDraftSave()
+    );
+  }
+
+  document.getElementById("prod-custom-availability").addEventListener("change", (e) => {
+    document.getElementById("prod-availability-mount").hidden = !e.target.checked;
+    if (e.target.checked && !productAvailabilityPicker) mountProductAvailabilityPicker(null);
+    scheduleProductDraftSave();
+  });
 
   document.getElementById("prod-name").addEventListener("input", (e) => {
     document.getElementById("prod-slug").value = generateSlug(e.target.value);
@@ -1748,6 +2076,9 @@ setTimeout(() => {
     document.getElementById("variant-sizes-input").value = "";
     document.getElementById("variant-colors-input").value = "";
     document.getElementById("variant-sync-wrap").style.display = "none";
+    document.getElementById("prod-custom-availability").checked = false;
+    document.getElementById("prod-availability-mount").hidden = true;
+    if (productAvailabilityPicker) { productAvailabilityPicker.destroy(); productAvailabilityPicker = null; }
     renderSeoChecklist();
     updateProductPricePreview();
   }
@@ -2052,6 +2383,11 @@ setTimeout(() => {
       if (p.hasVariants) populateVariantBoxesForParent(id);
     }
 
+    document.getElementById("prod-custom-availability").checked = !!p.hasCustomAvailability;
+    document.getElementById("prod-availability-mount").hidden = !p.hasCustomAvailability;
+    if (p.hasCustomAvailability) mountProductAvailabilityPicker(p.availability || null);
+    else if (productAvailabilityPicker) { productAvailabilityPicker.destroy(); productAvailabilityPicker = null; }
+
     document.getElementById("product-form-title").textContent = p.isVariant ? `Edit "${p.color || ""}"` : "Edit Product";
     renderSeoChecklist();
     checkForProductDraft();
@@ -2218,6 +2554,15 @@ setTimeout(() => {
         // related-products) keep working untouched.
         categoryId: (categoriesList.find((c) => c.name === document.getElementById("prod-category").value) || {}).id || "",
         brand: document.getElementById("prod-brand").value,
+        // brandId + availability: needed by the server-side pincode/city
+        // availability check at checkout (functions/api/place-order.js) —
+        // brand is still stored by name above for backward compat with
+        // existing name-based filters.
+        brandId: (brandsList.find((b) => b.name === document.getElementById("prod-brand").value) || {}).id || "",
+        hasCustomAvailability: document.getElementById("prod-custom-availability").checked,
+        availability: document.getElementById("prod-custom-availability").checked && productAvailabilityPicker
+          ? productAvailabilityPicker.getValue()
+          : null,
         mrp: Number(document.getElementById("prod-mrp").value) || 0,
         sellingPrice: Number(document.getElementById("prod-price").value) || 0,
         costPrice: Number(document.getElementById("prod-cost-price").value) || 0,
@@ -2708,7 +3053,10 @@ setTimeout(() => {
       fields,
       shortDescriptionHTML: sdRTE.getHTML(),
       descriptionHTML: ldRTE.getHTML(),
-      variantBoxes: serializeVariantBoxesForDraft()
+      variantBoxes: serializeVariantBoxesForDraft(),
+      availability: (document.getElementById("prod-custom-availability").checked && productAvailabilityPicker)
+        ? productAvailabilityPicker.getValue()
+        : null
     };
   }
 
@@ -2734,6 +3082,11 @@ setTimeout(() => {
     restoreVariantBoxesFromDraft(draft.variantBoxes || []);
     const showVariants = document.getElementById("prod-has-variants").checked || document.getElementById("prod-is-variant").value === "1";
     document.getElementById("variants-section").style.display = showVariants ? "" : "none";
+
+    document.getElementById("prod-availability-mount").hidden = !document.getElementById("prod-custom-availability").checked;
+    if (document.getElementById("prod-custom-availability").checked) mountProductAvailabilityPicker(draft.availability || null);
+    else if (productAvailabilityPicker) { productAvailabilityPicker.destroy(); productAvailabilityPicker = null; }
+
     updateProductPricePreview();
     renderSeoChecklist();
     document.getElementById("product-save-status").textContent = "Draft restored — naye select ki gayi image files dobara select karni hongi.";

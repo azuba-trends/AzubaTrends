@@ -83,6 +83,22 @@
             <strong id="delivery-partner-name"></strong>
           </div>
 
+          <!-- Check Delivery Date & Availability — placed above the action
+               buttons so the "not available at your location" status is
+               impossible to miss before someone tries to buy. -->
+          <div class="pdp-sidebar-card" id="delivery-checker-card">
+            <div class="pdp-sidebar-card__title">Check Delivery Date &amp; Availability</div>
+            <div class="delivery-checker__row">
+              <input type="text" id="delivery-pincode-input" placeholder="Enter delivery pincode" inputmode="numeric" maxlength="6" aria-label="Delivery pincode">
+              <button type="button" class="btn btn-outline" id="delivery-pincode-check-btn">Check</button>
+            </div>
+            <button type="button" class="btn-link" id="delivery-detect-location-btn" style="margin-top:6px; font-size:0.85rem;">📍 Use my current location</button>
+            <p class="form-hint">This is just a quick check — your address is confirmed again at checkout.</p>
+            <div class="delivery-checker__result" id="delivery-checker-result"></div>
+          </div>
+
+          <div id="availability-status" class="availability-status" hidden></div>
+
           <div class="product-info__actions" id="product-actions">
             <div id="add-to-cart-mount" style="flex: 1; min-width: 140px;"></div>
             <button type="button" id="buy-now-btn" class="btn btn-primary">Buy Now</button>
@@ -111,17 +127,6 @@
                 <div class="sold-by-row__note">Seller profile page coming soon.</div>
               </div>
             </div>
-          </div>
-
-          <!-- Check Delivery Date & Availability -->
-          <div class="pdp-sidebar-card" id="delivery-checker-card">
-            <div class="pdp-sidebar-card__title">Check Delivery Date &amp; Availability</div>
-            <div class="delivery-checker__row">
-              <input type="text" id="delivery-pincode-input" placeholder="Enter delivery pincode" inputmode="numeric" maxlength="6" aria-label="Delivery pincode">
-              <button type="button" class="btn btn-outline" id="delivery-pincode-check-btn">Check</button>
-            </div>
-            <p class="form-hint">This is just a quick check — your address is confirmed again at checkout.</p>
-            <div class="delivery-checker__result" id="delivery-checker-result"></div>
           </div>
 
           <!-- Reviews — moved into the right column, Meesho-style. -->
@@ -229,6 +234,7 @@
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
 <script src="/js/product-loader.js"></script>
 <script src="/js/category-loader.js"></script>
+<script src="/js/availability.js"></script>
 <script src="/js/search.js"></script>
 <script src="/js/geo-restriction.js"></script>
 <script src="/js/reviews.js"></script>
@@ -957,6 +963,9 @@
       const input = document.getElementById("delivery-pincode-input");
       const btn = document.getElementById("delivery-pincode-check-btn");
       const resultEl = document.getElementById("delivery-checker-result");
+      const detectBtn = document.getElementById("delivery-detect-location-btn");
+      const statusEl = document.getElementById("availability-status");
+      const LAST_PINCODE_KEY = "azuba_last_pincode";
 
       // Rough district -> dispatch/transit estimate. This store only
       // ships within West Bengal (see config/geo-config.json) — Kolkata
@@ -977,6 +986,26 @@
         const from = new Date(); from.setDate(from.getDate() + dispatchDays + transitMin);
         const to = new Date(); to.setDate(to.getDate() + dispatchDays + transitMax);
         return { dispatchDays, from: fmt(from), to: fmt(to) };
+      }
+
+      // Toggles Add to Cart / Buy Now based on THIS product's (or its
+      // brand's) availability at the given pincode — the whole-store WB
+      // check and stock check are separate and already block the buttons
+      // via their own paths above/below this.
+      function setProductAvailableUI(available, pin) {
+        const buyNowBtn = document.getElementById("buy-now-btn");
+        const addToCartBtn = document.querySelector("#add-to-cart-mount button");
+        if (available) {
+          statusEl.hidden = true;
+          if (buyNowBtn) { buyNowBtn.disabled = false; buyNowBtn.removeAttribute("aria-disabled"); }
+          if (addToCartBtn) { addToCartBtn.disabled = false; addToCartBtn.removeAttribute("aria-disabled"); }
+        } else {
+          statusEl.hidden = false;
+          statusEl.className = "availability-status availability-status--unavailable";
+          statusEl.innerHTML = `<span>🚫</span><span>Sorry — this product is not available for delivery to pincode <strong>${Security.escapeHTML(pin)}</strong>. It can't be added to cart until you check a serviceable pincode.</span>`;
+          if (buyNowBtn) { buyNowBtn.disabled = true; buyNowBtn.setAttribute("aria-disabled", "true"); }
+          if (addToCartBtn) { addToCartBtn.disabled = true; addToCartBtn.setAttribute("aria-disabled", "true"); }
+        }
       }
 
       async function runCheck() {
@@ -1016,10 +1045,16 @@
         btn.disabled = false;
         btn.textContent = originalLabel;
 
+        // Remember the last pincode the shopper checked — cart.html and
+        // checkout.js reuse this so they don't have to ask again, and can
+        // re-validate every item against it.
+        try { localStorage.setItem(LAST_PINCODE_KEY, pin); } catch (err) { /* ignore — private browsing/quota */ }
+
         if (!serviceable) {
           resultEl.dataset.status = "error";
           resultEl.innerHTML = `<p class="delivery-checker__headline">Sorry, we don't deliver to this pincode yet.</p>`;
           resultEl.classList.add("is-visible");
+          setProductAvailableUI(false, pin);
           return;
         }
 
@@ -1032,6 +1067,13 @@
           return;
         }
 
+        // Product/brand-level availability — separate from the whole-store
+        // WB check above. A product can be perfectly serviceable pincode-
+        // wise (in WB) but still restricted to only a subset of cities.
+        const productAvailable = await Availability.isProductAvailableAt(product, pin);
+        setProductAvailableUI(productAvailable, pin);
+        if (!productAvailable) return;
+
         const est = estimateWindow(district);
         resultEl.dataset.status = "ok";
         resultEl.innerHTML = `
@@ -1043,6 +1085,30 @@
 
       btn.addEventListener("click", runCheck);
       input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); runCheck(); } });
+
+      detectBtn.addEventListener("click", async () => {
+        const originalLabel = detectBtn.textContent;
+        detectBtn.disabled = true;
+        detectBtn.textContent = "Detecting...";
+        const pin = await Availability.detectPincodeFromLocation();
+        detectBtn.disabled = false;
+        detectBtn.textContent = originalLabel;
+        if (!pin) {
+          alert("Couldn't detect your location. Please allow location access, or enter your pincode manually.");
+          return;
+        }
+        input.value = pin;
+        runCheck();
+      });
+
+      // If the shopper already checked a pincode earlier (this session or
+      // a past visit), pre-fill and silently re-check it here too — so
+      // Add to Cart / Buy Now reflect this product's real availability
+      // immediately, without making them type it again on every page.
+      try {
+        const savedPin = localStorage.getItem(LAST_PINCODE_KEY);
+        if (savedPin) { input.value = savedPin; runCheck(); }
+      } catch (err) { /* ignore */ }
     })();
 
     // ---- SEO: Structured Data (Schema.org Product) -------------------

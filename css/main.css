@@ -95,8 +95,6 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
-  max-width: 100vw;
   overflow-wrap: break-word;
   word-wrap: break-word;
   /* Room for the fixed mobile bottom nav; removed at desktop widths. */

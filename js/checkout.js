@@ -399,6 +399,36 @@
 
       if (hasError) return;
 
+      // Persist so cart.html / product pages stay in sync with whatever
+      // pincode checkout itself was just validated against.
+      try { localStorage.setItem('azuba_last_pincode', pin); } catch (err) { /* ignore */ }
+
+      // Final client-side gate: every cart item's own (or its brand's)
+      // availability, re-checked against THIS pincode right now — a
+      // product could have been added to cart before any pincode was
+      // checked at all, or the shopper could have typed a different
+      // pincode here than they checked earlier on the product page.
+      // ProductLoader.getProductById reads from the cheap /api/products
+      // endpoint, not a direct Firestore read, so this doesn't touch the
+      // Firestore free-tier quota. This is still just client-side UX —
+      // functions/api/place-order.js re-checks authoritatively server-side
+      // no matter what happens here.
+      const cartItems = window.Cart.getItems();
+      const unavailableTitles = [];
+      await Promise.all(cartItems.map(async (item) => {
+        try {
+          const product = await window.ProductLoader.getProductById(item.productId);
+          const available = product ? await window.Availability.isProductAvailableAt(product, pin) : true;
+          if (!available) unavailableTitles.push(item.title);
+        } catch (err) {
+          console.error('Availability re-check failed for cart item:', item.productId, err);
+        }
+      }));
+      if (unavailableTitles.length > 0) {
+        showFieldError('error-pincode', `Not deliverable to this pincode: ${unavailableTitles.join(', ')}. Remove ${unavailableTitles.length > 1 ? 'these items' : 'this item'} from your cart or use a different pincode.`);
+        return;
+      }
+
       deliveryDetails = {
         name: Security.escapeHTML(name),
         phone,
@@ -411,6 +441,8 @@
 
       $('delivery-section').hidden = true;
       $('payment-section').hidden = false;
+      if (window.CheckoutProgress) CheckoutProgress.render(document.getElementById('checkout-progress-mount'), 2);
+      window.scrollTo(0, 0);
       Security.setTextSafely($('payment-order-id-note'), 'Order ID: ' + currentOrderId);
       renderSummary();
     });
@@ -692,6 +724,8 @@
 
       $('payment-section').hidden = true;
       $('confirmation-section').hidden = false;
+      if (window.CheckoutProgress) CheckoutProgress.render(document.getElementById('checkout-progress-mount'), 3);
+      window.scrollTo(0, 0);
       if ($('summary-aside')) $('summary-aside').style.display = 'none';
       Security.setTextSafely($('confirmation-order-id'), currentOrderId);
       
@@ -738,6 +772,7 @@
   }
 
   window.addEventListener('DOMContentLoaded', async () => {
+    window.scrollTo(0, 0);
     renderPageVisibility();
     window.addEventListener('cart:updated', () => {
       renderPageVisibility();
@@ -764,6 +799,7 @@
     }
 
     initUI(geoConfig);
+    if (window.CheckoutProgress) CheckoutProgress.render(document.getElementById('checkout-progress-mount'), 1);
     wireDeliveryForm(geoConfig);
     wirePaymentSelection();
     wireScreenshotUpload();

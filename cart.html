@@ -42,6 +42,7 @@
 <div id="header-mount"></div>
 
 <main class="container" style="padding: 40px 20px; min-height: 60vh;">
+  <div id="checkout-progress-mount"></div>
   <h1>Your Shopping Cart</h1>
   
   <div id="empty-cart-msg" style="display: none; text-align: center; margin-top: 50px;">
@@ -49,6 +50,8 @@
     <p>Looks like you haven't added anything yet.</p>
     <a href="/" class="btn btn-primary" style="margin-top: 20px;">Continue Shopping</a>
   </div>
+
+  <div id="cart-availability-banner" class="availability-status availability-status--unavailable" hidden style="margin-top: 16px;"></div>
 
   <div class="cart-page-grid" id="cart-content" style="display: none;">
     <!-- Left Side: Items -->
@@ -94,8 +97,11 @@
 <script src="js/cart.js"></script>
 <script src="js/coupon.js"></script>
 <script src="js/product-loader.js"></script>
+<script src="js/availability.js"></script>
+<script src="js/checkout-progress.js"></script>
 <script>
   window.addEventListener("layout:ready", () => ProductLoader.initHeader());
+  CheckoutProgress.render(document.getElementById("checkout-progress-mount"), 0);
 
   document.addEventListener("DOMContentLoaded", () => {
     let appliedDiscount = 0;
@@ -124,13 +130,14 @@
           ? `<p style="margin:2px 0; font-size:0.85rem; color:var(--color-ink-soft);">${Security.escapeHTML([item.size, item.color].filter(Boolean).join(" / "))}</p>`
           : '';
         container.innerHTML += `
-          <div class="cart-item">
+          <div class="cart-item" data-product-id="${Security.escapeHTML(item.productId)}">
             <img src="${safeImage}" alt="Product">
             <div class="cart-item-details">
               <div>
                 <h3 style="margin: 0; font-size: 1.2rem;">${safeTitle}</h3>
                 ${variantLine}
                 <p style="margin: 5px 0; font-weight: bold; color: var(--color-primary);">₹${item.price}</p>
+                <p class="cart-item-unavailable-tag" hidden style="color:var(--color-danger); font-size:0.82rem; font-weight:600;"></p>
               </div>
               <div class="qty-controls">
                 <button class="qty-btn" onclick="updateQty('${item.productId}', -1)">-</button>
@@ -145,6 +152,50 @@
       });
 
       calculateTotals();
+      validateCartAvailability();
+    }
+
+    // Re-checks every cart item against the pincode the shopper last
+    // checked on a product page (see product.html's delivery checker) —
+    // if none is saved yet, this is skipped entirely and checkout stays
+    // open (the hard, final gate is checkout.js + the server, not here).
+    // Uses ProductLoader.getProductById, which reads from the cheap
+    // /api/products endpoint (not a direct Firestore read), so this never
+    // adds to the Firestore free-tier quota.
+    async function validateCartAvailability() {
+      const banner = document.getElementById("cart-availability-banner");
+      const checkoutBtn = document.getElementById("checkout-btn");
+      let pin;
+      try { pin = localStorage.getItem("azuba_last_pincode"); } catch (err) { pin = null; }
+      if (!pin) { banner.hidden = true; checkoutBtn.disabled = false; return; }
+
+      const items = window.Cart.getItems();
+      const unavailableTitles = [];
+      await Promise.all(items.map(async (item) => {
+        const rowEl = document.querySelector(`.cart-item[data-product-id="${CSS.escape(item.productId)}"]`);
+        const tagEl = rowEl ? rowEl.querySelector(".cart-item-unavailable-tag") : null;
+        try {
+          const product = await ProductLoader.getProductById(item.productId);
+          const available = product ? await Availability.isProductAvailableAt(product, pin) : true;
+          if (!available) {
+            unavailableTitles.push(item.title);
+            if (tagEl) { tagEl.hidden = false; tagEl.textContent = `🚫 Not available at pincode ${pin}`; }
+          } else if (tagEl) {
+            tagEl.hidden = true;
+          }
+        } catch (err) {
+          console.error("Availability re-check failed for cart item:", item.productId, err);
+        }
+      }));
+
+      if (unavailableTitles.length > 0) {
+        banner.hidden = false;
+        banner.innerHTML = `<span>🚫</span><span>${unavailableTitles.length} item${unavailableTitles.length > 1 ? "s" : ""} in your cart ${unavailableTitles.length > 1 ? "aren't" : "isn't"} available at pincode <strong>${Security.escapeHTML(pin)}</strong>. Remove ${unavailableTitles.length > 1 ? "them" : "it"} or check a different pincode on the product page before checkout.</span>`;
+        checkoutBtn.disabled = true;
+      } else {
+        banner.hidden = true;
+        checkoutBtn.disabled = false;
+      }
     }
 
     window.updateQty = (id, change) => {

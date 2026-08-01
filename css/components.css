@@ -1837,3 +1837,187 @@
   background: var(--color-surface-sunken, #F2EEE5);
 }
 .category-tile span { font-weight: 600; font-size: 0.92rem; }
+
+/* ============================================================
+   Admin: Availability picker (Cities + Pincodes) — shared widget
+   used by both the Brand form and the Product form's availability
+   override section.
+   ============================================================ */
+.availability-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+}
+@media (max-width: 720px) {
+  .availability-picker { grid-template-columns: 1fr; }
+}
+.availability-picker__col {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.availability-picker__col-title {
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 10px 12px 4px;
+}
+.availability-picker__search {
+  margin: 0 12px 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+.availability-picker__list {
+  overflow-y: auto;
+  max-height: 260px;
+  padding: 0 12px 12px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 8px;
+}
+.availability-picker__list label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 2px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.availability-picker__all-row {
+  font-weight: 600;
+  border-bottom: 1px dashed var(--color-border);
+  margin-bottom: 6px;
+  padding-bottom: 8px !important;
+}
+.availability-picker__list label.is-hidden { display: none; }
+.availability-picker__list input:disabled ~ span,
+.availability-picker__list label.is-disabled { opacity: 0.5; }
+.ap-pincode-section {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.ap-pincode-section__header {
+  background: var(--color-surface-sunken);
+  padding: 6px 8px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ap-pincode-section__list { padding: 4px 8px; }
+.ap-pincode-section__loading { padding: 8px; font-size: 0.8rem; color: var(--color-muted); }
+.ap-select-all-btn {
+  margin: 0 12px 8px;
+  font-size: 0.78rem;
+  background: none;
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+.ap-empty-note { padding: 10px 12px; font-size: 0.8rem; color: var(--color-muted); }
+
+/* ============================================================
+   Storefront: product-level availability status (above Add to
+   Cart / Buy Now) + a compact 3-step progress bar for the
+   Cart -> Checkout -> Payment flow.
+   ============================================================ */
+.availability-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  margin-bottom: var(--space-3);
+}
+.availability-status--unavailable {
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger);
+}
+.availability-status--available {
+  background: var(--color-success-tint);
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
+}
+
+.checkout-progress {
+  display: flex;
+  align-items: center;
+  max-width: var(--max-width);
+  margin: 0 auto var(--space-4);
+  padding: var(--space-3) var(--space-4) 0;
+}
+.checkout-progress__step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+.checkout-progress__step:last-child { flex: 0; }
+.checkout-progress__circle {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: var(--color-surface-sunken);
+  color: var(--color-muted);
+  border: 2px solid var(--color-border);
+  flex-shrink: 0;
+}
+.checkout-progress__label {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+.checkout-progress__line {
+  flex: 1;
+  height: 2px;
+  background: var(--color-border);
+  margin: 0 4px;
+}
+.checkout-progress__step.is-done .checkout-progress__circle,
+.checkout-progress__step.is-current .checkout-progress__circle {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+.checkout-progress__step.is-done .checkout-progress__label,
+.checkout-progress__step.is-current .checkout-progress__label {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+.checkout-progress__step.is-done .checkout-progress__line,
+.checkout-progress__step.is-current ~ .checkout-progress__step .checkout-progress__line {
+  background: var(--color-border);
+}
+.checkout-progress__step.is-done + .checkout-progress__line,
+.checkout-progress__line.is-done {
+  background: var(--color-primary);
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+.btn-link:hover { color: var(--color-primary-dark); }
+.btn-link:disabled { opacity: 0.6; cursor: default; }
