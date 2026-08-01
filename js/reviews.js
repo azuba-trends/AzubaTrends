@@ -85,13 +85,13 @@ const Reviews = (function () {
     return "poor";
   }
 
-  // Maps a rating tier to the same red/orange/green scale used
-  // elsewhere on the site (oos-pill = danger, low-stock-pill = accent).
+  // Maps a rating tier to a clear green (4-5★) / yellow (3★) / red (1-2★)
+  // scale so the badge color actually reflects the star count at a glance,
+  // instead of everything except 1★ looking the same.
   function badgeTierClass(tier) {
-    if (tier === "excellent" || tier === "verygood") return "good"; // green badge (CSS default)
-    if (tier === "good") return "good";
-    if (tier === "average") return "good";
-    return "poor";
+    if (tier === "excellent" || tier === "verygood") return "great"; // 4-5★ → green (CSS default)
+    if (tier === "good") return "okay"; // 3★ → yellow
+    return "poor"; // average(2★)/poor(1★) → red
   }
 
   function renderStars(container, value, max = 5) {
@@ -251,7 +251,7 @@ const Reviews = (function () {
       const pct = total > 0 ? (count / total) * 100 : 0;
       const row = document.createElement("div");
       row.className = "reviews-summary__bar-row";
-      row.dataset.tier = tier === "excellent" || tier === "verygood" ? "great" : tier;
+      row.dataset.tier = (tier === "excellent" || tier === "verygood") ? "great" : (tier === "good" ? "okay" : "poor");
       row.innerHTML = `
         <span>${label}</span>
         <span class="reviews-summary__bar-track"><span class="reviews-summary__bar-fill" style="width:${pct}%"></span></span>

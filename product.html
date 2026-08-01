@@ -48,10 +48,12 @@
       <div class="product-detail">
         <!-- Gallery -->
         <div>
-          <div class="gallery__main" id="gallery-main">
-            <img id="gallery-main-img" src="" alt="">
+          <div class="gallery__stage">
+            <div class="gallery__thumbs" id="gallery-thumbs"></div>
+            <div class="gallery__main" id="gallery-main">
+              <img id="gallery-main-img" src="" alt="">
+            </div>
           </div>
-          <div class="gallery__thumbs" id="gallery-thumbs"></div>
           <div id="gallery-color-variants" class="gallery-color-variants" hidden></div>
         </div>
 
@@ -60,7 +62,7 @@
              short description, Sold By, delivery checker, and finally
              Ratings & Reviews. -->
         <div>
-          <div class="product-info__brand" id="product-brand" hidden></div>
+          <a class="product-info__brand" id="product-brand" href="#" hidden></a>
           <div class="product-info__category" id="product-category"></div>
           <h1 class="product-info__title" id="product-title"></h1>
 
@@ -114,7 +116,10 @@
             <p class="notify-me-status" id="notify-me-status"></p>
           </div>
 
-          <p class="product-info__short" id="product-short-desc"></p>
+          <div class="product-info__short-wrap" id="product-short-desc-wrap">
+            <p class="product-info__short" id="product-short-desc"></p>
+            <button type="button" class="product-info__short-toggle" id="product-short-desc-toggle" hidden>Show more</button>
+          </div>
 
           <!-- Sold By (demo — a real seller-profile page can replace this
                later; for now it just names the store). -->
@@ -123,9 +128,34 @@
             <div class="sold-by-row">
               <span class="sold-by-row__icon" id="sold-by-initial">A</span>
               <div>
-                <div class="sold-by-row__name" id="sold-by-name">AzubaTrends</div>
+                <div class="sold-by-row__name">
+                  <span id="sold-by-name">AzubaTrends</span>
+                  <span class="sold-by-verified-badge" id="sold-by-verified-badge">✔ Verified</span>
+                </div>
                 <div class="sold-by-row__note">Seller profile page coming soon.</div>
               </div>
+            </div>
+
+            <!-- Seller rating / feedback / product count / Visit Store —
+                 kept here in code so it's ready to switch on the moment the
+                 real /seller/{slug} profile page exists, but hidden for now
+                 so half-built numbers don't show on the live site. -->
+            <div class="sold-by-extra" id="sold-by-extra" hidden>
+              <div class="sold-by-extra__stats">
+                <div class="sold-by-extra__stat">
+                  <span class="sold-by-extra__stat-value" id="sold-by-rating">4.6 ★</span>
+                  <span class="sold-by-extra__stat-label">Seller rating</span>
+                </div>
+                <div class="sold-by-extra__stat">
+                  <span class="sold-by-extra__stat-value" id="sold-by-positive-feedback">96%</span>
+                  <span class="sold-by-extra__stat-label">Positive feedback</span>
+                </div>
+                <div class="sold-by-extra__stat">
+                  <span class="sold-by-extra__stat-value" id="sold-by-total-products">120+</span>
+                  <span class="sold-by-extra__stat-label">Products</span>
+                </div>
+              </div>
+              <button type="button" class="btn btn-outline btn-block" id="sold-by-visit-store-btn">Visit Store</button>
             </div>
           </div>
 
@@ -697,9 +727,17 @@
     });
 
     // ---- Info ---------------------------------------------
+    // Same slugging rules as the admin panel's generateSlug(), so a brand
+    // name here resolves to the same slug the /brand/{slug} page (built
+    // later) will be looking up.
+    function slugifyBrand(text) {
+      return text.toString().toLowerCase().replace(/\s+/g, "-").replace(/[^\w\-]+/g, "").replace(/\-\-+/g, "-").replace(/^-+/, "").replace(/-+$/, "");
+    }
+
     const brandEl = document.getElementById("product-brand");
     if (product.brand) {
       Security.setTextSafely(brandEl, product.brand);
+      brandEl.href = `/brand/${slugifyBrand(product.brand)}`;
       brandEl.hidden = false;
     } else {
       brandEl.hidden = true;
@@ -708,6 +746,27 @@
     Security.setTextSafely(document.getElementById("product-category"), product.category || "");
     Security.setTextSafely(document.getElementById("product-title"), product.title || "");
     document.getElementById("product-short-desc").innerHTML = product.shortDescription || "";
+
+    // Short description: same show more/less idea as the big Description
+    // section below, just with a smaller collapsed height since this is
+    // meant to be a quick line or two, not the full write-up.
+    (function initShortDescToggle() {
+      const shortDesc = document.getElementById("product-short-desc");
+      const shortToggle = document.getElementById("product-short-desc-toggle");
+      shortDesc.classList.remove("is-expanded");
+      shortToggle.hidden = true;
+      shortToggle.textContent = "Show more";
+      if (!shortDesc.textContent.trim()) return;
+      requestAnimationFrame(() => {
+        if (shortDesc.scrollHeight > shortDesc.clientHeight + 4) {
+          shortToggle.hidden = false;
+          shortToggle.onclick = () => {
+            const expanded = shortDesc.classList.toggle("is-expanded");
+            shortToggle.textContent = expanded ? "Show less" : "Show more";
+          };
+        }
+      });
+    })();
 
     const descSection = document.getElementById("product-description-section");
     const descBody = document.getElementById("product-description");
@@ -945,20 +1004,47 @@
           const group = document.createElement("div");
           group.className = "variant-selector-group";
           group.innerHTML = `<span class="variant-selector-group__label">Size</span>`;
+
+          // If every size sells at the same price, plain S/M/L-style
+          // buttons are enough. If prices differ by size, switch to wider
+          // boxes that show the price under each size — Meesho-style —
+          // so shoppers can compare without clicking each one.
+          const sizeMatches = sizes.map((size) => ({ size, match: findSameColorSibling(size) }));
+          const distinctPrices = new Set(
+            sizeMatches.filter((sm) => sm.match).map((sm) => sm.match.sellingPrice)
+          );
+          const showPricePerSize = distinctPrices.size > 1;
+
           const row = document.createElement("div");
-          row.className = "variant-size-row";
-          sizes.forEach((size) => {
-            const match = findSameColorSibling(size);
+          row.className = showPricePerSize ? "variant-price-row" : "variant-size-row";
+
+          sizeMatches.forEach(({ size, match }) => {
+            const isUnavailable = !match || ProductLoader.isUnavailable(match);
             const btn = document.createElement("button");
             btn.type = "button";
-            btn.className = "variant-size-btn" + (size === product.size ? " is-active" : "");
-            btn.textContent = size;
-            if (!match || ProductLoader.isUnavailable(match)) btn.disabled = true;
+
+            if (showPricePerSize) {
+              btn.className = "variant-price-btn" + (size === product.size ? " is-active" : "");
+              btn.innerHTML = `
+                <span class="variant-price-btn__size"></span>
+                <span class="variant-price-btn__price"></span>`;
+              btn.querySelector(".variant-price-btn__size").textContent = size;
+              btn.querySelector(".variant-price-btn__price").textContent = match ? ProductLoader.formatPrice(match.sellingPrice) : "";
+            } else {
+              btn.className = "variant-size-btn" + (size === product.size ? " is-active" : "");
+              // Long labels (e.g. "7 to 8 Year", "Free Size") get a touch
+              // more room and a smaller font instead of stretching the
+              // button huge or overflowing its text.
+              if (String(size).length > 4) btn.classList.add("variant-size-btn--long");
+              btn.textContent = size;
+            }
+
+            if (isUnavailable) btn.disabled = true;
             // Picking a different size stays on THIS product page — it just
             // swaps which underlying size's price/stock is shown.
             btn.addEventListener("click", () => {
               if (!match || match.id === activeProduct.id) return;
-              row.querySelectorAll(".variant-size-btn").forEach((b) => b.classList.remove("is-active"));
+              row.querySelectorAll(".variant-size-btn, .variant-price-btn").forEach((b) => b.classList.remove("is-active"));
               btn.classList.add("is-active");
               renderVariantDependentUI(match);
             });
@@ -981,6 +1067,38 @@
     })();
 
     // ---- Check Delivery Date & Availability ---------------------------
+    // Swaps a button's label to a temporary one (e.g. "Checking...") without
+    // letting the button grow — its current rendered width is locked first,
+    // then the label's font-size is shrunk (never the width) just enough
+    // for the new text to fit inside that same width.
+    function setCheckBtnLabelFit(btn, tempLabel) {
+      if (!btn.dataset.lockedWidthPx) {
+        btn.dataset.lockedWidthPx = String(btn.getBoundingClientRect().width);
+        btn.dataset.baseFontSizePx = String(parseFloat(getComputedStyle(btn).fontSize));
+      }
+      btn.classList.add("btn--fit-lock");
+      btn.style.width = btn.dataset.lockedWidthPx + "px";
+      btn.style.fontSize = btn.dataset.baseFontSizePx + "px";
+      btn.textContent = tempLabel;
+
+      const MIN_FONT_PX = 10; // floor so the label stays legible
+      let fontSize = parseFloat(btn.dataset.baseFontSizePx);
+      while (btn.scrollWidth > btn.clientWidth && fontSize > MIN_FONT_PX) {
+        fontSize -= 0.5;
+        btn.style.fontSize = fontSize + "px";
+      }
+    }
+
+    // Restores the button to its normal label, width, and font-size.
+    function resetCheckBtnLabel(btn, originalLabel) {
+      btn.textContent = originalLabel;
+      btn.classList.remove("btn--fit-lock");
+      btn.style.width = "";
+      btn.style.fontSize = "";
+      delete btn.dataset.lockedWidthPx;
+      delete btn.dataset.baseFontSizePx;
+    }
+
     (function initDeliveryChecker() {
       const input = document.getElementById("delivery-pincode-input");
       const btn = document.getElementById("delivery-pincode-check-btn");
@@ -1043,7 +1161,7 @@
 
         btn.disabled = true;
         const originalLabel = btn.textContent;
-        btn.textContent = "Checking...";
+        setCheckBtnLabelFit(btn, "Checking...");
 
         let verify = { checked: false, valid: null };
         try {
@@ -1065,7 +1183,7 @@
         }
 
         btn.disabled = false;
-        btn.textContent = originalLabel;
+        resetCheckBtnLabel(btn, originalLabel);
 
         // Remember the last pincode the shopper checked — cart.html and
         // checkout.js reuse this so they don't have to ask again, and can
