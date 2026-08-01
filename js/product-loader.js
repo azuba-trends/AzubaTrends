@@ -3,6 +3,36 @@ const ProductLoader = (function () {
   let inFlightRequest = null;
   const currency = "₹";
 
+  // ------------------------------------------------------------------
+  // Fast single-product path (see functions/api/product.js). Holds the
+  // result of the most recent /api/product hit so getVariantSiblings()
+  // and product.html's breadcrumb render can reuse it instead of firing a
+  // second request or falling back to the slow full-catalog scan. Keyed
+  // by product id, cleared whenever a different product's fast lookup
+  // succeeds — this only ever needs to remember "the product currently on
+  // screen", not a general-purpose cache.
+  // ------------------------------------------------------------------
+  let fastLookup = null; // { productId, parentId, siblings, breadcrumb }
+
+  function rememberFastLookup(product, siblings, breadcrumb) {
+    if (!product) return;
+    fastLookup = {
+      productId: product.id,
+      parentId: product.parentId || null,
+      siblings: siblings || [],
+      breadcrumb: breadcrumb || [],
+    };
+  }
+
+  /** Server-resolved breadcrumb ([{id,name,fullPath}]) for `product`, if
+   *  the most recent fast lookup was for this same product — otherwise
+   *  null, so the caller (product.html) knows to fall back to
+   *  CategoryLoader's own (slower) tree resolution. */
+  function getFastBreadcrumb(product) {
+    if (!product || !fastLookup || fastLookup.productId !== product.id) return null;
+    return fastLookup.breadcrumb;
+  }
+
   // Mirrors lib/pricing.js exactly (this file is loaded as a classic
   // script, not a module, so it can't `import` that one) — only used on
   // the direct-Firestore fallback path below, since the normal /api/products
@@ -98,6 +128,25 @@ const ProductLoader = (function () {
   }
 
   async function getProductBySlug(slug) {
+    // Fast path first: one small request for just this product (see
+    // functions/api/product.js) instead of downloading the whole catalog
+    // to Array.find() one row out of it. Falls straight through to the
+    // old full-catalog behaviour on any failure — a 404 here (edge cache
+    // briefly out of sync with a brand-new product, endpoint not deployed
+    // yet, etc.) should never be treated as "product doesn't exist"
+    // without also checking the slow path.
+    try {
+      const res = await fetch(`/api/product?slug=${encodeURIComponent(slug)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.product) {
+          rememberFastLookup(data.product, data.siblings, data.breadcrumb);
+          return data.product;
+        }
+      }
+    } catch (err) {
+      console.warn("ProductLoader: /api/product fast path failed, falling back to full catalog.", err);
+    }
     const products = await loadAllProducts();
     return products.find((p) => p.slug === slug) || null;
   }
@@ -120,6 +169,24 @@ const ProductLoader = (function () {
   // size. Several docs can therefore match here; pick an in-stock one to
   // land on by default, falling back to the first if all are out of stock.
   async function getProductByParentAndVariantSlug(parentId, variantSlug) {
+    // Fast path: one request returns every doc sharing this parentId (all
+    // colors, all sizes) — enough to both resolve this exact color's
+    // default size AND, via rememberFastLookup, answer getVariantSiblings()
+    // below with zero extra requests.
+    try {
+      const res = await fetch(`/api/product?parentId=${encodeURIComponent(parentId)}&variantSlug=${encodeURIComponent(variantSlug)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.siblings) && data.siblings.length > 0) {
+          rememberFastLookup(data.product, data.siblings, data.breadcrumb);
+          const group = data.siblings.filter((p) => p.variantSlug === variantSlug);
+          const picked = pickDefaultVariant(group.length > 0 ? group : data.siblings);
+          if (picked) return picked;
+        }
+      }
+    } catch (err) {
+      console.warn("ProductLoader: /api/product fast path failed, falling back to full catalog.", err);
+    }
     const products = await loadAllProducts();
     const matches = products.filter((p) => p.isVariant && p.parentId === parentId && p.variantSlug === variantSlug);
     if (matches.length === 0) return null;
@@ -180,6 +247,12 @@ const ProductLoader = (function () {
   // special case.
   async function getVariantSiblings(product) {
     if (!product || !product.isVariant || !product.parentId) return [product].filter(Boolean);
+    // Already have the whole sibling group from the fast lookup that found
+    // this product (see getProductByParentAndVariantSlug) — no need to
+    // fetch or download anything else.
+    if (fastLookup && fastLookup.productId === product.id && fastLookup.siblings.length > 0) {
+      return fastLookup.siblings;
+    }
     const products = await loadAllProducts();
     return products.filter((p) => p.isVariant && p.parentId === product.parentId);
   }
@@ -505,7 +578,7 @@ const ProductLoader = (function () {
     window.addEventListener("cart:updated", (e) => setBadge(e.detail.count));
   }
 
-  const API = { loadAllProducts, getProductById, getProductBySlug, getProductByParentAndVariantSlug, getVariantSiblings, dedupeVariantGroups, pickDefaultVariant, isUnavailable, productUrl, calcDiscount, formatPrice, sortByStock, sortSizes, getCategories, renderProductCard, renderGrid, renderSkeletonGrid, renderCategoryChips, initHeader, trackCategoryInterest, mountRelatedProducts };
+  const API = { loadAllProducts, getProductById, getProductBySlug, getProductByParentAndVariantSlug, getVariantSiblings, getFastBreadcrumb, dedupeVariantGroups, pickDefaultVariant, isUnavailable, productUrl, calcDiscount, formatPrice, sortByStock, sortSizes, getCategories, renderProductCard, renderGrid, renderSkeletonGrid, renderCategoryChips, initHeader, trackCategoryInterest, mountRelatedProducts };
   window.ProductLoader = API;
   return API;
 })();
