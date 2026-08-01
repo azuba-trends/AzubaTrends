@@ -2128,6 +2128,7 @@
 .hero-banner {
   position: relative;
   margin-top: var(--space-5);
+  margin-bottom: var(--space-5);
   border-radius: var(--radius-md);
   overflow: hidden;
   min-height: 320px;
@@ -2192,7 +2193,7 @@
    breakpoints — §Hero section: "2-3 cards, edge partially visible to
    hint it scrolls") ---------- */
 .promo-strip {
-  display: flex;
+  display: none; /*flex*/
   gap: var(--space-3);
   overflow-x: auto;
   scrollbar-width: none;
@@ -2246,7 +2247,7 @@
 
 /* ---------- Trust badges row ---------- */
 .trust-badges {
-  display: grid;
+  display: none; /*grid;*/
   grid-template-columns: repeat(4, 1fr);
   gap: var(--space-5);
   margin-top: var(--space-8);
