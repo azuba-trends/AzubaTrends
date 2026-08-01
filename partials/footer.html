@@ -30,11 +30,12 @@
       </ul>
     </div>
     <div>
-      <h4>Help</h4>
+      <h4>Policies</h4>
       <ul>
-        <li><a href="/terms#delivery-area">Shipping &amp; Delivery</a></li>
-        <li><a href="/terms#returns">Returns &amp; Refunds</a></li>
         <li><a href="/terms">Terms &amp; Conditions</a></li>
+        <li><a href="/terms#delivery-area">Delivery Area</a></li>
+        <li><a href="/terms#returns">Returns &amp; Refunds</a></li>
+        <li><a href="/terms#reviews-policy">Reviews Policy</a></li>
       </ul>
     </div>
     <div class="site-footer__subscribe">
@@ -67,14 +68,18 @@
     Cart
     <span class="bottom-nav__badge" data-cart-count id="bottom-nav-cart-badge">0</span>
   </a>
+  <a href="#" id="bottom-nav-wishlist" data-page="wishlist">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
+    Wishlist
+  </a>
   <a href="#" id="bottom-nav-account" data-page="account">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-    Account
+    Profile
   </a>
 </nav>
 <div id="account-dev-modal" class="account-dev-modal" hidden>
   <div class="account-dev-modal__card">
-    <p>Accounts are currently in development — you can order without one.</p>
+    <p id="account-dev-modal-text">Accounts are currently in development — you can order without one.</p>
     <button type="button" id="account-dev-modal-close" class="btn btn-primary">Got it</button>
   </div>
 </div>

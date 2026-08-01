@@ -2132,42 +2132,45 @@
   .hero-banner__subtitle { font-size: 0.9rem; max-width: 30ch; }
 }
 
-/* ---------- Mobile promo strip (horizontally swipeable) ---------- */
+/* ---------- Promotional offers strip (horizontally scrollable, all
+   breakpoints — §Hero section: "2-3 cards, edge partially visible to
+   hint it scrolls") ---------- */
 .promo-strip {
-  display: none;
+  display: flex;
+  gap: var(--space-3);
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-top: var(--space-4);
+  padding-bottom: 2px;
 }
-@media (max-width: 767px) {
-  .promo-strip {
-    display: flex;
-    gap: var(--space-3);
-    overflow-x: auto;
-    scrollbar-width: none;
-    margin-top: var(--space-4);
-    padding-bottom: 2px;
-  }
-  .promo-strip::-webkit-scrollbar { display: none; }
-  .promo-strip__card {
-    flex-shrink: 0;
-    min-width: 168px;
-    border-radius: var(--radius-sm);
-    padding: var(--space-3);
-    background: var(--color-primary-tint);
-  }
-  .promo-strip__card strong {
-    display: block;
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: var(--color-primary-dark);
-    margin-bottom: 2px;
-  }
-  .promo-strip__card span {
-    display: block;
-    font-size: 0.75rem;
-    color: var(--color-ink-soft);
-  }
-  .promo-strip__card span.code { color: var(--color-primary-dark); font-weight: 600; }
-  .promo-strip__card--success { background: var(--color-success-tint); }
-  .promo-strip__card--success strong { color: var(--color-success); }
+.promo-strip::-webkit-scrollbar { display: none; }
+.promo-strip__card {
+  flex-shrink: 0;
+  min-width: 168px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  background: var(--color-primary-tint);
+}
+.promo-strip__card strong {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  margin-bottom: 2px;
+}
+.promo-strip__card span {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--color-ink-soft);
+}
+.promo-strip__card span.code { color: var(--color-primary-dark); font-weight: 600; }
+.promo-strip__card--success { background: var(--color-success-tint); }
+.promo-strip__card--success strong { color: var(--color-success); }
+
+@media (min-width: 768px) {
+  .promo-strip__card { min-width: 220px; padding: var(--space-4); }
+  .promo-strip__card strong { font-size: 0.95rem; }
+  .promo-strip__card span { font-size: 0.82rem; }
 }
 
 /* ---------- Section heading above product grid ---------- */
@@ -2268,3 +2271,26 @@
   margin-top: var(--space-2);
 }
 .site-footer__subscribe-note[hidden] { display: none; }
+
+/* ---------- Product card wishlist heart (design/structure only, §3.3) --------- */
+.product-card__wishlist {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.92);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-ink-soft);
+}
+.product-card__wishlist svg { width: 16px; height: 16px; }
+.product-card__wishlist:hover { color: var(--color-accent); }
+.product-card__wishlist.is-active {
+  color: var(--color-accent);
+}
+.product-card__wishlist.is-active svg { fill: var(--color-accent); }

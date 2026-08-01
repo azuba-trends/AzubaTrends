@@ -346,7 +346,7 @@ main { flex: 1; }
   right: 0;
   z-index: 40;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   height: var(--bottom-nav-height);
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
@@ -554,13 +554,13 @@ main { flex: 1; }
    Responsive breakpoints
    ========================================================================== */
 
-/* Mobile: 2-row header — row 1 is brand name only, row 2 is a full-width
-   search bar. The header cart icon is hidden here because the bottom nav
-   (mobile only) already has a Cart tab with its own live badge — showing
-   the count in two places at once on a small screen was redundant. */
+/* Mobile: 2-row header — row 1 is brand name + cart, row 2 is a full-width
+   search bar. The standalone account icon only appears in the desktop bar
+   (§2.1 mobile spec: logo left, cart right, no separate account icon) —
+   the bottom nav's Profile tab covers that on small screens instead. */
 @media (max-width: 767px) {
   .site-header__bar { min-height: 56px; }
-  .header-cart { display: none; }
+  .header-icon-btn { display: none; }
   .site-header__bar .search-wrap {
     order: 3;
     flex: 1 1 100%;
@@ -580,3 +580,20 @@ main { flex: 1; }
 @media (min-width: 1024px) {
   .site-footer__inner { grid-template-columns: 2fr 1fr 1fr; }
 }
+
+/* ---------- Header right-side icon group (account + cart) ---------- */
+.header-icon-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.header-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2);
+  color: var(--color-primary-dark);
+}
+.header-icon-btn svg { width: 22px; height: 22px; }

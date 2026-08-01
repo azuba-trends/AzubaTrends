@@ -274,6 +274,9 @@ const ProductLoader = (function () {
           <img src="${safeImage}" alt="${safeTitle}" loading="lazy">
         </div>
       </a>
+      <button type="button" class="product-card__wishlist" aria-label="Save to wishlist" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
+      </button>
       <div class="product-card__body">
         <div class="product-card__top-row">
           <span class="product-card__category">${safeCategory}</span>
@@ -288,6 +291,20 @@ const ProductLoader = (function () {
         <div class="product-card__cta" data-cta-mount></div>
       </div>
     `;
+
+    // Wishlist heart is a visual save-state toggle only (design system
+    // §3.3) — no wishlist page/backend exists yet, so this intentionally
+    // doesn't persist anywhere; it just gives tap feedback in place.
+    const wishlistBtn = card.querySelector(".product-card__wishlist");
+    if (wishlistBtn) {
+      wishlistBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const pressed = wishlistBtn.getAttribute("aria-pressed") === "true";
+        wishlistBtn.setAttribute("aria-pressed", pressed ? "false" : "true");
+        wishlistBtn.classList.toggle("is-active", !pressed);
+      });
+    }
 
     if (!unavailable) {
       const ctaMount = card.querySelector("[data-cta-mount]");

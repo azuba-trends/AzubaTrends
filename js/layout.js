@@ -51,23 +51,34 @@
       loadPartial("/partials/footer.html", "footer-mount")
     ]);
 
-    // Bottom-nav "Account" tab — accounts aren't built yet, so this just
-    // shows a small notice instead of a dead link. Ordering without an
-    // account still works fully (checkout never required one).
-    const accountTab = document.getElementById("bottom-nav-account");
-    const accountModal = document.getElementById("account-dev-modal");
-    const accountModalClose = document.getElementById("account-dev-modal-close");
-    if (accountTab && accountModal) {
-      accountTab.addEventListener("click", (e) => {
-        e.preventDefault();
-        accountModal.hidden = false;
+    // "Coming soon" notice — shared by every entry point that leads to a
+    // feature that isn't built yet (Account/Profile, Wishlist). No accounts
+    // or wishlist backend exist, so these open a small notice instead of a
+    // dead link. Ordering without an account still works fully (checkout
+    // never required one).
+    const devModal = document.getElementById("account-dev-modal");
+    const devModalClose = document.getElementById("account-dev-modal-close");
+    const devModalText = document.getElementById("account-dev-modal-text");
+    const devTriggers = [
+      { el: document.getElementById("bottom-nav-account"), msg: "Accounts are currently in development — you can order without one." },
+      { el: document.getElementById("header-account-btn"), msg: "Accounts are currently in development — you can order without one." },
+      { el: document.getElementById("bottom-nav-wishlist"), msg: "Wishlist is coming soon — for now, items stay easy to find in your cart." }
+    ];
+    if (devModal) {
+      devTriggers.forEach(({ el, msg }) => {
+        if (!el) return;
+        el.addEventListener("click", (e) => {
+          e.preventDefault();
+          if (devModalText) devModalText.textContent = msg;
+          devModal.hidden = false;
+        });
       });
-      accountModal.addEventListener("click", (e) => {
-        if (e.target === accountModal) accountModal.hidden = true;
+      devModal.addEventListener("click", (e) => {
+        if (e.target === devModal) devModal.hidden = true;
       });
     }
-    if (accountModalClose && accountModal) {
-      accountModalClose.addEventListener("click", () => { accountModal.hidden = true; });
+    if (devModalClose && devModal) {
+      devModalClose.addEventListener("click", () => { devModal.hidden = true; });
     }
 
     // "Policies" nav dropdown — opens on hover (desktop mouse) via CSS

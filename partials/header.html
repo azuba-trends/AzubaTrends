@@ -8,7 +8,7 @@
     <div class="search-wrap">
       <form class="search-form" role="search" autocomplete="off">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" class="search-input" id="site-search-input" name="q" placeholder="Search for products..." aria-label="Search products" autocomplete="off">
+        <input type="text" class="search-input" id="site-search-input" name="q" placeholder="Search handmade & hand-loomed goods..." aria-label="Search products" autocomplete="off">
       </form>
       <div class="search-suggestions" role="listbox" hidden></div>
     </div>
@@ -35,11 +35,20 @@
       <a href="#" id="become-seller-link">Become a Seller</a>
     </nav>
 
-    <!-- FIXED: Link to cart.html -->
-    <a href="/cart" class="header-cart" aria-label="View cart">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-      <span class="header-cart__badge" data-cart-count id="cart-count-badge">0</span>
-    </a>
+    <div class="header-icon-group">
+      <!-- Account — no account system yet, so this opens the same
+           "in development" notice as the mobile Profile tab (see layout.js)
+           instead of a dead link. -->
+      <button type="button" class="header-icon-btn" id="header-account-btn" aria-label="Account">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </button>
+
+      <!-- FIXED: Link to cart.html -->
+      <a href="/cart" class="header-cart" aria-label="View cart">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+        <span class="header-cart__badge" data-cart-count id="cart-count-badge">0</span>
+      </a>
+    </div>
   </div>
 
   <!-- Category icon-chip row — Home/Categories pages only (§2.1). Hidden by
