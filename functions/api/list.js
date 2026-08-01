@@ -124,7 +124,10 @@ async function handleCategories(env) {
   // category tree whenever a product has a categoryId) doesn't have to
   // wait on a slow browser->Firestore realtime channel anymore.
   const categories = await getDocs(env, "categories");
-  return jsonResponse({ categories, generatedAt: new Date().toISOString() });
+  return jsonResponse(
+    { categories, generatedAt: new Date().toISOString() },
+    { cache: "public, s-maxage=20, stale-while-revalidate=10" }
+  );
 }
 
 export async function onRequestGet(context) {

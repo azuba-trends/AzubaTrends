@@ -14,6 +14,7 @@
  */
 const CategoryLoader = (function () {
   let cached = null;
+  let cachedSavedAt = 0;
   let inFlight = null;
 
   // Short-lived sessionStorage cache — the real fix for the visible
@@ -24,7 +25,26 @@ const CategoryLoader = (function () {
   // instantly; the very first category page visited in a session still
   // does one real fetch. Cleared automatically when the tab closes.
   const SESSION_CACHE_KEY = "azuba_categories_cache_v1";
-  const SESSION_CACHE_TTL_MS = 5 * 60 * 1000;
+  const SESSION_CACHE_TTL_MS = 90 * 1000;
+
+  // Cross-tab invalidation: js/admin.js writes this same key (in
+  // localStorage, which — unlike sessionStorage — IS shared across every
+  // tab of this origin) to a fresh timestamp the instant a category is
+  // saved or deleted. Any cache here saved BEFORE that timestamp is
+  // treated as stale immediately, rather than waiting out its TTL. This
+  // is what makes "I just removed a category's icon in the admin panel"
+  // show up on the storefront right away instead of up to
+  // SESSION_CACHE_TTL_MS later.
+  const DIRTY_FLAG_KEY = "azuba_categories_dirty_at";
+
+  function isStaleByDirtyFlag(savedAt) {
+    try {
+      const dirtyAt = Number(localStorage.getItem(DIRTY_FLAG_KEY)) || 0;
+      return dirtyAt > savedAt;
+    } catch (err) {
+      return false; // localStorage unavailable — can't check, assume fresh
+    }
+  }
 
   function readSessionCache() {
     try {
@@ -32,15 +52,16 @@ const CategoryLoader = (function () {
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       if (!parsed || (Date.now() - parsed.savedAt) > SESSION_CACHE_TTL_MS) return null;
-      return parsed.categories;
+      if (isStaleByDirtyFlag(parsed.savedAt)) return null;
+      return parsed;
     } catch (err) {
       return null;
     }
   }
 
-  function writeSessionCache(categories) {
+  function writeSessionCache(categories, savedAt) {
     try {
-      sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), categories }));
+      sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({ savedAt, categories }));
     } catch (err) {
       // Storage full/unavailable — fine, this cache is purely an
       // optimization, everything still works without it.
@@ -48,9 +69,9 @@ const CategoryLoader = (function () {
   }
 
   async function loadAllCategories() {
-    if (cached) return cached;
+    if (cached && !isStaleByDirtyFlag(cachedSavedAt)) return cached;
     const fromSession = readSessionCache();
-    if (fromSession) { cached = fromSession; return cached; }
+    if (fromSession) { cached = fromSession.categories; cachedSavedAt = fromSession.savedAt; return cached; }
     if (inFlight) return inFlight;
     inFlight = (async () => {
       // Fast path first: /api/categories is the same edge-cached endpoint
@@ -66,7 +87,8 @@ const CategoryLoader = (function () {
           const data = await res.json();
           if (Array.isArray(data.categories)) {
             cached = data.categories;
-            writeSessionCache(cached);
+            cachedSavedAt = Date.now();
+            writeSessionCache(cached, cachedSavedAt);
             return cached;
           }
         }
@@ -81,7 +103,8 @@ const CategoryLoader = (function () {
         const db = window.FirebaseApp.db;
         const snap = await getDocs(collection(db, "categories"));
         cached = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        writeSessionCache(cached);
+        cachedSavedAt = Date.now();
+        writeSessionCache(cached, cachedSavedAt);
         return cached;
       } catch (err) {
         console.error("CategoryLoader Error:", err);
@@ -97,6 +120,7 @@ const CategoryLoader = (function () {
    *  update's work), just exposed for that to call later. */
   function invalidateCache() {
     cached = null;
+    cachedSavedAt = 0;
     try { sessionStorage.removeItem(SESSION_CACHE_KEY); } catch (err) {}
   }
 

@@ -681,6 +681,17 @@ setTimeout(() => {
   // ================================================================
   let categoriesList = [];
 
+  // Bumped into localStorage (shared across every tab of this origin,
+  // unlike sessionStorage) any time a category is created, edited, or
+  // deleted — js/category-loader.js checks this on every storefront page
+  // load and throws away any cached category list saved before this
+  // timestamp. Without this, an admin edit (e.g. removing a category's
+  // icon) could take up to the storefront's session-cache TTL to show up
+  // anywhere it had already been loaded.
+  function markCategoriesDirty() {
+    try { localStorage.setItem("azuba_categories_dirty_at", String(Date.now())); } catch (err) { /* fine, cache just won't invalidate early */ }
+  }
+
   document.getElementById("cat-name").addEventListener("input", (e) => {
     document.getElementById("cat-slug").value = generateSlug(e.target.value);
   });
@@ -955,6 +966,7 @@ setTimeout(() => {
     if (!confirm(msg)) return;
     const idsToDelete = [id, ...getDescendantIds(id, categoriesById())];
     for (const delId of idsToDelete) await deleteDoc(doc(db, "categories", delId));
+    markCategoriesDirty();
   }
 
   document.getElementById("category-form").addEventListener("submit", async (e) => {
@@ -1009,6 +1021,7 @@ setTimeout(() => {
       // than waiting for the next onSnapshot tick.
       const latestDocs = categoriesList.filter((c) => c.id !== savedId).concat([{ id: savedId, ...data }]);
       await cascadeFullPathUpdate(savedId, latestDocs);
+      markCategoriesDirty();
 
       categoryDraft.clearDraft();
       resetCategoryForm();
@@ -1024,6 +1037,7 @@ setTimeout(() => {
     const allIds = new Set();
     ids.forEach((id) => { allIds.add(id); getDescendantIds(id, categoriesById()).forEach((d) => allIds.add(d)); });
     for (const id of allIds) await deleteDoc(doc(db, "categories", id));
+    markCategoriesDirty();
   });
 
   // ================================================================

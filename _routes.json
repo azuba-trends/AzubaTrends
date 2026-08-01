@@ -19,6 +19,7 @@
     "/product",
     "/search",
     "/terms",
+    "/wishlist",
     "/product-import-tester",
     "/share-preview-tester"
   ]
