@@ -324,60 +324,14 @@
     }
 
     // ---- Breadcrumb ---------------------------------------------
-    const catLink = document.getElementById("breadcrumb-category");
-    const ancestorsEl = document.getElementById("breadcrumb-ancestors");
-    ancestorsEl.innerHTML = "";
-
-    const breadcrumbItems = [
-      { name: "Home", url: window.location.origin + "/" }
-    ];
-
-    if (product.categoryId) {
-      try {
-        const categories = await CategoryLoader.loadAllCategories();
-        const tree = CategoryLoader.buildTree(categories);
-        const node = tree.byId.get(product.categoryId);
-        if (node) {
-          const chain = CategoryLoader.breadcrumbChain(tree, node);
-          chain.forEach((n, i) => {
-            if (i < chain.length - 1) {
-              const a = document.createElement("a");
-              a.href = `/category/${n.fullPath}`;
-              a.textContent = n.name;
-              ancestorsEl.appendChild(a);
-              ancestorsEl.appendChild(document.createTextNode(" / "));
-              breadcrumbItems.push({ name: n.name, url: `${window.location.origin}/category/${n.fullPath}` });
-            }
-          });
-          Security.setTextSafely(catLink, node.name || "Category");
-          catLink.href = `/category/${node.fullPath}`;
-          breadcrumbItems.push({ name: node.name, url: `${window.location.origin}/category/${node.fullPath}` });
-        }
-      } catch (err) {
-        console.error("Breadcrumb category-tree lookup failed, falling back to flat category name:", err);
-      }
-    }
-    if (!product.categoryId || catLink.textContent === "Category") {
-      // Legacy fallback: no categoryId (pre-migration product), or the
-      // tree lookup above didn't find a match.
-      Security.setTextSafely(catLink, product.category || "Category");
-      catLink.href = product.category ? `/category/${encodeURIComponent(product.category)}` : "/category";
-      if (product.category) breadcrumbItems.push({ name: product.category, url: `${window.location.origin}/category/${encodeURIComponent(product.category)}` });
-    }
-    breadcrumbItems.push({ name: product.title || "Product", url: window.location.href });
-
-    let breadcrumbJsonLdEl = document.getElementById("breadcrumb-jsonld");
-    if (!breadcrumbJsonLdEl) {
-      breadcrumbJsonLdEl = document.createElement("script");
-      breadcrumbJsonLdEl.type = "application/ld+json";
-      breadcrumbJsonLdEl.id = "breadcrumb-jsonld";
-      document.head.appendChild(breadcrumbJsonLdEl);
-    }
-    breadcrumbJsonLdEl.textContent = JSON.stringify({
-      "@context": "https://schema.org",
-      "@type": "BreadcrumbList",
-      itemListElement: breadcrumbItems.map((item, i) => ({ "@type": "ListItem", position: i + 1, name: item.name, item: item.url }))
-    });
+    // Fire-and-forget on purpose: this needs a category-tree fetch (see
+    // CategoryLoader, which itself waits on Firebase init + a Firestore
+    // read) that can be genuinely slow on a poor connection. It's an SEO/
+    // navigation nicety, not core content — the image, title, price, and
+    // Add to Cart button below must NEVER be blocked waiting on it. It
+    // fills in the breadcrumb whenever it resolves, a beat after the rest
+    // of the page is already fully visible and usable.
+    renderBreadcrumb(product);
 
     // ---- Gallery ---------------------------------------------
     const images = (product.images && product.images.length > 0 && product.images[0])
@@ -394,6 +348,63 @@
     
     let currentImageIndex = 0;
     let wasDragged = false; // set by the swipe handler below; read by the lightbox click handler
+
+    async function renderBreadcrumb(product) {
+      const catLink = document.getElementById("breadcrumb-category");
+      const ancestorsEl = document.getElementById("breadcrumb-ancestors");
+      ancestorsEl.innerHTML = "";
+
+      const breadcrumbItems = [
+        { name: "Home", url: window.location.origin + "/" }
+      ];
+
+      if (product.categoryId) {
+        try {
+          const categories = await CategoryLoader.loadAllCategories();
+          const tree = CategoryLoader.buildTree(categories);
+          const node = tree.byId.get(product.categoryId);
+          if (node) {
+            const chain = CategoryLoader.breadcrumbChain(tree, node);
+            chain.forEach((n, i) => {
+              if (i < chain.length - 1) {
+                const a = document.createElement("a");
+                a.href = `/category/${n.fullPath}`;
+                a.textContent = n.name;
+                ancestorsEl.appendChild(a);
+                ancestorsEl.appendChild(document.createTextNode(" / "));
+                breadcrumbItems.push({ name: n.name, url: `${window.location.origin}/category/${n.fullPath}` });
+              }
+            });
+            Security.setTextSafely(catLink, node.name || "Category");
+            catLink.href = `/category/${node.fullPath}`;
+            breadcrumbItems.push({ name: node.name, url: `${window.location.origin}/category/${node.fullPath}` });
+          }
+        } catch (err) {
+          console.error("Breadcrumb category-tree lookup failed, falling back to flat category name:", err);
+        }
+      }
+      if (!product.categoryId || catLink.textContent === "Category") {
+        // Legacy fallback: no categoryId (pre-migration product), or the
+        // tree lookup above didn't find a match.
+        Security.setTextSafely(catLink, product.category || "Category");
+        catLink.href = product.category ? `/category/${encodeURIComponent(product.category)}` : "/category";
+        if (product.category) breadcrumbItems.push({ name: product.category, url: `${window.location.origin}/category/${encodeURIComponent(product.category)}` });
+      }
+      breadcrumbItems.push({ name: product.title || "Product", url: window.location.href });
+
+      let breadcrumbJsonLdEl = document.getElementById("breadcrumb-jsonld");
+      if (!breadcrumbJsonLdEl) {
+        breadcrumbJsonLdEl = document.createElement("script");
+        breadcrumbJsonLdEl.type = "application/ld+json";
+        breadcrumbJsonLdEl.id = "breadcrumb-jsonld";
+        document.head.appendChild(breadcrumbJsonLdEl);
+      }
+      breadcrumbJsonLdEl.textContent = JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: breadcrumbItems.map((item, i) => ({ "@type": "ListItem", position: i + 1, name: item.name, item: item.url }))
+      });
+    }
 
     function showImage(index, { fromLightbox } = {}) {
       currentImageIndex = ((index % images.length) + images.length) % images.length;
