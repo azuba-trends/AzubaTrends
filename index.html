@@ -53,22 +53,73 @@
 -->
 
 </head>
-<body>
+<body data-show-chips>
 
 <div id="header-mount"></div>
 
 <main>
   <div class="container">
-    <section class="page-header">
-      <h1>Everyday goods for the home</h1>
-      <p id="home-tagline">Handmade and hand-loomed pieces, delivered around the courtyard.</p>
+
+    <section class="hero-banner" aria-label="Welcome">
+      <svg class="hero-banner__decor" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <circle cx="88" cy="20" r="30" fill="#C1502E" opacity="0.10"/>
+        <circle cx="78" cy="85" r="18" fill="#C1502E" opacity="0.12"/>
+        <circle cx="97" cy="60" r="12" fill="#181818" opacity="0.05"/>
+      </svg>
+      <div class="hero-banner__content">
+        <span class="hero-banner__eyebrow">Everyday goods for the home</span>
+        <h1 class="hero-banner__title">Handmade. Heartfelt.<br>From West Bengal to You.</h1>
+        <p class="hero-banner__subtitle" id="home-tagline">Authentic hand-loomed &amp; handcrafted treasures by skilled artisans.</p>
+        <div class="hero-banner__actions">
+          <a href="#product-grid" class="btn btn-primary">Shop Now</a>
+          <a href="/about" class="btn btn-outline">Explore Artisans</a>
+        </div>
+      </div>
     </section>
 
+    <div class="promo-strip" aria-hidden="false">
+      <div class="promo-strip__card promo-strip__card--success">
+        <strong>FREE Delivery</strong>
+        <span>On orders above ₹499</span>
+      </div>
+      <div class="promo-strip__card">
+        <strong>Extra 10% OFF</strong>
+        <span class="code">On first order — code AZUBA10</span>
+      </div>
+      <div class="promo-strip__card promo-strip__card--success">
+        <strong>Sustainable Picks</strong>
+        <span>Eco-friendly &amp; artisan-made</span>
+      </div>
+    </div>
+
     <div id="filter-bar-mount"></div>
+
+    <div class="section-heading-row">
+      <h2>Curated for your courtyard</h2>
+    </div>
 
     <div class="product-grid" id="product-grid" aria-live="polite">
       <!-- ProductListing.mount() fills this in -->
     </div>
+
+    <section class="trust-badges" aria-label="Why shop with us">
+      <div class="trust-badge">
+        <span class="trust-badge__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 12H3v9h8z"/><path d="M13 21h8v-6a3 3 0 0 0-3-3h-2"/><path d="M7 12V7a2 2 0 1 1 4 0"/><path d="M13 12V7a2 2 0 1 0-4 0"/></svg></span>
+        <span><strong>Handmade by Artisans</strong><span>Supporting traditional skills</span></span>
+      </div>
+      <div class="trust-badge">
+        <span class="trust-badge__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>
+        <span><strong>Made in West Bengal</strong><span>Proudly local, globally loved</span></span>
+      </div>
+      <div class="trust-badge">
+        <span class="trust-badge__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 9.5 17 9.5s3.5.5 3.5 5A7 7 0 0 1 11 20z"/><path d="M2 21c1.5-4 3.5-6 8-8"/></svg></span>
+        <span><strong>Sustainable</strong><span>Eco-friendly &amp; ethical products</span></span>
+      </div>
+      <div class="trust-badge">
+        <span class="trust-badge__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1" y="7" width="14" height="10" rx="1"/><path d="M15 10h4l3 3v4h-7z"/><circle cx="5.5" cy="19.5" r="1.5"/><circle cx="17.5" cy="19.5" r="1.5"/></svg></span>
+        <span><strong>Pan-India Delivery</strong><span>Fast &amp; reliable shipping</span></span>
+      </div>
+    </section>
 
     <section aria-labelledby="recommended-heading" style="margin-top: var(--space-8);" id="recommended-section" hidden>
       <h2 id="recommended-heading">Recommended for you</h2>
@@ -96,6 +147,8 @@
 <script src="js/product-listing.js"></script>
 <script src="js/search.js"></script>
 <script src="js/page-loader.js"></script>
+<script src="js/category-loader.js"></script>
+<script src="js/category-chips.js"></script>
 <script>
   window.addEventListener("layout:ready", () => ProductLoader.initHeader());
 

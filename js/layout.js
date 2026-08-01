@@ -96,6 +96,25 @@
       });
     }
 
+    // Footer social icons — no accounts live yet, so these are placeholders
+    // (same "do nothing yet" pattern as Become a Seller below) rather than
+    // dead-looking "#" jumps.
+    document.querySelectorAll(".footer-social-link").forEach((a) => {
+      a.addEventListener("click", (e) => { e.preventDefault(); });
+    });
+
+    // Footer newsletter subscribe — no email backend wired up yet, so this
+    // just gives the visitor visible confirmation instead of a dead form.
+    const subscribeForm = document.getElementById("footer-subscribe-form");
+    const subscribeNote = document.getElementById("footer-subscribe-note");
+    if (subscribeForm && subscribeNote) {
+      subscribeForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        subscribeNote.hidden = false;
+        subscribeForm.reset();
+      });
+    }
+
     // "Become a Seller" — intentionally does nothing yet (feature is
     // planned for a future update). Prevent the "#" href from jumping
     // the page to the top rather than leaving it a dead "#" link.

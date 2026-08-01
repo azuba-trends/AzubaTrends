@@ -1,23 +1,50 @@
 <footer class="site-footer">
-  <div class="site-footer__inner">
+  <div class="site-footer__inner site-footer__inner--full">
+    <div class="site-footer__about">
+      <h4 style="text-transform:none; font-size:1.05rem; letter-spacing:normal;" data-site-name>AzubaTrends</h4>
+      <p style="color:var(--color-ink-soft); font-size:0.88rem;">Bringing you authentic handmade &amp; hand-loomed products from the heart of West Bengal.</p>
+      <div class="site-footer__social">
+        <a href="#" class="footer-social-link" aria-label="Instagram"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><line x1="17.5" y1="6.5" x2="17.5" y2="6.5"/></svg></a>
+        <a href="#" class="footer-social-link" aria-label="Facebook"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg></a>
+        <a href="#" class="footer-social-link" aria-label="YouTube"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="3"/><polygon points="10 9 15 12 10 15 10 9"/></svg></a>
+        <a href="#" class="footer-social-link" aria-label="Pinterest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9 21c1-3 1.5-6 2.5-10a2.5 2.5 0 1 1 4.5 1.5C15.5 15 13.5 16 12 15"/></svg></a>
+      </div>
+    </div>
     <div>
-      <h4 data-site-name>AzubaTrends</h4>
-      <p style="color:var(--color-ink-soft); font-size:0.88rem; max-width:36ch;">Everyday home goods, delivered across West Bengal.</p>
+      <h4>Shop</h4>
+      <ul id="footer-shop-links">
+        <li><a href="/category">All Categories</a></li>
+        <li><a href="/category">Textiles</a></li>
+        <li><a href="/category">Terracotta</a></li>
+        <li><a href="/category">Jute</a></li>
+        <li><a href="/category">Brass</a></li>
+      </ul>
     </div>
     <div>
       <h4>Company</h4>
       <ul>
-        <li><a href="/about">About</a></li>
-        <li><a href="/terms">Terms &amp; Conditions</a></li>
-        <li><a href="/blog">Blogs</a></li>
+        <li><a href="/about">About Us</a></li>
+        <li><a href="/about#artisans">Our Artisans</a></li>
+        <li><a href="/blog">Blog</a></li>
+        <li><a href="/about#contact">Contact Us</a></li>
       </ul>
     </div>
     <div>
-      <h4>Shop</h4>
+      <h4>Help</h4>
       <ul>
-        <li><a href="/">All Products</a></li>
-        <li><a href="/category">Categories</a></li>
+        <li><a href="/terms#delivery-area">Shipping &amp; Delivery</a></li>
+        <li><a href="/terms#returns">Returns &amp; Refunds</a></li>
+        <li><a href="/terms">Terms &amp; Conditions</a></li>
       </ul>
+    </div>
+    <div class="site-footer__subscribe">
+      <h4>Subscribe</h4>
+      <p style="color:var(--color-ink-soft);">Get updates on new arrivals, offers &amp; more.</p>
+      <form class="site-footer__subscribe-form" id="footer-subscribe-form">
+        <input type="email" required placeholder="Enter your email" aria-label="Email address" id="footer-subscribe-email">
+        <button type="submit" class="btn btn-primary">Subscribe</button>
+      </form>
+      <p class="site-footer__subscribe-note" id="footer-subscribe-note" hidden>Thanks — you're on the list!</p>
     </div>
   </div>
   <div class="site-footer__bottom">

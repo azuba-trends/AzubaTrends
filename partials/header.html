@@ -41,4 +41,12 @@
       <span class="header-cart__badge" data-cart-count id="cart-count-badge">0</span>
     </a>
   </div>
+
+  <!-- Category icon-chip row — Home/Categories pages only (§2.1). Hidden by
+       default; category-chips.js reveals + fills it in on pages that opt in
+       via <body data-show-chips>. Left empty here so pages that don't opt in
+       never show an empty bar. -->
+  <div class="category-chip-row" id="category-chip-row" hidden>
+    <div class="category-chip-row__inner" id="category-chip-list"></div>
+  </div>
 </header>
