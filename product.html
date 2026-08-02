@@ -375,12 +375,13 @@
 
   document.addEventListener("DOMContentLoaded", async () => {
     
-    // FIX: Hardware-accelerated transforms ki wajah se hone wale "Scroll Bleed" ko global level pe lock karna.
-    // Yeh kisi bhi child element ko viewport stretch karne se completely block kar dega.
-    document.documentElement.style.overflowX = "hidden";
-    document.body.style.overflowX = "hidden";
-    document.body.style.position = "relative";
-    document.body.style.maxWidth = "100vw";
+    // NOTE: horizontal "scroll bleed" from the carousel's transforms is already
+    // guarded against globally via `overflow-x: hidden` on <html> in main.css.
+    // Previously this also set overflow-x/position on <body>, but that turns
+    // <body> into its own scroll container, which breaks the sticky header
+    // (it starts sticking to <body>'s scrollport instead of the viewport,
+    // so it scrolls away). Removed — do not re-add overflow-x/position on
+    // document.body here.
 
     if (window.LoadingOverlay) window.LoadingOverlay.show();
 
