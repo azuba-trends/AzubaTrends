@@ -607,7 +607,7 @@ html {
 .product-detail {
   display: grid;
   gap: var(--space-6);
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   margin-bottom: var(--space-8);
 }
 
@@ -620,6 +620,7 @@ html {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  min-width: 0;
 }
 
 .gallery__main {
@@ -648,6 +649,7 @@ html {
   overflow-x: auto;
   overflow-y: visible;
   padding-bottom: 4px;
+  min-width: 0;
 }
 
 /* Desktop: thumbnails move to the LEFT of the main image, stacked

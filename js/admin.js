@@ -1216,23 +1216,47 @@ setTimeout(() => {
     return wbCitiesCache;
   }
 
+  let wbBundledPincodesCache = null; // config/wb-pincodes.json, loaded once and shared
+  async function loadBundledWbPincodes() {
+    if (wbBundledPincodesCache) return wbBundledPincodesCache;
+    try {
+      const res = await fetch("/config/wb-pincodes.json");
+      wbBundledPincodesCache = await res.json();
+    } catch (err) {
+      console.error("Could not load config/wb-pincodes.json:", err);
+      wbBundledPincodesCache = {};
+    }
+    return wbBundledPincodesCache;
+  }
+
   const pincodesByCityCache = new Map(); // cityName -> string[] (pincodes), shared across every picker instance this session
   async function fetchPincodesForCity(cityName) {
     if (pincodesByCityCache.has(cityName)) return pincodesByCityCache.get(cityName);
+
+    // Bundled dataset first — this is matched against the whole district
+    // (all post offices under that city/district), not just offices whose
+    // name happens to contain the city name, so it covers far more real
+    // pincodes than the live name-search API alone ever could.
+    const bundled = await loadBundledWbPincodes();
+    const bundledCodes = new Set(bundled[cityName] || []);
+
+    // Then merge in the live India Post name-search API too, in case it
+    // has newer post offices the bundled dataset doesn't (bundled data is
+    // a point-in-time export, not an exhaustive/live directory).
     try {
       const res = await fetch(`https://api.postalpincode.in/postoffice/${encodeURIComponent(cityName)}`);
       const data = await res.json();
       const offices = (data && data[0] && data[0].Status === "Success" && data[0].PostOffice) || [];
-      const codes = Array.from(new Set(
-        offices.filter((o) => (o.State || "").toLowerCase() === "west bengal").map((o) => o.Pincode)
-      )).sort();
-      pincodesByCityCache.set(cityName, codes);
-      return codes;
+      offices
+        .filter((o) => (o.State || "").toLowerCase() === "west bengal")
+        .forEach((o) => bundledCodes.add(o.Pincode));
     } catch (err) {
-      console.error(`Could not fetch pincodes for "${cityName}" from India Post API:`, err);
-      pincodesByCityCache.set(cityName, []);
-      return [];
+      console.error(`Could not fetch pincodes for "${cityName}" from India Post API (using bundled data only):`, err);
     }
+
+    const codes = Array.from(bundledCodes).sort();
+    pincodesByCityCache.set(cityName, codes);
+    return codes;
   }
 
   // Builds the two-column widget inside `mountEl` and returns

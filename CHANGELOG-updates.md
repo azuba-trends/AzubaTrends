@@ -1,5 +1,18 @@
 # AzubaTrends — Update Changelog
 
+## 2026-08-02 — West Bengal pincode dataset replaced with official directory-derived data
+
+**config/wb-pincodes.json rebuilt from the full India Post Pincode Directory (~154,000 post offices), not the ~2,100-row partial mirror used before.**
+Previous bundled dataset only had a small subset of West Bengal post offices, which meant a few cities in `geo-config.json`'s `allowedCities` list had ZERO pincodes bundled at all: **Habra, Basirhat, Diamond Harbour, Bhatpara** were silently empty (customers in those areas would only ever get coverage from the live India Post name-search API fallback, which itself under-matches — see the #3 fix from the previous session). All four now have real pincode lists (12, 9, 3, and 2 respectively).
+
+Matching strategy per city:
+- Cities that map 1:1 to an official district (Kolkata, Howrah, Malda, Darjeeling, Jalpaiguri, Cooch Behar, Bankura, Purulia) — every pincode in that district.
+- Cities that are one of several inside a shared district (Durgapur/Asansol/Bardhaman inside the old Bardhaman district; Habra/Basirhat/Barrackpore/Naihati/Bhatpara/Kanchrapara/Panihati/Bidhannagar/Rajarhat all inside North 24 Parganas; Chandannagar/Serampore inside Hooghly; etc.) — matched by town name (plus known aliases/spelling variants like Burdwan/Bardhaman, Berhampore/Baharampur, Chandernagore/Chandannagar, Saltlake/Bidhannagar) against the post office name, Taluk/block, and division fields, restricted to the correct district, so pincodes aren't double-counted across sibling cities.
+
+Net effect: 38/38 allowed cities now have at least one real bundled pincode (was 34/38), and several cities that previously had an inflated, cross-contaminated count (e.g. an entire shared district counted under one city's name) now have a scoped, city-specific list instead. `admin.js`'s merge-with-live-API logic is unchanged — this only replaces the bundled source file.
+
+⚠️ Still not literally exhaustive for every small locality (a handful of far-flung rural offices under uncommon local names may not match any of the known aliases), but it's built from the authoritative full directory rather than a partial export, so gaps should now be rare edge cases rather than entire cities missing.
+
 ## 2026-07-25 (2) — Rich-text product descriptions, product page reorder, Auto Fetch on the form, global loading overlay
 
 **1. Short/Long Description are now real rich-text editors.**

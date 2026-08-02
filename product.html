@@ -1444,11 +1444,26 @@
         const allowBtn = document.getElementById("geo-soft-prompt-allow");
         const dismissBtn = document.getElementById("geo-soft-prompt-dismiss");
         const DISMISSED_KEY = "azuba_geo_prompt_dismissed";
+        const GRANTED_KEY = "azuba_geo_prompt_granted";
 
         async function detectAndFill() {
           const pin = await Availability.detectPincodeFromLocation();
           if (pin) { input.value = pin; runCheck(); }
           return !!pin;
+        }
+
+        // Our own record of "we've confirmed this browser already allows
+        // location for this site" — checked BEFORE the live Permissions
+        // API call below. This matters because navigator.permissions.query()
+        // can throw, be unsupported (Safari), or simply be unreliable in
+        // some contexts; if that happens the old code silently fell back
+        // to the 'prompt' state and showed the banner even when access was
+        // already granted. Once we've seen a real 'granted' once, trust it.
+        let alreadyGranted = false;
+        try { alreadyGranted = localStorage.getItem(GRANTED_KEY) === "1"; } catch (err) { /* ignore */ }
+        if (alreadyGranted) {
+          await detectAndFill();
+          return;
         }
 
         // Permissions API isn't supported everywhere (notably Safari) —
@@ -1465,6 +1480,7 @@
         if (state === "granted") {
           // Already granted (maybe from a previous visit, or elsewhere on
           // the site) — big platforms don't re-ask here, they just use it.
+          try { localStorage.setItem(GRANTED_KEY, "1"); } catch (err) { /* ignore */ }
           await detectAndFill();
           return;
         }
@@ -1496,6 +1512,7 @@
           allowBtn.disabled = true;
           allowBtn.textContent = "Checking...";
           const found = await detectAndFill(); // this is what triggers the real native browser prompt
+          if (found) { try { localStorage.setItem(GRANTED_KEY, "1"); } catch (err) { /* ignore */ } }
           markDismissed(); // one ask, ever — respected either way
           hide();
           if (!found) {
