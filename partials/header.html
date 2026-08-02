@@ -57,12 +57,20 @@
       </a>
     </div>
   </div>
-
-  <!-- Category icon-chip row — Home/Categories pages only (§2.1). Hidden by
-       default; category-chips.js reveals + fills it in on pages that opt in
-       via <body data-show-chips>. Left empty here so pages that don't opt in
-       never show an empty bar. -->
-  <div class="category-chip-row" id="category-chip-row" hidden>
-    <div class="category-chip-row__inner" id="category-chip-list"></div>
-  </div>
 </header>
+
+<!-- Category icon-chip row — Home/Categories pages only (§2.1). Hidden by
+     default; category-chips.js reveals + fills it in on pages that opt in
+     via <body data-show-chips>. Left empty here so pages that don't opt in
+     never show an empty bar. Moved OUTSIDE <header> on purpose: a
+     position:sticky element can only stay pinned while its own parent box
+     is still in view — when the chip row lived inside <header>, the
+     header's box was only ~header+chips tall, so the sticky bar unstuck
+     itself right after that short height scrolled by (the bug in the
+     screenshot). As a sibling of <header> instead (both direct children of
+     #header-mount, which is display:contents — see main.css), the sticky
+     bar's effective containing block becomes <body>, which is the full
+     page height, so it stays pinned for the entire scroll. -->
+<div class="category-chip-row" id="category-chip-row" hidden>
+  <div class="category-chip-row__inner" id="category-chip-list"></div>
+</div>
