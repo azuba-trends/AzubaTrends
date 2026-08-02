@@ -317,36 +317,58 @@
 
     window.pdpStickyActionsSetEnabled = function (value) {
       enabled = value;
-      if (!enabled) stickyBar.classList.remove("is-visible");
+      updateVisibility();
     };
 
     const mq = window.matchMedia("(max-width: 767px)");
 
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (!enabled || !mq.matches) {
-          stickyBar.classList.remove("is-visible");
-          return;
-        }
-        const entry = entries[0];
-        // Show only while the anchor's natural position is still below
-        // the viewport (boundingClientRect.top > 0, i.e. not reached
-        // yet). Once it's on screen (isIntersecting) or already scrolled
-        // past above (top < 0), stay hidden — the real buttons are
-        // either visible or already seen.
-        if (!entry.isIntersecting && entry.boundingClientRect.top > 0) {
-          stickyBar.classList.add("is-visible");
-        } else {
-          stickyBar.classList.remove("is-visible");
-        }
-      },
-      { threshold: 0 }
-    );
+    // Shared check, called from every trigger below — always reads a
+    // fresh getBoundingClientRect() rather than trusting a possibly-stale
+    // snapshot, so it's correct regardless of *why* it was called.
+    function updateVisibility() {
+      if (!enabled || !mq.matches) {
+        stickyBar.classList.remove("is-visible");
+        return;
+      }
+      const rect = anchor.getBoundingClientRect();
+      const isIntersecting = rect.bottom > 0 && rect.top < window.innerHeight;
+      // Show only while the anchor's natural position is still below the
+      // viewport (rect.top > 0, i.e. not reached yet). Once it's on
+      // screen or already scrolled past above, stay hidden — the real
+      // buttons are either visible or already seen.
+      if (!isIntersecting && rect.top > 0) {
+        stickyBar.classList.add("is-visible");
+      } else {
+        stickyBar.classList.remove("is-visible");
+      }
+    }
+
+    const io = new IntersectionObserver(() => updateVisibility(), { threshold: 0 });
     io.observe(anchor);
 
-    mq.addEventListener("change", (e) => {
-      if (!e.matches) stickyBar.classList.remove("is-visible");
-    });
+    // Baseline check for the common case (no async layout shift at all).
+    updateVisibility();
+
+    // IntersectionObserver's very first callback can fire against a
+    // layout snapshot taken before images/fonts above the anchor have
+    // finished loading and settled the page's real height — on a fresh
+    // navigation or reload that left the sticky bar wrongly hidden until
+    // an actual scroll forced a recompute. These catch that: re-check
+    // once everything (images included) has finished loading — via the
+    // 'load' event if it hasn't fired yet, or immediately if it already
+    // has by the time this script runs — and keep re-checking any time
+    // the page's layout height changes afterwards (lazy images, web
+    // fonts swapping in, etc).
+    if (document.readyState === "complete") {
+      updateVisibility();
+    } else {
+      window.addEventListener("load", updateVisibility);
+    }
+    if (window.ResizeObserver) {
+      new ResizeObserver(() => updateVisibility()).observe(document.body);
+    }
+
+    mq.addEventListener("change", updateVisibility);
   })();
 
   document.addEventListener("DOMContentLoaded", async () => {
