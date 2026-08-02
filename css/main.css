@@ -501,6 +501,10 @@ main { flex: 1; }
 .breadcrumb a { color: var(--color-primary); }
 .breadcrumb a:hover { text-decoration: underline; }
 
+@media (max-width: 767px) {
+  .breadcrumb { display: none; }
+}
+
 /* ---------- Static content pages (About / Terms) ---------- */
 .prose { max-width: 68ch; overflow-wrap: break-word; word-break: break-word; }
 .prose h1 { margin-top: var(--space-6); margin-bottom: var(--space-2); }
@@ -575,6 +579,30 @@ main { flex: 1; }
   .bottom-nav { display: none; }
   .site-nav { display: flex; }
   .site-footer__inner { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* Mobile only: the category icon-chip row (§2.1) sits inside .site-header
+   right after .site-header__bar, and normally the whole header sticks as
+   one unit — which would keep the chip row pinned too. On mobile only,
+   the header itself stops being the sticky element and the top bar
+   becomes the sticky one instead, so the chip row scrolls away with the
+   rest of the page like ordinary content while the logo/search/icons
+   stay pinned. Desktop/tablet keep the original whole-header-sticky
+   behaviour untouched. */
+@media (max-width: 767px) {
+  .site-header {
+    position: static;
+  }
+  .site-header__bar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .category-chip-row {
+    position: static;
+  }
 }
 
 @media (min-width: 1024px) {
