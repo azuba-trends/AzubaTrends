@@ -160,7 +160,7 @@ export async function onRequestPost(context) {
   }
 
   try {
-    const { orderId, items, deliveryDetails, paymentMethod, couponCode, paymentScreenshotUrl, autoPlaced } = body || {};
+    const { orderId, items, deliveryDetails, paymentMethod, couponCode, paymentScreenshotUrl, autoPlaced, deviceId } = body || {};
 
     if (!orderId || !Array.isArray(items) || items.length === 0 || !deliveryDetails) {
       return json({ error: "Missing required order fields." }, 400);
@@ -383,6 +383,7 @@ export async function onRequestPost(context) {
       paymentMethod,
       paymentScreenshotUrl: paymentMethod === "UPI" ? (paymentScreenshotUrl || null) : null,
       autoPlaced: !!autoPlaced,
+      deviceId: deviceId || null,
       estimatedDelivery: estimatedDeliveryString, // <--- Yeh naya field add kar diya
       status: "Pending",
       createdAt,

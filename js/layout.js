@@ -24,6 +24,108 @@
 (function () {
   "use strict";
 
+  // Non-secret by design — this is the VAPID PUBLIC key, meant to ship in
+  // client JS. The matching private key lives only as a Cloudflare Pages
+  // environment secret, used server-side in functions/api/send-push.js.
+  const VAPID_PUBLIC_KEY = "BEQ9uzhucC598j7Ye1UAd9D5vYtYfATU_V2Kzfgi1hwf9UXVdqCTAOTxU8ol7seSurfjJgnDu0KuVkLT7kWEIwM";
+
+  function urlBase64ToUint8Array(base64String) {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const raw = atob(base64);
+    return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+  }
+
+  // Registers sw.js (idempotent — safe to call on every page load; the
+  // browser no-ops if the same worker is already registered and up to
+  // date). This alone is what's needed for push notifications to work
+  // AND for the browser to consider the site installable.
+  async function registerServiceWorker() {
+    if (!("serviceWorker" in navigator)) return null;
+    try {
+      return await navigator.serviceWorker.register("/sw.js");
+    } catch (err) {
+      console.error("Service worker registration failed:", err);
+      return null;
+    }
+  }
+
+  // Subscribes this browser to push, asking for Notification permission
+  // in the process if it hasn't been decided yet (pushManager.subscribe()
+  // triggers the native prompt itself — no separate
+  // Notification.requestPermission() call needed). Call this from a UI
+  // moment that already explained WHY (e.g. a soft prompt after Add to
+  // Cart), not on page load — see the geolocation soft-prompt in
+  // product.html for the pattern this should follow once that UI exists.
+  //
+  // Returns true if this browser ends up subscribed (whether it already
+  // was, or just became so), false otherwise (declined, unsupported, or
+  // the save-to-server call failed).
+  // Persistent per-browser id — NOT a login/account, just a random string
+  // this browser keeps reusing. It's the only way to connect "this push
+  // subscription" to "this order" later without a login system: checkout.js
+  // stamps it on the order, subscribe() below stamps the same value on the
+  // push subscription, and admin.js's order-status-update handler uses it
+  // to notify only the customer who actually placed that order (see
+  // functions/api/send-push.js's targeted mode).
+  function getDeviceId() {
+    try {
+      let id = localStorage.getItem("azuba_device_id");
+      if (!id) {
+        id = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`).replace(/-/g, "");
+        localStorage.setItem("azuba_device_id", id);
+      }
+      return id;
+    } catch (err) {
+      return null; // private browsing/quota — order still places, just won't get push updates
+    }
+  }
+  window.getAzubaDeviceId = getDeviceId;
+
+  async function subscribe() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return false;
+    try {
+      const registration = await registerServiceWorker();
+      if (!registration) return false;
+
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        });
+      }
+
+      const res = await fetch("/api/push-subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscription: subscription.toJSON(), deviceId: getDeviceId() })
+      });
+      if (!res.ok) throw new Error("Couldn't save subscription to the server.");
+
+      try { localStorage.setItem("azuba_push_subscribed", "1"); } catch (err) { /* ignore */ }
+      return true;
+    } catch (err) {
+      // Includes the user dismissing/blocking the native permission
+      // prompt — that rejects subscribe() with a NotAllowedError, which
+      // lands here same as any other failure. Nothing to alert about;
+      // caller just gets `false` back.
+      console.error("Push subscribe failed:", err);
+      return false;
+    }
+  }
+
+  function isSubscribedLocally() {
+    try { return localStorage.getItem("azuba_push_subscribed") === "1"; } catch (err) { return false; }
+  }
+
+  window.AzubaPush = { subscribe, isSubscribedLocally };
+
+  // Register on every page load (not just when someone subscribes) so
+  // the worker is ready to receive pushes even between visits, and so
+  // Chrome's install-prompt criteria are met site-wide.
+  registerServiceWorker();
+
   async function loadPartial(url, mountId) {
     const mount = document.getElementById(mountId);
     if (!mount) return;

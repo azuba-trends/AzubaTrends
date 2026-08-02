@@ -4475,6 +4475,36 @@ setTimeout(() => {
       }).catch((err) => console.warn("Telegram order_cancelled notify failed (non-fatal):", err));
     }
 
+    // Push notification to the customer's device — only possible if they
+    // enabled notifications AND we captured a deviceId at checkout (see
+    // js/layout.js's getDeviceId()). Silently skipped otherwise — this
+    // never blocks or fails the status update itself, which already
+    // succeeded above.
+    if (order && order.deviceId) {
+      const STATUS_MESSAGES = {
+        Processing: "Your order is being processed.",
+        Shipped: "Your order has been shipped!",
+        Delivered: "Your order has been delivered. Enjoy!",
+        Cancelled: "Your order has been cancelled."
+      };
+      const pushBody = STATUS_MESSAGES[newStatus];
+      if (pushBody) {
+        try {
+          const idToken = await auth.currentUser.getIdToken();
+          fetch("/api/send-push", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+            body: JSON.stringify({
+              deviceId: order.deviceId,
+              title: `Order #${order.orderId} — ${newStatus}`,
+              body: pushBody,
+              url: "/" // TODO: swap for a real order-tracking page URL once one exists
+            })
+          }).catch((err) => console.warn("Order-status push failed (non-fatal):", err));
+        } catch (err) { console.warn("Order-status push failed (non-fatal):", err); }
+      }
+    }
+
     if (shouldNotify && order) {
       try {
         await sendStatusUpdateEmail(order, newStatus);
@@ -4972,6 +5002,72 @@ setTimeout(() => {
   document.getElementById("export-orders-csv-btn")?.addEventListener("click", () => {
     downloadCSV(`orders-${todayFileStamp()}.csv`, buildOrdersReportCSV());
   });
+
+  // ================================================================
+  // Notifications (Web Push broadcast)
+  // ================================================================
+  async function loadPushHistory() {
+    const tbody = document.getElementById("push-history-table-body");
+    if (!tbody) return;
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+      const res = await fetch("/api/push-history", { headers: { Authorization: `Bearer ${idToken}` } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load history.");
+      if (!data.rows || data.rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="color:var(--color-ink-soft);">No notifications sent yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.rows.map((row) => `
+        <tr>
+          <td>${row.sentAt ? new Date(row.sentAt).toLocaleString("en-IN") : "—"}</td>
+          <td>${esc(row.title || "")}</td>
+          <td>${esc(row.body || "")}</td>
+          <td>${row.delivered ?? 0} / ${row.attempted ?? 0}</td>
+        </tr>
+      `).join("");
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="4" style="color:var(--color-danger);">${esc(err.message || "Failed to load history.")}</td></tr>`;
+    }
+  }
+
+  const pushBroadcastForm = document.getElementById("push-broadcast-form");
+  if (pushBroadcastForm) {
+    pushBroadcastForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const title = document.getElementById("push-title").value.trim();
+      const bodyText = document.getElementById("push-body").value.trim();
+      const url = document.getElementById("push-url").value.trim();
+      const btn = document.getElementById("push-broadcast-btn");
+      const statusEl = document.getElementById("push-broadcast-status");
+      if (!title || !bodyText) return;
+
+      if (!confirm("Send this notification to every subscriber right now? This can't be undone.")) return;
+
+      btn.disabled = true; btn.textContent = "Sending...";
+      statusEl.textContent = "";
+      try {
+        const idToken = await auth.currentUser.getIdToken();
+        const res = await fetch("/api/send-push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+          body: JSON.stringify({ broadcast: true, title, body: bodyText, url: url || "/" })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to send.");
+        statusEl.style.color = "var(--color-success)";
+        statusEl.textContent = `Sent — delivered to ${data.delivered} of ${data.attempted} subscribers.`;
+        pushBroadcastForm.reset();
+        loadPushHistory();
+      } catch (err) {
+        statusEl.style.color = "var(--color-danger)";
+        statusEl.textContent = err.message || "Something went wrong.";
+      } finally {
+        btn.disabled = false; btn.textContent = "Send to All Subscribers";
+      }
+    });
+    loadPushHistory();
+  }
 
   // ================================================================
   // Boot sequence — realtime sync

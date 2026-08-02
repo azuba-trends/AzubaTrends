@@ -289,6 +289,7 @@
         </div>
       </div>
       <button class="nav-btn" data-target="store-orders">All Orders</button>
+      <button class="nav-btn" data-target="store-notifications">Notifications</button>
 
       <div class="nav-group-title">Blog</div>
       <div class="nav-item">
@@ -973,7 +974,47 @@
       </div>
     </div>
 
-    <!-- ============ BLOG: ALL POSTS ============ -->
+    <!-- ============ STORE: NOTIFICATIONS (Web Push) ============ -->
+    <div id="store-notifications" class="section">
+      <div class="section-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>Notifications</h2>
+      </div>
+      <p style="color:var(--color-ink-soft); font-size:0.9rem; margin-top:-12px; margin-bottom:20px;">
+        Sends a real push notification to every visitor who has notifications enabled on this site
+        — works even if they don't currently have the site open in a tab. Order-status updates
+        (Shipped/Delivered/etc) are sent automatically from the order modal and don't need this form.
+      </p>
+      <div class="card" style="max-width: 560px;">
+        <form id="push-broadcast-form">
+          <div class="field-group">
+            <label for="push-title">Title</label>
+            <input type="text" id="push-title" maxlength="65" required placeholder="e.g. Flat 20% off, today only!">
+          </div>
+          <div class="field-group">
+            <label for="push-body">Message</label>
+            <textarea id="push-body" rows="3" maxlength="200" required placeholder="e.g. Use code SALE20 at checkout. Ends midnight."></textarea>
+          </div>
+          <div class="field-group">
+            <label for="push-url">Link when tapped (optional)</label>
+            <input type="text" id="push-url" placeholder="/category/womens-ethnic-wear or leave blank for homepage">
+          </div>
+          <button type="submit" class="btn btn-primary" id="push-broadcast-btn" style="width:100%; margin-top:8px;">Send to All Subscribers</button>
+          <p class="field-hint" id="push-broadcast-status" style="margin-top:10px;"></p>
+        </form>
+      </div>
+
+      <h3 style="margin-top:28px;">Send History</h3>
+      <div class="card">
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr><th>Sent</th><th>Title</th><th>Message</th><th>Delivered / Attempted</th></tr>
+            </thead>
+            <tbody id="push-history-table-body"><tr><td colspan="4" style="color:var(--color-ink-soft);">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
     <div id="blog-posts" class="section">
       <div class="section-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h2>All Blog Posts</h2>

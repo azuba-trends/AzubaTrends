@@ -710,6 +710,7 @@
       paymentMethod: method,
       paymentScreenshotUrl: method === 'UPI' ? uploadedScreenshotUrl : null,
       autoPlaced: isAuto,
+      deviceId: window.getAzubaDeviceId ? window.getAzubaDeviceId() : null,
       status: 'Pending',
       createdAt: new Date().toISOString()
     };
@@ -737,7 +738,8 @@
           paymentMethod: method,
           couponCode: appliedCoupon ? appliedCoupon.code : null,
           paymentScreenshotUrl: method === 'UPI' ? uploadedScreenshotUrl : null,
-          autoPlaced: isAuto
+          autoPlaced: isAuto,
+          deviceId: window.getAzubaDeviceId ? window.getAzubaDeviceId() : null
         })
       });
 
