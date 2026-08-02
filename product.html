@@ -87,17 +87,19 @@
 
           <!-- Check Delivery Date & Availability — placed above the action
                buttons so the "not available at your location" status is
-               impossible to miss before someone tries to buy. -->
+               impossible to miss before someone tries to buy. Card holds
+               ONLY the title + input/button row by design — the hint and
+               the result message (error or success) render right below,
+               outside the card, not inside it. -->
           <div class="pdp-sidebar-card" id="delivery-checker-card">
             <div class="pdp-sidebar-card__title">Check Delivery Date &amp; Availability</div>
             <div class="delivery-checker__row">
               <input type="text" id="delivery-pincode-input" placeholder="Enter delivery pincode" inputmode="numeric" maxlength="6" aria-label="Delivery pincode">
               <button type="button" class="btn btn-outline" id="delivery-pincode-check-btn">Check</button>
             </div>
-            <button type="button" class="btn-link" id="delivery-detect-location-btn" style="margin-top:6px; font-size:0.85rem;">📍 Use my current location</button>
-            <p class="form-hint">This is just a quick check — your address is confirmed again at checkout.</p>
-            <div class="delivery-checker__result" id="delivery-checker-result"></div>
           </div>
+          <p class="form-hint delivery-checker__hint">This is just a quick check — your address is confirmed again at checkout.</p>
+          <div class="delivery-checker__result" id="delivery-checker-result"></div>
 
           <div id="availability-status" class="availability-status" hidden></div>
 
@@ -1240,7 +1242,6 @@
       const input = document.getElementById("delivery-pincode-input");
       const btn = document.getElementById("delivery-pincode-check-btn");
       const resultEl = document.getElementById("delivery-checker-result");
-      const detectBtn = document.getElementById("delivery-detect-location-btn");
       const statusEl = document.getElementById("availability-status");
       const LAST_PINCODE_KEY = "azuba_last_pincode";
 
@@ -1361,28 +1362,12 @@
         resultEl.dataset.status = "ok";
         resultEl.innerHTML = `
           <p class="delivery-checker__result-row"><span class="delivery-checker__icon">✅</span><span class="delivery-checker__headline">Delivers to ${district ? Security.escapeHTML(district) : "pincode " + pin}</span></p>
-          <p class="delivery-checker__result-row"><span class="delivery-checker__icon">📦</span><span>Dispatch in ${est.dispatchDays} day${est.dispatchDays > 1 ? "s" : ""}</span></p>
           <p class="delivery-checker__result-row"><span class="delivery-checker__icon">🚚</span><span>Estimated delivery: <strong>${est.from} – ${est.to}</strong></span></p>`;
         resultEl.classList.add("is-visible");
       }
 
       btn.addEventListener("click", runCheck);
       input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); runCheck(); } });
-
-      detectBtn.addEventListener("click", async () => {
-        const originalLabel = detectBtn.textContent;
-        detectBtn.disabled = true;
-        detectBtn.textContent = "Detecting...";
-        const pin = await Availability.detectPincodeFromLocation();
-        detectBtn.disabled = false;
-        detectBtn.textContent = originalLabel;
-        if (!pin) {
-          alert("Couldn't detect your location. Please allow location access, or enter your pincode manually.");
-          return;
-        }
-        input.value = pin;
-        runCheck();
-      });
 
       // If the shopper already checked a pincode earlier (this session or
       // a past visit), pre-fill and silently re-check it here too — so

@@ -906,7 +906,7 @@ html {
   position: relative;
   color: var(--color-ink-soft);
   margin-bottom: 0;
-  max-height: 4.8em;
+  max-height: 6.4em; /* ~4 lines at this line-height before "Show more" kicks in */
   line-height: 1.6;
   overflow: hidden;
 }
@@ -1183,8 +1183,10 @@ html {
 .review-list { display: flex; flex-direction: column; gap: var(--space-4); }
 
 .review-item {
-  border-bottom: 1px solid var(--color-border);
-  padding-bottom: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0; /* sharp corners on purpose, not rounded */
+  padding: var(--space-4);
 }
 
 .review-item__head {
@@ -1194,6 +1196,20 @@ html {
   margin-bottom: 6px;
   flex-wrap: wrap;
 }
+
+.review-item__delete-btn {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  padding: 2px 10px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--color-danger);
+  cursor: pointer;
+}
+.review-item__delete-btn:hover { background: var(--color-danger); color: #fff; border-color: var(--color-danger); }
+.review-item__delete-btn:disabled { opacity: 0.6; cursor: default; }
 
 .review-item__rating-badge {
   display: inline-flex;

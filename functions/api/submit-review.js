@@ -49,6 +49,12 @@ function json(data, status = 200) {
   });
 }
 
+async function sha256Hex(text) {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 export async function onRequestPost(context) {
   const { request, env } = context;
 
@@ -122,6 +128,22 @@ export async function onRequestPost(context) {
     const docId = crypto.randomUUID().replace(/-/g, "");
     const guestTag = docId.replace(/[^a-zA-Z0-9]/g, "").slice(-4).toUpperCase();
 
+    // There's no login system — guests are just "Guest #XXXX" — so instead
+    // of tying ownership to an account, each review gets its own random
+    // delete token at creation. It's returned ONCE, in this response, and
+    // the browser stashes it in localStorage (see reviews.js).
+    //
+    // Reviews are publicly readable (see firestore.rules — anyone can read
+    // the `reviews` collection, that's how the storefront shows them), so
+    // the raw token itself must NEVER be written to the document — anyone
+    // could open the Network tab, read another shopper's token off their
+    // fetched review, and delete it. Only a SHA-256 hash of the token is
+    // stored; functions/api/delete-review.js re-hashes whatever token it's
+    // given and compares hashes, so the raw token — the only thing that
+    // actually works — never touches a publicly-readable field.
+    const deleteToken = crypto.randomUUID().replace(/-/g, "");
+    const deleteTokenHash = await sha256Hex(deleteToken);
+
     const review = {
       productId,
       rating: ratingNum,
@@ -129,7 +151,8 @@ export async function onRequestPost(context) {
       imageUrl: cleanImageUrls[0] || null, // kept for older readers of this field
       imageUrls: cleanImageUrls,
       authorLabel: `Guest #${guestTag}`,
-      date: new Date().toISOString()
+      date: new Date().toISOString(),
+      deleteTokenHash
     };
 
     await createDoc(env, "reviews", docId, review);
@@ -166,7 +189,7 @@ export async function onRequestPost(context) {
       productUrl: host ? `https://${host}/product.html?id=${encodeURIComponent(productId)}` : null
     });
 
-    return json({ ok: true, id: docId });
+    return json({ ok: true, id: docId, deleteToken });
   } catch (err) {
     console.error(err);
     return json({ error: "Something went wrong submitting your review. Please try again." }, 500);

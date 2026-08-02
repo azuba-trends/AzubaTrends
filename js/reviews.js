@@ -136,6 +136,34 @@ const Reviews = (function () {
     return data.data.url;
   }
 
+  // ---- "My reviews" delete tokens ------------------------------------
+  // Keyed by review id -> the random token submit-review.js issued for it.
+  // Purely client-side bookkeeping — the real check happens server-side in
+  // delete-review.js, this is just how the browser remembers which
+  // reviews (across any product) it's allowed to offer a Delete button
+  // for.
+  const MY_TOKENS_KEY = "azuba_my_review_tokens";
+
+  function getMyTokens() {
+    try {
+      return JSON.parse(localStorage.getItem(MY_TOKENS_KEY) || "{}");
+    } catch (err) { return {}; }
+  }
+  function rememberMyReview(reviewId, deleteToken) {
+    try {
+      const tokens = getMyTokens();
+      tokens[reviewId] = deleteToken;
+      localStorage.setItem(MY_TOKENS_KEY, JSON.stringify(tokens));
+    } catch (err) { /* ignore — private browsing/quota */ }
+  }
+  function forgetMyReview(reviewId) {
+    try {
+      const tokens = getMyTokens();
+      delete tokens[reviewId];
+      localStorage.setItem(MY_TOKENS_KEY, JSON.stringify(tokens));
+    } catch (err) { /* ignore */ }
+  }
+
   function formatDate(iso) {
     try {
       return new Date(iso).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" });
@@ -150,7 +178,7 @@ const Reviews = (function () {
     return [];
   }
 
-  function buildReviewItem(review) {
+  function buildReviewItem(review, onDeleted) {
     const item = document.createElement("div");
     item.className = "review-item";
 
@@ -173,6 +201,38 @@ const Reviews = (function () {
     head.appendChild(badge);
     head.appendChild(author);
     head.appendChild(date);
+
+    // Only shown for reviews THIS browser submitted (its delete token is
+    // in localStorage) — nobody else sees a Delete button on it.
+    const myTokens = getMyTokens();
+    const myToken = myTokens[review.id];
+    if (myToken) {
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "review-item__delete-btn";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.addEventListener("click", async () => {
+        if (!confirm("Delete your review? This can't be undone.")) return;
+        deleteBtn.disabled = true;
+        deleteBtn.textContent = "Deleting...";
+        try {
+          const res = await fetch("/api/delete-review", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reviewId: review.id, deleteToken: myToken })
+          });
+          const data = await res.json();
+          if (!res.ok || !data.ok) throw new Error(data.error || "Couldn't delete your review.");
+          forgetMyReview(review.id);
+          if (typeof onDeleted === "function") onDeleted();
+        } catch (err) {
+          alert(err.message || "Couldn't delete your review. Please try again.");
+          deleteBtn.disabled = false;
+          deleteBtn.textContent = "Delete";
+        }
+      });
+      head.appendChild(deleteBtn);
+    }
 
     const comment = document.createElement("p");
     comment.className = "review-item__comment";
@@ -200,7 +260,7 @@ const Reviews = (function () {
     return item;
   }
 
-  function renderReviewList(container, list, { emptyMessage } = {}) {
+  function renderReviewList(container, list, { emptyMessage, onDeleted } = {}) {
     container.innerHTML = "";
     if (list.length === 0) {
       const empty = document.createElement("p");
@@ -209,7 +269,7 @@ const Reviews = (function () {
       container.appendChild(empty);
       return;
     }
-    list.forEach((review) => container.appendChild(buildReviewItem(review)));
+    list.forEach((review) => container.appendChild(buildReviewItem(review, onDeleted)));
   }
 
   // Reuses the page's existing #lightbox (already present on product.html
@@ -387,7 +447,7 @@ const Reviews = (function () {
 
     function renderPagePreview(list) {
       const preview = list.slice(0, PAGE_PREVIEW_COUNT);
-      renderReviewList(els.list, preview);
+      renderReviewList(els.list, preview, { onDeleted: refresh });
       if (els.viewAllBtn) {
         els.viewAllBtn.hidden = list.length <= PAGE_PREVIEW_COUNT;
         Security.setTextSafely(els.viewAllBtn, `View all ${list.length} reviews →`);
@@ -411,7 +471,10 @@ const Reviews = (function () {
         empty.textContent = "No reviews yet — be the first to add one.";
         listWrap.appendChild(empty);
       }
-      nextBatch.forEach((review) => listWrap.appendChild(buildReviewItem(review)));
+      nextBatch.forEach((review) => listWrap.appendChild(buildReviewItem(review, async () => {
+        await refresh();
+        renderDrawerBatch(true);
+      })));
       drawerShown += nextBatch.length;
 
       let moreBtn = els.drawerBody.querySelector(".review-load-more-btn");
@@ -526,6 +589,7 @@ const Reviews = (function () {
         if (!res.ok || !data.ok) {
           throw new Error(data.error || "Your review couldn't be submitted. Please try again.");
         }
+        if (data.id && data.deleteToken) rememberMyReview(data.id, data.deleteToken);
       } catch (err) {
         console.error("Reviews: could not save via api/submit-review", err);
         Security.setTextSafely(els.imageError, err.message || "Your review couldn't be saved — please check your connection and try again.");
