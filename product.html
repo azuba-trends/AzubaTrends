@@ -101,19 +101,27 @@
 
           <div id="availability-status" class="availability-status" hidden></div>
 
-          <div class="product-info__actions" id="product-actions">
-            <div id="add-to-cart-mount" style="flex: 1; min-width: 140px;"></div>
-            <button type="button" id="buy-now-btn" class="btn btn-primary">Buy Now</button>
-          </div>
+          <!-- pdp-buybox-anchor wraps the real Add to Cart/Buy Now row (and
+               its out-of-stock Notify Me alternate) purely so the mobile
+               sticky bar below (#pdp-sticky-actions) knows, via
+               IntersectionObserver, exactly when this natural position has
+               scrolled out of view above the screen (sticky bar slides in)
+               vs. back into view (sticky bar settles away again). -->
+          <div id="pdp-buybox-anchor">
+            <div class="product-info__actions" id="product-actions">
+              <div id="add-to-cart-mount" style="flex: 1; min-width: 140px;"></div>
+              <button type="button" id="buy-now-btn" class="btn btn-primary">Buy Now</button>
+            </div>
 
-          <!-- Out-of-stock replacement for the actions row above. -->
-          <div class="notify-me-block" id="notify-me-block" hidden>
-            <button type="button" class="btn btn-outline btn-block" id="notify-me-btn">🔔 Notify Me</button>
-            <form class="notify-me-form" id="notify-me-form" novalidate>
-              <input type="email" id="notify-me-email" placeholder="Your email address" required autocomplete="email">
-              <button type="submit" class="btn btn-primary">Notify Me</button>
-            </form>
-            <p class="notify-me-status" id="notify-me-status"></p>
+            <!-- Out-of-stock replacement for the actions row above. -->
+            <div class="notify-me-block" id="notify-me-block" hidden>
+              <button type="button" class="btn btn-outline btn-block" id="notify-me-btn">🔔 Notify Me</button>
+              <form class="notify-me-form" id="notify-me-form" novalidate>
+                <input type="email" id="notify-me-email" placeholder="Your email address" required autocomplete="email">
+                <button type="submit" class="btn btn-primary">Notify Me</button>
+              </form>
+              <p class="notify-me-status" id="notify-me-status"></p>
+            </div>
           </div>
 
           <div class="product-info__short-wrap" id="product-short-desc-wrap">
@@ -251,6 +259,21 @@
   </div>
 </div>
 
+<!-- Mobile-only sticky Add to Cart / Buy Now bar — docked just above the
+     bottom nav. Hidden by default (translated off-screen); JS below shows
+     it only once #pdp-buybox-anchor (the real actions row) has scrolled
+     out of view above the screen, and smoothly hides it again once
+     scrolling back up reaches that natural position. Mirrors (not
+     clones) the real Add to Cart/Buy Now: CartButtonUI.mount() is called
+     on this container too, so it's a fully independent, live-synced
+     button — not a fake duplicate. -->
+<div class="pdp-sticky-actions" id="pdp-sticky-actions" aria-hidden="true">
+  <div class="pdp-sticky-actions__inner" id="pdp-sticky-actions-inner">
+    <div id="add-to-cart-mount-sticky" style="flex: 1; min-width: 140px;"></div>
+    <button type="button" id="buy-now-btn-sticky" class="btn btn-primary">Buy Now</button>
+  </div>
+</div>
+
 <div id="footer-mount"></div>
 
 <script src="/js/site-config.js"></script>
@@ -271,6 +294,57 @@
 <script src="/js/reviews.js"></script>
 <script>
   window.addEventListener("layout:ready", () => ProductLoader.initHeader());
+
+  // ---------------------------------------------------------------------
+  // Mobile sticky Add to Cart / Buy Now bar
+  // ---------------------------------------------------------------------
+  // Runs independently of the product-data fetch below (no reason to wait
+  // on that just to watch scroll position). Watches #pdp-buybox-anchor —
+  // the wrapper around the real, inline Add to Cart/Buy Now row — and
+  // shows the fixed sticky bar ONLY once that anchor has scrolled fully
+  // above the viewport (i.e. the shopper scrolled down past it). Scrolling
+  // back up until the anchor is visible again hides the sticky bar with
+  // the same smooth slide, so it never fights with the real buttons for
+  // screen space.
+  (function setupStickyActions() {
+    const stickyBar = document.getElementById("pdp-sticky-actions");
+    const anchor = document.getElementById("pdp-buybox-anchor");
+    if (!stickyBar || !anchor) return;
+
+    let enabled = true; // flipped false while the product is out of stock
+
+    window.pdpStickyActionsSetEnabled = function (value) {
+      enabled = value;
+      if (!enabled) stickyBar.classList.remove("is-visible");
+    };
+
+    const mq = window.matchMedia("(max-width: 767px)");
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!enabled || !mq.matches) {
+          stickyBar.classList.remove("is-visible");
+          return;
+        }
+        const entry = entries[0];
+        // Only stick once the anchor's natural position has scrolled
+        // above the top of the viewport (boundingClientRect.top < 0) —
+        // not before it's ever been reached on initial load, and not
+        // while it's still on screen.
+        if (!entry.isIntersecting && entry.boundingClientRect.top < 0) {
+          stickyBar.classList.add("is-visible");
+        } else {
+          stickyBar.classList.remove("is-visible");
+        }
+      },
+      { threshold: 0 }
+    );
+    io.observe(anchor);
+
+    mq.addEventListener("change", (e) => {
+      if (!e.matches) stickyBar.classList.remove("is-visible");
+    });
+  })();
 
   document.addEventListener("DOMContentLoaded", async () => {
     
@@ -798,12 +872,18 @@
     const deliveryNote = document.getElementById("delivery-partner-note");
     const deliveryLogo = document.getElementById("delivery-partner-logo");
     const deliveryNameEl = document.getElementById("delivery-partner-name");
-    if (product.deliveryPartnerName || product.deliveryPartnerImage) {
+    const partnerImageUrl = (product.deliveryPartnerImage || "").trim();
+    if (product.deliveryPartnerName || partnerImageUrl) {
       Security.setTextSafely(deliveryNameEl, product.deliveryPartnerName || "");
-      if (product.deliveryPartnerImage) {
-        deliveryLogo.src = product.deliveryPartnerImage;
+      if (partnerImageUrl) {
+        // Hide the image box the instant it fails to load (broken/removed
+        // URL) instead of leaving an empty broken-image icon showing —
+        // the name text alone is still enough for the note to make sense.
+        deliveryLogo.onerror = () => { deliveryLogo.hidden = true; };
+        deliveryLogo.src = partnerImageUrl;
         deliveryLogo.hidden = false;
       } else {
+        deliveryLogo.removeAttribute("src");
         deliveryLogo.hidden = true;
       }
       deliveryNote.hidden = false;
@@ -819,6 +899,12 @@
     // duplicate listeners on them.
     const addToCartMount = document.getElementById("add-to-cart-mount");
     const buyNowBtn = document.getElementById("buy-now-btn");
+    // Mobile sticky bar's own Add to Cart mount + Buy Now button — kept in
+    // sync with the real ones below every time renderVariantDependentUI()
+    // runs (size change, initial load, etc). See setupStickyActions() near
+    // the bottom of this script for how/when the bar itself shows.
+    const addToCartMountSticky = document.getElementById("add-to-cart-mount-sticky");
+    const buyNowBtnSticky = document.getElementById("buy-now-btn-sticky");
     const stockStatusEl = document.getElementById("product-stock-status");
     const productActionsEl = document.getElementById("product-actions");
     const notifyBlock = document.getElementById("notify-me-block");
@@ -863,6 +949,10 @@
         notifyBlock.hidden = false;
         buyNowBtn.disabled = true;
         buyNowBtn.setAttribute("aria-disabled", "true");
+
+        // Nothing to stick — out of stock has no Add to Cart/Buy Now at
+        // all, so the mobile sticky bar has nothing useful to show.
+        window.pdpStickyActionsSetEnabled && window.pdpStickyActionsSetEnabled(false);
       } else {
         if (vp.stock <= 5) {
           stockStatusEl.innerHTML = `<span class="low-stock-pill">Only ${vp.stock} left</span>`;
@@ -872,7 +962,7 @@
         buyNowBtn.disabled = false;
         buyNowBtn.removeAttribute("aria-disabled");
 
-        window.CartButtonUI.mount(addToCartMount, {
+        const cartProduct = {
           productId: vp.id,
           title: vp.title,
           price: vp.sellingPrice,
@@ -880,7 +970,12 @@
           stock: vp.stock,
           size: vp.size || "",
           color: vp.color || ""
-        });
+        };
+        window.CartButtonUI.mount(addToCartMount, cartProduct);
+        // Independent second mount for the sticky bar's own container —
+        // CartButtonUI.mount() supports multiple containers for the same
+        // product and keeps every one of them live-synced with the cart.
+        if (addToCartMountSticky) window.CartButtonUI.mount(addToCartMountSticky, cartProduct);
 
         buyNowBtn.setAttribute("data-buy-now", "");
         buyNowBtn.setAttribute("data-product-id", vp.id);
@@ -889,6 +984,23 @@
         buyNowBtn.setAttribute("data-product-image", images[0]);
         buyNowBtn.setAttribute("data-product-size", vp.size || "");
         buyNowBtn.setAttribute("data-product-color", vp.color || "");
+
+        // Mirror the exact same state/attributes onto the sticky Buy Now
+        // button — same [data-buy-now] contract, so cart.js's existing
+        // delegated click listener handles it automatically.
+        if (buyNowBtnSticky) {
+          buyNowBtnSticky.disabled = false;
+          buyNowBtnSticky.removeAttribute("aria-disabled");
+          buyNowBtnSticky.setAttribute("data-buy-now", "");
+          buyNowBtnSticky.setAttribute("data-product-id", vp.id);
+          buyNowBtnSticky.setAttribute("data-product-title", vp.title);
+          buyNowBtnSticky.setAttribute("data-product-price", String(vp.sellingPrice));
+          buyNowBtnSticky.setAttribute("data-product-image", images[0]);
+          buyNowBtnSticky.setAttribute("data-product-size", vp.size || "");
+          buyNowBtnSticky.setAttribute("data-product-color", vp.color || "");
+        }
+
+        window.pdpStickyActionsSetEnabled && window.pdpStickyActionsSetEnabled(true);
       }
     }
 
@@ -1134,17 +1246,23 @@
       // via their own paths above/below this.
       function setProductAvailableUI(available, pin) {
         const buyNowBtn = document.getElementById("buy-now-btn");
+        const buyNowBtnSticky = document.getElementById("buy-now-btn-sticky");
         const addToCartBtn = document.querySelector("#add-to-cart-mount button");
+        const addToCartBtnSticky = document.querySelector("#add-to-cart-mount-sticky button");
         if (available) {
           statusEl.hidden = true;
           if (buyNowBtn) { buyNowBtn.disabled = false; buyNowBtn.removeAttribute("aria-disabled"); }
+          if (buyNowBtnSticky) { buyNowBtnSticky.disabled = false; buyNowBtnSticky.removeAttribute("aria-disabled"); }
           if (addToCartBtn) { addToCartBtn.disabled = false; addToCartBtn.removeAttribute("aria-disabled"); }
+          if (addToCartBtnSticky) { addToCartBtnSticky.disabled = false; addToCartBtnSticky.removeAttribute("aria-disabled"); }
         } else {
           statusEl.hidden = false;
           statusEl.className = "availability-status availability-status--unavailable";
           statusEl.innerHTML = `<span>🚫</span><span>Sorry — this product is not available for delivery to pincode <strong>${Security.escapeHTML(pin)}</strong>. It can't be added to cart until you check a serviceable pincode.</span>`;
           if (buyNowBtn) { buyNowBtn.disabled = true; buyNowBtn.setAttribute("aria-disabled", "true"); }
+          if (buyNowBtnSticky) { buyNowBtnSticky.disabled = true; buyNowBtnSticky.setAttribute("aria-disabled", "true"); }
           if (addToCartBtn) { addToCartBtn.disabled = true; addToCartBtn.setAttribute("aria-disabled", "true"); }
+          if (addToCartBtnSticky) { addToCartBtnSticky.disabled = true; addToCartBtnSticky.setAttribute("aria-disabled", "true"); }
         }
       }
 

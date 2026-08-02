@@ -95,19 +95,22 @@ async function handleSitemap(request, env) {
   const staticUrls = [
     { loc: "/", priority: "1.0", changefreq: "daily" },
     { loc: "/category", priority: "0.7", changefreq: "weekly" },
+    { loc: "/brand", priority: "0.7", changefreq: "weekly" },
     { loc: "/blog", priority: "0.6", changefreq: "weekly" },
   ];
 
   let blogUrls = [];
   let productUrls = [];
   let categoryUrls = [];
+  let brandUrls = [];
   let blogCategoryUrls = [];
   let pageUrls = [];
 
   try {
-    const [products, categories, blogPosts, blogCategories, pages] = await Promise.all([
+    const [products, categories, brands, blogPosts, blogCategories, pages] = await Promise.all([
       getDocs(env, "products"),
       getDocs(env, "categories"),
+      getDocs(env, "brands"),
       getDocs(env, "blogPosts", { where: [["status", "==", "published"]] }),
       getDocs(env, "blogCategories"),
       getDocs(env, "pages", { where: [["status", "==", "published"]] }),
@@ -165,6 +168,16 @@ async function handleSitemap(request, env) {
       });
     }
 
+    for (const b of brands) {
+      if (!b.slug) continue;
+      brandUrls.push({
+        loc: `/brand/${encodeURIComponent(b.slug)}`,
+        priority: "0.6",
+        changefreq: "weekly",
+        lastmod: b.updatedAt || b.createdAt || undefined,
+      });
+    }
+
     for (const p of blogPosts) {
       if (!p.slug) continue;
       blogUrls.push({
@@ -194,12 +207,12 @@ async function handleSitemap(request, env) {
     }
   } catch (err) {
     console.error(
-      "site-meta(sitemap): could not load products/categories/blogCategories/pages:",
+      "site-meta(sitemap): could not load products/categories/brands/blogCategories/pages:",
       err.message
     );
   }
 
-  const allUrls = [...staticUrls, ...categoryUrls, ...productUrls, ...blogUrls, ...blogCategoryUrls, ...pageUrls];
+  const allUrls = [...staticUrls, ...categoryUrls, ...brandUrls, ...productUrls, ...blogUrls, ...blogCategoryUrls, ...pageUrls];
 
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

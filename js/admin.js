@@ -1540,9 +1540,18 @@ setTimeout(() => {
     goToSection("store-add-brand");
   }
 
+  // Bumped into localStorage any time a brand is created, edited, or
+  // deleted — js/brand-loader.js checks this on every storefront page
+  // load and throws away any cached brand list saved before this
+  // timestamp. Same reasoning as markCategoriesDirty() above.
+  function markBrandsDirty() {
+    try { localStorage.setItem("azuba_brands_dirty_at", String(Date.now())); } catch (err) { /* fine, cache just won't invalidate early */ }
+  }
+
   async function deleteBrand(id) {
     if (!confirm("Delete this brand?")) return;
     await deleteDoc(doc(db, "brands", id));
+    markBrandsDirty();
   }
 
   document.getElementById("brand-form").addEventListener("submit", async (e) => {
@@ -1572,6 +1581,7 @@ setTimeout(() => {
         data.createdAt = new Date().toISOString();
         await addDoc(collection(db, "brands"), data);
       }
+      markBrandsDirty();
       brandDraft.clearDraft();
       resetBrandForm();
       goToSection("store-brands");
@@ -1584,6 +1594,7 @@ setTimeout(() => {
 
   wireBulkSelect("brands-table-body", "select-all-brands", "bulk-delete-brands-btn", async (ids) => {
     for (const id of ids) await deleteDoc(doc(db, "brands", id));
+    markBrandsDirty();
   });
 
   function populateCategoryDropdown() {

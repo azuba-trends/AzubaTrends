@@ -450,18 +450,21 @@ html {
 
 .product-card__title {
   font-family: var(--font-body);
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--color-ink);
   line-height: 1.35;
   overflow-wrap: break-word;
   word-break: break-word;
-  /* Fixed-height clamp so cards never resize based on title length */
+  /* Fixed-height clamp so cards never resize based on title length —
+     3 lines (not 2) at this smaller font size so most product titles
+     show in full instead of getting cut off with "…". Card height is
+     still fixed/non-dynamic; it just accommodates one more line. */
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  min-height: calc(1.35em * 2);
+  min-height: calc(1.35em * 3);
 }
 
 .product-card__price-row {
@@ -794,14 +797,15 @@ html {
 .product-info__title {
   margin-top: 4px;
   margin-bottom: var(--space-2);
-  font-size: clamp(1.1rem, 0.95rem + 0.8vw, 1.5rem);
+  font-size: clamp(1rem, 0.87rem + 0.7vw, 1.35rem);
   line-height: 1.3;
   overflow-wrap: break-word;
   word-break: break-word;
-  /* Max 2 lines — anything past that gets an automatic "…" instead of
-     pushing the layout taller. */
+  /* Max 3 lines (not 2) — the fixed clamp still caps how tall this can
+     grow (not dynamic sizing), but the smaller font + extra line means
+     the full title fits without an automatic "…" in almost every case. */
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -819,12 +823,59 @@ html {
 .product-info__price .price-mrp { font-size: 1rem; }
 
 .discount-pill {
-  background: var(--color-success-tint);
-  color: var(--color-success);
+  /* Matches the design system's "% off" badge rule used everywhere else
+     on the site (see .price-tag above — accent fill, white text) instead
+     of the mismatched green that used to live here. */
+  background: var(--color-accent);
+  color: #fff;
   font-weight: 700;
   font-size: 0.78rem;
   padding: 3px 10px;
   border-radius: 999px;
+}
+
+/* ---------- Mobile sticky Add to Cart / Buy Now bar (product.html) ----------
+   Desktop never shows this — the real inline buttons are always visible
+   there. On mobile it's docked just above .bottom-nav, and toggled purely
+   with a transform so it can slide smoothly instead of snapping in/out
+   with display:none. See the IntersectionObserver in product.html for
+   when .is-visible gets added/removed. */
+.pdp-sticky-actions {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .pdp-sticky-actions {
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: var(--bottom-nav-height);
+    z-index: 39; /* just under .bottom-nav's 40 — sits directly above it */
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    box-shadow: 0 -6px 16px rgba(0, 0, 0, 0.08);
+    padding: var(--space-3) var(--space-4);
+    transform: translateY(100%);
+    transition: transform 0.28s ease;
+    pointer-events: none;
+  }
+
+  .pdp-sticky-actions.is-visible {
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .pdp-sticky-actions__inner {
+    display: flex;
+    gap: var(--space-3);
+  }
+
+  /* Same equal-share sizing as .product-info__actions #buy-now-btn. */
+  #buy-now-btn-sticky {
+    flex: 1;
+    min-width: 140px;
+  }
 }
 
 .delivery-partner-note {

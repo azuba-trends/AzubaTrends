@@ -130,6 +130,18 @@ async function handleCategories(env) {
   );
 }
 
+async function handleBrands(env) {
+  // Same pattern as handleCategories above — `brands` is small and public
+  // (see firestore.rules), so this just moves BrandLoader's read behind
+  // the same edge cache as /api/products / /api/categories instead of a
+  // direct browser->Firestore read on every /brand and /brand/:slug visit.
+  const brands = await getDocs(env, "brands");
+  return jsonResponse(
+    { brands, generatedAt: new Date().toISOString() },
+    { cache: "public, s-maxage=20, stale-while-revalidate=10" }
+  );
+}
+
 export async function onRequestGet(context) {
   const { request, env } = context;
   const type = new URL(request.url).searchParams.get("type");
@@ -138,13 +150,14 @@ export async function onRequestGet(context) {
     if (type === "products") return await handleProducts(env);
     if (type === "posts") return await handlePosts(env);
     if (type === "categories") return await handleCategories(env);
+    if (type === "brands") return await handleBrands(env);
     return jsonResponse({ error: "Unknown or missing 'type' query param." }, { status: 400, cache: "no-store" });
   } catch (err) {
     console.error(`api/list (type=${type}) failed:`, err.message);
     // Fail with a normal error response (not a 500 HTML page) so the
     // frontend's fallback-to-Firestore logic can detect this cleanly and
     // still work even if the service account isn't configured yet.
-    const service = type === "posts" ? "Blog" : type === "categories" ? "Category" : "Products";
+    const service = type === "posts" ? "Blog" : type === "categories" ? "Category" : type === "brands" ? "Brand" : "Products";
     return jsonResponse(
       { error: `${service} service temporarily unavailable.` },
       { status: 503, cache: "no-store" }

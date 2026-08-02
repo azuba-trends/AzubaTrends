@@ -13,6 +13,7 @@
     "/admin",
     "/blog",
     "/blog-post",
+    "/brand",
     "/cart",
     "/category",
     "/checkout",

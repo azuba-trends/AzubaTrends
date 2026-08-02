@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/images/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/images/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="/images/icons/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1F3A5F">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="AzubaTrends" id="apple-app-title-meta">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title id="page-title">Brands — AzubaTrends</title>
+<meta id="page-description" name="description" content="Browse AzubaTrends by brand — every brand we carry, all in one place.">
+<link id="page-canonical" rel="canonical" href="https://azubatrends.pages.dev/brand">
+
+<!-- OPEN GRAPH (Facebook, WhatsApp) -->
+<meta property="og:type" content="website">
+<meta id="og-url" property="og:url" content="https://azubatrends.pages.dev/brand">
+<meta id="og-title" property="og:title" content="Brands — AzubaTrends">
+<meta id="og-description" property="og:description" content="Browse AzubaTrends by brand — every brand we carry, all in one place.">
+<meta property="og:image" content="https://azubatrends.pages.dev/images/icons/icon-512.png">
+<meta property="og:site_name" content="AzubaTrends">
+
+<!-- TWITTER -->
+<meta name="twitter:card" content="summary_large_image">
+<meta id="twitter-title" name="twitter:title" content="Brands — AzubaTrends">
+<meta id="twitter-description" name="twitter:description" content="Browse AzubaTrends by brand — every brand we carry, all in one place.">
+<meta name="twitter:image" content="https://azubatrends.pages.dev/images/icons/icon-512.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/main.css">
+<link rel="stylesheet" href="/css/components.css">
+</head>
+<body>
+
+<div id="header-mount"></div>
+
+<main>
+  <div class="container">
+    <section class="page-header">
+      <nav class="breadcrumb" id="brand-breadcrumb" aria-label="Breadcrumb">
+        <span class="skeleton skeleton--line" style="width:140px; display:inline-block; vertical-align:middle;"></span>
+      </nav>
+      <h1 id="brand-title">
+        <span class="skeleton skeleton--line" style="width:220px; height:1.4em; display:inline-block; vertical-align:middle;"></span>
+      </h1>
+      <p id="brand-subtitle">
+        <span class="skeleton skeleton--line" style="width:180px; display:inline-block; vertical-align:middle;"></span>
+      </p>
+    </section>
+
+    <!-- Brand directory grid — every brand as a tile, shown only at the
+         plain /brand URL. Reuses the exact same tile styling as
+         category.html's child-category tiles (.category-tiles/.category-tile
+         in css/components.css) for visual consistency. -->
+    <div class="category-tiles" id="brand-tiles" hidden></div>
+
+    <!-- Single-brand mode — filter bar + product grid, shown only once a
+         /brand/:slug resolves to a real brand. Identical mechanism to
+         category.html's product-grid + ProductListing.mount(). -->
+    <div id="filter-bar-mount"></div>
+    <div class="product-grid" id="product-grid" aria-live="polite" hidden></div>
+
+    <div id="brand-empty-state" class="empty-state" hidden>
+      <h2 id="brand-empty-title">No brands yet</h2>
+      <p id="brand-empty-text">Check back soon — brands will show up here as they're added.</p>
+      <p style="margin-top:16px;"><a class="btn btn-primary" href="/">Back to shop</a></p>
+    </div>
+  </div>
+</main>
+
+<div id="footer-mount"></div>
+
+<script src="/js/site-config.js"></script>
+<script src="/js/tracking.js"></script>
+<script src="/js/security.js"></script>
+<script src="/js/layout.js"></script>
+<script src="/js/loading-overlay.js"></script>
+<script src="/js/a2hs.js"></script>
+    <script src="/js/cart.js"></script>
+    <script src="/js/cart-button-ui.js"></script>
+<script src="/js/wishlist.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
+<script src="/js/product-loader.js"></script>
+<script src="/js/brand-loader.js"></script>
+<script src="/js/category-chips.js"></script>
+<script src="/js/product-listing.js"></script>
+<script src="/js/search.js"></script>
+<script>
+  window.addEventListener("layout:ready", () => ProductLoader.initHeader());
+
+  // Same BreadcrumbList JSON-LD helper category.html uses.
+  function setBreadcrumbJsonLd(items) {
+    let scriptEl = document.getElementById("breadcrumb-jsonld");
+    if (!scriptEl) {
+      scriptEl = document.createElement("script");
+      scriptEl.type = "application/ld+json";
+      scriptEl.id = "breadcrumb-jsonld";
+      document.head.appendChild(scriptEl);
+    }
+    scriptEl.textContent = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: items.map((item, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        name: item.name,
+        item: item.url
+      }))
+    });
+  }
+
+  function renderBreadcrumbNav(chainLinks) {
+    const nav = document.getElementById("brand-breadcrumb");
+    nav.innerHTML = "";
+    chainLinks.forEach((item, i) => {
+      if (i > 0) nav.appendChild(document.createTextNode(" / "));
+      if (item.url && i < chainLinks.length - 1) {
+        const a = document.createElement("a");
+        a.href = item.url;
+        a.textContent = item.name;
+        nav.appendChild(a);
+      } else {
+        const span = document.createElement("span");
+        span.textContent = item.name;
+        nav.appendChild(span);
+      }
+    });
+  }
+
+  function setSeo({ title, description, canonicalUrl }) {
+    document.getElementById("page-title").textContent = title;
+    document.getElementById("page-description").setAttribute("content", description);
+    document.getElementById("page-canonical").setAttribute("href", canonicalUrl);
+    document.getElementById("og-title").setAttribute("content", title);
+    document.getElementById("og-description").setAttribute("content", description);
+    document.getElementById("og-url").setAttribute("content", canonicalUrl);
+    document.getElementById("twitter-title").setAttribute("content", title);
+    document.getElementById("twitter-description").setAttribute("content", description);
+  }
+
+  function renderBrandTiles(brands) {
+    const wrap = document.getElementById("brand-tiles");
+    wrap.innerHTML = "";
+    wrap.hidden = false;
+    brands
+      .slice()
+      .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+      .forEach((b) => {
+        const a = document.createElement("a");
+        a.className = "category-tile";
+        a.href = `/brand/${encodeURIComponent(b.slug || "")}`;
+        a.innerHTML = `
+          <img src="${b.image ? window.Security.escapeHTML(b.image) : "/images/logo-placeholder.svg"}" alt="" loading="lazy">
+          <span>${window.Security.escapeHTML(b.name || "")}</span>
+        `;
+        wrap.appendChild(a);
+      });
+  }
+
+  document.addEventListener("DOMContentLoaded", async () => {
+
+    const titleEl = document.getElementById("brand-title");
+    const subtitleEl = document.getElementById("brand-subtitle");
+    const emptyStateEl = document.getElementById("brand-empty-state");
+    const grid = document.getElementById("product-grid");
+
+    // Clean URL is /brand/some-slug (see _redirects' /brand/* rewrite ->
+    // this file), same technique category.html uses for /category/*.
+    const pathParts = window.location.pathname.split("/").filter(Boolean);
+    const slugFromUrl = pathParts[0] === "brand" ? decodeURIComponent(pathParts.slice(1).join("/")) : "";
+
+    const brands = await BrandLoader.loadAllBrands();
+
+    // ---------------------------------------------------------------
+    // Mode 1: /brand — plain directory of every brand.
+    // ---------------------------------------------------------------
+    if (!slugFromUrl) {
+      const chain = [{ name: "Home", url: "/" }, { name: "Brands", url: "" }];
+      renderBreadcrumbNav(chain);
+      setBreadcrumbJsonLd(chain.map((b) => ({ name: b.name, url: b.url ? `${window.location.origin}${b.url}` : window.location.href })));
+
+      Security.setTextSafely(titleEl, "All Brands");
+      Security.setTextSafely(
+        subtitleEl,
+        brands.length ? `${brands.length} brand${brands.length === 1 ? "" : "s"} to explore.` : "Check back soon."
+      );
+
+      setSeo({
+        title: "Brands — AzubaTrends",
+        description: "Browse AzubaTrends by brand — every brand we carry, all in one place.",
+        canonicalUrl: `${window.location.origin}/brand`
+      });
+
+      if (!brands.length) {
+        Security.setTextSafely(document.getElementById("brand-empty-title"), "No brands yet");
+        Security.setTextSafely(document.getElementById("brand-empty-text"), "Check back soon — brands will show up here as they're added.");
+        emptyStateEl.hidden = false;
+      } else {
+        renderBrandTiles(brands);
+      }
+      return;
+    }
+
+    // ---------------------------------------------------------------
+    // Mode 2: /brand/:slug — this brand's products, filter bar + grid,
+    // exactly like category.html's single-category mode.
+    // ---------------------------------------------------------------
+    const brand = BrandLoader.findBySlug(brands, slugFromUrl);
+
+    if (!brand) {
+      const chain = [{ name: "Home", url: "/" }, { name: "Brands", url: "/brand" }, { name: "Not found", url: "" }];
+      renderBreadcrumbNav(chain);
+      Security.setTextSafely(titleEl, "Brand not found");
+      Security.setTextSafely(subtitleEl, "");
+      Security.setTextSafely(document.getElementById("brand-empty-title"), "We couldn't find that brand");
+      Security.setTextSafely(document.getElementById("brand-empty-text"), "It may have been removed, or the link might be incorrect.");
+      emptyStateEl.hidden = false;
+      return;
+    }
+
+    grid.hidden = false;
+    ProductLoader.renderSkeletonGrid(grid, 8);
+
+    const products = await ProductLoader.loadAllProducts();
+    const visibleProducts = products.filter((p) => (p.brandId && p.brandId === brand.id) || (!p.brandId && p.brand === brand.name));
+
+    const chain = [{ name: "Home", url: "/" }, { name: "Brands", url: "/brand" }, { name: brand.name, url: "" }];
+    renderBreadcrumbNav(chain);
+    setBreadcrumbJsonLd(chain.map((b) => ({ name: b.name, url: b.url ? `${window.location.origin}${b.url}` : window.location.href })));
+
+    Security.setTextSafely(titleEl, brand.name || "Brand");
+    Security.setTextSafely(
+      subtitleEl,
+      `${visibleProducts.length} product${visibleProducts.length === 1 ? "" : "s"} from ${brand.name}.`
+    );
+
+    const pageTitle = `${brand.metaTitle || brand.name} — AzubaTrends`;
+    const pageDesc = brand.metaDesc || brand.description || `Shop ${brand.name} at AzubaTrends.`;
+    setSeo({
+      title: pageTitle,
+      description: pageDesc,
+      canonicalUrl: `${window.location.origin}/brand/${encodeURIComponent(brand.slug)}`
+    });
+
+    ProductListing.mount(
+      document.getElementById("filter-bar-mount"),
+      grid,
+      visibleProducts,
+      {
+        initialCategory: "All",
+        emptyMessage: `No products from ${brand.name} yet — check back soon.`
+      }
+    );
+  });
+</script>
+</body>
+</html>
