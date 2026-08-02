@@ -1624,8 +1624,16 @@ setTimeout(() => {
   function populateCategoryDropdown() {
     const sel = document.getElementById("prod-category");
     const current = sel.value;
-    sel.innerHTML = "<option value=''>Select Category</option>";
-    categoriesList.forEach((cat) => sel.innerHTML += `<option value="${esc(cat.name)}">${esc(cat.name)}</option>`);
+    const byId = categoriesById();
+    // Same depth-first, parentId-based tree ordering as the Parent Category
+    // dropdown (buildCategoryTreeOptions) — previously this just looped over
+    // categoriesList in Firestore's arbitrary snapshot order, so the list
+    // showed categories randomly instead of grouped under their parents.
+    sel.innerHTML = "<option value=''>Select Category</option>" +
+      buildCategoryTreeOptions().map((o) => {
+        const cat = byId.get(o.id);
+        return `<option value="${esc(cat.name)}">${esc(o.label)}</option>`;
+      }).join("");
     sel.value = current;
   }
 
