@@ -260,12 +260,12 @@
 </div>
 
 <!-- Mobile-only sticky Add to Cart / Buy Now bar — docked just above the
-     bottom nav. Hidden by default (translated off-screen); JS below shows
-     it only once #pdp-buybox-anchor (the real actions row) has scrolled
-     out of view above the screen, and smoothly hides it again once
-     scrolling back up reaches that natural position. Mirrors (not
-     clones) the real Add to Cart/Buy Now: CartButtonUI.mount() is called
-     on this container too, so it's a fully independent, live-synced
+     bottom nav. Shown by default (until the real row is reached); JS below
+     hides it the instant #pdp-buybox-anchor (the real actions row) scrolls
+     into view, and keeps it hidden once you've scrolled past it too — it
+     only ever shows for "haven't reached the real buttons yet". Mirrors
+     (not clones) the real Add to Cart/Buy Now: CartButtonUI.mount() is
+     called on this container too, so it's a fully independent, live-synced
      button — not a fake duplicate. -->
 <div class="pdp-sticky-actions" id="pdp-sticky-actions" aria-hidden="true">
   <div class="pdp-sticky-actions__inner" id="pdp-sticky-actions-inner">
@@ -301,11 +301,13 @@
   // Runs independently of the product-data fetch below (no reason to wait
   // on that just to watch scroll position). Watches #pdp-buybox-anchor —
   // the wrapper around the real, inline Add to Cart/Buy Now row — and
-  // shows the fixed sticky bar ONLY once that anchor has scrolled fully
-  // above the viewport (i.e. the shopper scrolled down past it). Scrolling
-  // back up until the anchor is visible again hides the sticky bar with
-  // the same smooth slide, so it never fights with the real buttons for
-  // screen space.
+  // shows the fixed sticky bar ONLY while that anchor's natural position
+  // is still BELOW the viewport (i.e. the shopper hasn't scrolled down to
+  // it yet — gallery/details are still above the fold). The instant the
+  // real row scrolls into view, the sticky bar settles away smoothly and
+  // the real buttons take over; scrolling further down past it (or back
+  // up above it again) it stays hidden either way — it only ever shows
+  // for "haven't reached it yet, it's further down the page".
   (function setupStickyActions() {
     const stickyBar = document.getElementById("pdp-sticky-actions");
     const anchor = document.getElementById("pdp-buybox-anchor");
@@ -327,11 +329,12 @@
           return;
         }
         const entry = entries[0];
-        // Only stick once the anchor's natural position has scrolled
-        // above the top of the viewport (boundingClientRect.top < 0) —
-        // not before it's ever been reached on initial load, and not
-        // while it's still on screen.
-        if (!entry.isIntersecting && entry.boundingClientRect.top < 0) {
+        // Show only while the anchor's natural position is still below
+        // the viewport (boundingClientRect.top > 0, i.e. not reached
+        // yet). Once it's on screen (isIntersecting) or already scrolled
+        // past above (top < 0), stay hidden — the real buttons are
+        // either visible or already seen.
+        if (!entry.isIntersecting && entry.boundingClientRect.top > 0) {
           stickyBar.classList.add("is-visible");
         } else {
           stickyBar.classList.remove("is-visible");
