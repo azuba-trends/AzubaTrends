@@ -1335,21 +1335,6 @@ html {
 }
 
 /* ---------- Right-column sidebar cards (Sold By / Delivery checker) ---------- */
-.geo-soft-prompt {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  background: var(--color-bg-soft, #f6f6f4);
-  border: 1px solid var(--color-border);
-  padding: var(--space-3);
-  margin-bottom: var(--space-4);
-  font-size: 0.88rem;
-}
-.geo-soft-prompt__text { flex: 1; min-width: 160px; }
-.geo-soft-prompt__allow { padding: 6px 14px; font-size: 0.85rem; }
-.geo-soft-prompt__dismiss { font-size: 0.82rem; }
-
 .delivery-checker__input--attn {
   outline: 2px solid var(--color-danger);
   outline-offset: 1px;

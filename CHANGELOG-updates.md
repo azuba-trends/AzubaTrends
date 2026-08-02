@@ -1,5 +1,25 @@
 # AzubaTrends — Update Changelog
 
+## 2026-08-02 (4) — Check button now always asks for location permission, even with a pincode already typed
+
+Tweak on top of the previous fix: clicking **Check** now triggers the geolocation permission ask every time (so it still gets resolved even if the shopper already typed a pincode) — it just no longer overwrites whatever they've already typed in the field. Detected location is only used to auto-fill when the input was empty.
+
+## 2026-08-02 (3) — Custom "Allow location access" banner removed; native browser prompt used instead
+
+**The custom geo-soft-prompt banner ("Allow location access to auto-check delivery for this product?") is gone completely** — markup, CSS, and its whole JS state machine (session-dismissed flag, granted flag, Permissions API polling on load) all removed from `product.html` and `css/components.css`.
+
+In its place: clicking the **Check** button next to the pincode field is now the trigger. That's a real, direct user gesture, so if location permission hasn't been decided yet, the browser's own native "Allow location?" prompt shows right there — no custom UI to keep in sync with the real permission state (which is what was going stale/still showing before). If the shopper has already typed their own pincode, clicking Check just checks that — no location ask at all.
+
+On page load, if the Permissions API confirms location is *already* granted (from an earlier visit), the pincode is silently auto-detected and checked with no prompt at all — same as before, just without the banner in the way. If it's undecided or denied, nothing happens until Check is clicked; whether/when the browser re-offers a denied permission later is entirely Chrome's own behavior (it does reset this after a while) — not something a site can or should control.
+
+## 2026-08-02 (2) — Checkout city/pincode mismatch bug fixed; Buy Now / Add to Cart no longer grey out
+
+**1. Checkout bug: city and pincode were validated completely independently.**
+Real bug — a shopper could select "Kolkata" in the city dropdown but type a Siliguri (or any other) pincode, and checkout would accept the order, because `GeoRestriction.validate()` only ever checked the pincode against the state-wide West Bengal ranges, never against the chosen city. Fixed in `js/checkout.js`: on submit, once the city and pincode individually pass, they're now cross-checked against each other using the bundled `config/wb-pincodes.json` (the same directory-derived dataset from the earlier fix today), with a live India Post per-city lookup as a second opinion in case the bundled file is missing something. Mismatches now show a clear error under the City field instead of silently going through. Hand-typed "Other" cities are left alone (no directory to check them against), and a third-party API outage fails open rather than blocking a real order.
+
+**2. Buy Now / Add to Cart no longer visually grey out while waiting on a pincode check.**
+Previously, once a pincode was checked and came back as "not deliverable for this product," the buttons were set `disabled` + `aria-disabled`, which the global `.btn:disabled` CSS rule renders as a flat grey "looks broken" button. Owner's call: buttons should always keep their normal `btn-primary` / `btn-accent` color. `product.html` no longer touches `.disabled`/`aria-disabled` for this case at all — a `productAvailableAtPin` flag now gates the click instead (same capture-phase listener that already handled "pincode not checked yet"), so clicking still scrolls up and shows the reason, but the button itself never looks disabled. (Out-of-stock buttons are unrelated and still genuinely disable — that's a real "cannot be ordered at all" state, not a pincode gate.)
+
 ## 2026-08-02 — West Bengal pincode dataset replaced with official directory-derived data
 
 **config/wb-pincodes.json rebuilt from the full India Post Pincode Directory (~154,000 post offices), not the ~2,100-row partial mirror used before.**

@@ -85,22 +85,6 @@
             <strong id="delivery-partner-name"></strong>
           </div>
 
-          <!-- Soft geolocation prompt — deliberately NOT the raw browser
-               permission dialog. We ask here first, in our own words, and
-               only trigger navigator.geolocation (the real one-shot native
-               prompt) if they tap Allow. This is the pattern big platforms
-               use: it avoids burning the browser's one-time prompt on a
-               cold ask, and if they say "Not now" we never touch the real
-               dialog at all, so they can still be asked again as a normal
-               choice later instead of being permanently auto-blocked.
-               Hidden by default; JS below decides whether to show it. -->
-          <div class="geo-soft-prompt" id="geo-soft-prompt" hidden>
-            <span class="geo-soft-prompt__icon">📍</span>
-            <span class="geo-soft-prompt__text">Allow location access to auto-check delivery for this product?</span>
-            <button type="button" class="btn btn-primary geo-soft-prompt__allow" id="geo-soft-prompt-allow">Allow</button>
-            <button type="button" class="btn-link geo-soft-prompt__dismiss" id="geo-soft-prompt-dismiss">Not now</button>
-          </div>
-
           <!-- Check Delivery Date & Availability — placed above the action
                buttons so the "not available at your location" status is
                impossible to miss before someone tries to buy. Card holds
@@ -1292,25 +1276,22 @@
       // brand's) availability at the given pincode — the whole-store WB
       // check and stock check are separate and already block the buttons
       // via their own paths above/below this.
+      // Whether the currently-active product/brand can actually be
+      // delivered to the last-checked pincode. Buttons are intentionally
+      // NEVER greyed out for this (owner's call, 2026-08-02) — they always
+      // keep their normal btn-primary/btn-accent color. This flag just
+      // gates the click via the capture-phase listener below, which blocks
+      // the click and re-shows the reason instead of disabling the button.
+      let productAvailableAtPin = true;
+
       function setProductAvailableUI(available, pin) {
-        const buyNowBtn = document.getElementById("buy-now-btn");
-        const buyNowBtnSticky = document.getElementById("buy-now-btn-sticky");
-        const addToCartBtn = document.querySelector("#add-to-cart-mount button");
-        const addToCartBtnSticky = document.querySelector("#add-to-cart-mount-sticky button");
+        productAvailableAtPin = !!available;
         if (available) {
           statusEl.hidden = true;
-          if (buyNowBtn) { buyNowBtn.disabled = false; buyNowBtn.removeAttribute("aria-disabled"); }
-          if (buyNowBtnSticky) { buyNowBtnSticky.disabled = false; buyNowBtnSticky.removeAttribute("aria-disabled"); }
-          if (addToCartBtn) { addToCartBtn.disabled = false; addToCartBtn.removeAttribute("aria-disabled"); }
-          if (addToCartBtnSticky) { addToCartBtnSticky.disabled = false; addToCartBtnSticky.removeAttribute("aria-disabled"); }
         } else {
           statusEl.hidden = false;
           statusEl.className = "availability-status availability-status--unavailable";
           statusEl.innerHTML = `<span>🚫</span><span>Sorry — this product is not available for delivery to pincode <strong>${Security.escapeHTML(pin)}</strong>. It can't be added to cart until you check a serviceable pincode.</span>`;
-          if (buyNowBtn) { buyNowBtn.disabled = true; buyNowBtn.setAttribute("aria-disabled", "true"); }
-          if (buyNowBtnSticky) { buyNowBtnSticky.disabled = true; buyNowBtnSticky.setAttribute("aria-disabled", "true"); }
-          if (addToCartBtn) { addToCartBtn.disabled = true; addToCartBtn.setAttribute("aria-disabled", "true"); }
-          if (addToCartBtnSticky) { addToCartBtnSticky.disabled = true; addToCartBtnSticky.setAttribute("aria-disabled", "true"); }
         }
       }
 
@@ -1389,7 +1370,24 @@
         resultEl.classList.add("is-visible");
       }
 
-      btn.addEventListener("click", runCheck);
+      // Clicking "Check" is a real, direct user gesture — this is exactly
+      // when the browser will show its native "Allow location?" prompt if
+      // permission hasn't been decided yet (2026-08-02: replaces the old
+      // custom "Allow location access..." banner entirely — no more
+      // separate UI to keep in sync with the real permission state). Only
+      // attempted regardless of whether the shopper already typed a
+      // pincode — the permission itself is still worth asking for (so it's
+      // resolved for next time), but we never OVERWRITE a pincode they
+      // already entered themselves.
+      btn.addEventListener("click", async () => {
+        if (navigator.geolocation) {
+          try {
+            const pin = await Availability.detectPincodeFromLocation();
+            if (pin && !input.value.trim()) input.value = pin;
+          } catch (err) { /* denied/unavailable — fall through to manual check */ }
+        }
+        runCheck();
+      });
       input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); runCheck(); } });
 
       // ---- Gate Add to Cart / Buy Now on a pincode check having happened
@@ -1412,14 +1410,26 @@
         input.classList.add("delivery-checker__input--attn");
         setTimeout(() => input.classList.remove("delivery-checker__input--attn"), 1400);
       }
+      function promptUnavailableAtPin() {
+        deliveryCard.scrollIntoView({ behavior: "smooth", block: "center" });
+        statusEl.hidden = false;
+      }
       document.addEventListener("click", (e) => {
-        if (deliveryChecked) return;
         const target = e.target.closest("#buy-now-btn, #buy-now-btn-sticky, #add-to-cart-mount button, #add-to-cart-mount-sticky button");
         if (!target || target.disabled) return;
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        promptForPincodeCheck();
+        if (!deliveryChecked) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          promptForPincodeCheck();
+          return;
+        }
+        if (!productAvailableAtPin) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          promptUnavailableAtPin();
+        }
       }, true);
 
       // If the shopper already checked a pincode earlier (this session or
@@ -1431,101 +1441,35 @@
       if (savedPin) {
         input.value = savedPin;
         runCheck();
-        return; // already have a pincode — skip the geolocation ask entirely
+        return; // already have a pincode — nothing else to do
       }
 
-      // ---- Soft geolocation ask (only reached if we have no saved
-      // pincode yet) --------------------------------------------------
-      initGeoSoftPrompt();
-
-      async function initGeoSoftPrompt() {
-        if (!navigator.geolocation) return; // not supported — manual entry only
-        const banner = document.getElementById("geo-soft-prompt");
-        const allowBtn = document.getElementById("geo-soft-prompt-allow");
-        const dismissBtn = document.getElementById("geo-soft-prompt-dismiss");
-        const DISMISSED_KEY = "azuba_geo_prompt_dismissed";
-        const GRANTED_KEY = "azuba_geo_prompt_granted";
-
-        async function detectAndFill() {
-          const pin = await Availability.detectPincodeFromLocation();
-          if (pin) { input.value = pin; runCheck(); }
-          return !!pin;
-        }
-
-        // Our own record of "we've confirmed this browser already allows
-        // location for this site" — checked BEFORE the live Permissions
-        // API call below. This matters because navigator.permissions.query()
-        // can throw, be unsupported (Safari), or simply be unreliable in
-        // some contexts; if that happens the old code silently fell back
-        // to the 'prompt' state and showed the banner even when access was
-        // already granted. Once we've seen a real 'granted' once, trust it.
-        let alreadyGranted = false;
-        try { alreadyGranted = localStorage.getItem(GRANTED_KEY) === "1"; } catch (err) { /* ignore */ }
-        if (alreadyGranted) {
-          await detectAndFill();
-          return;
-        }
-
-        // Permissions API isn't supported everywhere (notably Safari) —
-        // where it's missing, fall back to just showing the soft prompt
-        // once, same as the 'prompt' branch below.
-        let state = "prompt";
+      // ---- No saved pincode yet (2026-08-02: replaces the old custom
+      // "Allow location access..." banner) ------------------------------
+      // If the browser has ALREADY decided this permission is granted
+      // (from an earlier visit, or elsewhere on the site), use it right
+      // away with no prompt at all — big platforms don't re-ask once
+      // granted. If it's 'prompt' (undecided) or 'denied', we do nothing
+      // here and simply wait: clicking "Check" is what triggers the real
+      // native prompt (see the click listener above), and if it's denied
+      // the browser itself decides whether/when to offer it again later —
+      // that's entirely Chrome's own behavior, not something a site can
+      // or should override.
+      (async function silentAutoDetectIfAlreadyGranted() {
+        if (!navigator.geolocation) return;
         try {
           if (navigator.permissions && navigator.permissions.query) {
             const status = await navigator.permissions.query({ name: "geolocation" });
-            state = status.state; // 'granted' | 'denied' | 'prompt'
+            if (status.state !== "granted") return;
+          } else {
+            return; // Permissions API unsupported (e.g. Safari) — can't
+                     // confirm "already granted" silently, so don't guess;
+                     // let the Check button trigger the real prompt instead.
           }
-        } catch (err) { /* leave state as 'prompt' */ }
-
-        if (state === "granted") {
-          // Already granted (maybe from a previous visit, or elsewhere on
-          // the site) — big platforms don't re-ask here, they just use it.
-          try { localStorage.setItem(GRANTED_KEY, "1"); } catch (err) { /* ignore */ }
-          await detectAndFill();
-          return;
-        }
-
-        if (state === "denied") {
-          // Previously blocked at the browser level — browsers won't show
-          // the native prompt again regardless of what we do, so don't
-          // show our soft prompt either; it'd just be a dead end. Manual
-          // pincode entry (already visible) is the only path from here
-          // unless they re-enable it themselves in browser settings.
-          return;
-        }
-
-        // state === 'prompt' — undecided. Ask once per browsing SESSION
-        // (not forever) — a real browser 'prompt' state stays askable
-        // indefinitely too (that's what makes it different from
-        // 'denied'), so our own friendly pre-ask shouldn't be stricter
-        // than the browser itself. Closing the tab/browser and coming
-        // back is a fresh session, so it can offer again then.
-        let dismissed = false;
-        try { dismissed = sessionStorage.getItem(DISMISSED_KEY) === "1"; } catch (err) { /* ignore */ }
-        if (dismissed) return;
-
-        banner.hidden = false;
-        const hide = () => { banner.hidden = true; };
-        const markDismissed = () => { try { sessionStorage.setItem(DISMISSED_KEY, "1"); } catch (err) { /* ignore */ } };
-
-        allowBtn.addEventListener("click", async () => {
-          allowBtn.disabled = true;
-          allowBtn.textContent = "Checking...";
-          const found = await detectAndFill(); // this is what triggers the real native browser prompt
-          if (found) { try { localStorage.setItem(GRANTED_KEY, "1"); } catch (err) { /* ignore */ } }
-          markDismissed(); // one ask, ever — respected either way
-          hide();
-          if (!found) {
-            // Declined at the native prompt, or lookup failed — no error
-            // popup, manual pincode entry is right there already.
-          }
-        }, { once: true });
-
-        dismissBtn.addEventListener("click", () => {
-          markDismissed();
-          hide();
-        }, { once: true });
-      }
+        } catch (err) { return; }
+        const pin = await Availability.detectPincodeFromLocation();
+        if (pin) { input.value = pin; runCheck(); }
+      })();
     })();
 
     // ---- SEO: Structured Data (Schema.org Product) -------------------

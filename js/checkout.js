@@ -18,6 +18,12 @@
 //    tampered discount can't sneak through.
 // 6. Per-product deliveryFee (set by the admin on each product) is summed
 //    into the total as its own line item.
+// 7. (2026-08-02) City <-> pincode cross-check. Previously the city
+//    dropdown and the pincode field were validated completely
+//    independently — a shopper could pick "Kolkata" and type a Siliguri
+//    pincode and checkout would accept it. Now cross-checked against
+//    config/wb-pincodes.json (+ live India Post lookup as a second
+//    opinion) before the order can be placed.
 (function () {
   'use strict';
 
@@ -204,6 +210,72 @@
         errEl.style.color = 'var(--color-danger, red)';
       }
     });
+  }
+
+  // ------------------------------------------------------------------
+  // City <-> pincode cross-check (2026-08-02 fix).
+  // ------------------------------------------------------------------
+  // BUG THIS FIXES: previously, "West Bengal delivery zone" validation
+  // (GeoRestriction.validate) only checked the PIN CODE against the
+  // static state-wide ranges — it never compared the pincode against the
+  // CITY the shopper picked in the dropdown. So a shopper could select
+  // "Kolkata" but type a Siliguri pincode (or vice versa) and checkout
+  // would happily accept it, because city and pincode were two
+  // completely independent checks. This cross-checks the two against
+  // each other using the same bundled directory admin.js's availability
+  // picker uses (config/wb-pincodes.json), with a live India-Post
+  // per-city lookup as a second opinion in case the bundled file is
+  // missing a newer/rarer post office.
+  let wbBundledPincodesCache = null;
+  async function loadBundledWbPincodes() {
+    if (wbBundledPincodesCache) return wbBundledPincodesCache;
+    try {
+      const res = await fetch('/config/wb-pincodes.json');
+      wbBundledPincodesCache = await res.json();
+    } catch (err) {
+      console.error('Checkout: could not load config/wb-pincodes.json for city/pincode cross-check:', err);
+      wbBundledPincodesCache = {};
+    }
+    return wbBundledPincodesCache;
+  }
+
+  // Returns true if `pin` genuinely belongs to `city`, false if it belongs
+  // to somewhere else, or true (fail-open) if `city` isn't one of our
+  // curated/known cities (e.g. the free-typed "Other" option — we simply
+  // have no directory to check a hand-typed town against) or if both the
+  // bundled data AND the live API come back empty/unreachable, since a
+  // real order shouldn't be blocked over a third-party outage or a gap in
+  // a point-in-time export.
+  async function isPincodeValidForCity(city, pin, geoConfig) {
+    if (!city || !pin) return true;
+    const isKnownCity = (geoConfig.allowedCities || []).some(
+      (c) => c.trim().toLowerCase() === city.trim().toLowerCase()
+    );
+    if (!isKnownCity) return true; // hand-typed "Other" city — nothing to check against
+
+    const bundled = await loadBundledWbPincodes();
+    const bundledCodes = bundled[city] || [];
+    if (bundledCodes.includes(pin)) return true;
+
+    // Not in the bundled list — double-check against the live India Post
+    // name-search API before rejecting, in case the bundled export is
+    // missing a newer post office (same fallback pattern admin.js uses).
+    try {
+      const res = await fetch(`https://api.postalpincode.in/postoffice/${encodeURIComponent(city)}`);
+      const data = await res.json();
+      const offices = (data && data[0] && data[0].Status === 'Success' && data[0].PostOffice) || [];
+      const found = offices.some(
+        (o) => o.Pincode === pin && (o.State || '').toLowerCase() === 'west bengal'
+      );
+      if (found) return true;
+    } catch (err) {
+      // Live API unreachable — we already know the bundled list didn't
+      // have it either, but don't hard-fail a real order over a
+      // third-party outage; let it through and log for follow-up.
+      console.warn(`Checkout: could not verify "${city}" vs pincode ${pin} via live API (bundled data also had no match):`, err);
+      return true;
+    }
+    return false;
   }
 
   function getCartTotal() {
@@ -394,6 +466,16 @@
             showFieldError('error-pincode', pinCheck.details.pincodeReason || 'We do not deliver to this PIN code.');
             hasError = true;
           }
+        }
+      }
+
+      // City <-> pincode cross-check — only meaningful once both individually
+      // pass (a bad pincode or missing city already errored above).
+      if (!hasError) {
+        const cityPinOk = await isPincodeValidForCity(city, pin, geoConfig);
+        if (!cityPinOk) {
+          showFieldError('error-city', `This PIN code doesn't match "${city}" — please pick the correct city or re-check your PIN code.`);
+          hasError = true;
         }
       }
 
