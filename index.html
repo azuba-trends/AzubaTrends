@@ -38,6 +38,41 @@
 <link rel="stylesheet" href="css/components.css">
 <meta name="google-site-verification" content="3v9HWoAKEHH6LEex-Mn_WmM328fcyig_AQwt92-bHAM" />
 
+<!-- STRUCTURED DATA — tells Google "AzubaTrends" (and common variants people
+     type/search for it) is a brand entity whose official site is this URL.
+     This is one of the direct signals brand-name searches use; it does NOT
+     replace backlinks/a custom domain, but it's a free, always-on signal.
+     Edit the sameAs[] array below with every real social/marketplace
+     profile you have (Instagram, Facebook, etc.) — each one you add makes
+     this entity link stronger. Leave out any you don't have; don't add
+     placeholder URLs. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "AzubaTrends",
+  "alternateName": ["Azuba Trends", "Azuba Trend"],
+  "url": "https://azubatrends.pages.dev/",
+  "logo": "https://azubatrends.pages.dev/images/icons/icon-512.png",
+  "sameAs": []
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "AzubaTrends",
+  "alternateName": ["Azuba Trends", "Azuba Trend"],
+  "url": "https://azubatrends.pages.dev/",
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": "https://azubatrends.pages.dev/search?q={search_term_string}",
+    "query-input": "required name=search_term_string"
+  }
+}
+</script>
+
+
 <!--
   SEARCH ENGINE VERIFICATION TAG(S) GO HERE
   ------------------------------------------
