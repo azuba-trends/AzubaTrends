@@ -27,7 +27,7 @@
   // Non-secret by design — this is the VAPID PUBLIC key, meant to ship in
   // client JS. The matching private key lives only as a Cloudflare Pages
   // environment secret, used server-side in functions/api/send-push.js.
-  const VAPID_PUBLIC_KEY = "BEQ9uzhucC598j7Ye1UAd9D5vYtYfATU_V2Kzfgi1hwf9UXVdqCTAOTxU8ol7seSurfjJgnDu0KuVkLT7kWEIwM";
+  const VAPID_PUBLIC_KEY = "BLBXcUg_SIOOn9zl8dS7FgCvPgBy4vBFmcvPp9l8D3WpTDLwZ8AciONxyBf1DCiRwMR6T0_NpAkn_J-g4Da6l30";
 
   function urlBase64ToUint8Array(base64String) {
     const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
