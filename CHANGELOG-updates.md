@@ -1,5 +1,23 @@
 # AzubaTrends — Update Changelog
 
+## 2026-08-03 — Push notification images + heads-up banner, semi-automatic "New Arrival" Push Notify, admin table cleanup, push-based back-in-stock alerts
+
+**1. Notification images + real heads-up/floating banner (Meesho-style).**
+`sw.js`'s push handler now supports an optional `image` (the big banner-style picture inside the notification, e.g. a product photo) plus `vibrate`, `renotify`, and a per-notification `tag` — `requireInteraction` stays unset (false) on purpose so it floats in and auto-dismisses, exactly like the reference screenshot. `functions/api/send-push.js` now accepts and forwards `image`, and `lib/web-push.js` sends an `Urgency: high` header on every push, both of which push Chrome toward showing it as a heads-up banner instead of quietly landing in the tray. `SW_VERSION` bumped to `"3"` so this actually rolls out to already-installed service workers.
+
+**2. "Push Notify" button — semi-automatic New Arrival push, per product.**
+New "Notify" column in All Products (`admin.html` + `js/admin.js`), one **🔔 Push Notify** button per *product or parent product row only* — never on a color/size variant row, since those aren't their own visible store listing. One click (after a confirm), no typing: auto-generates a short professional "✨ New Arrival" message and broadcasts it to every subscriber via the existing `/api/send-push` (broadcast) path, using the product's own image + link if it's a plain product, or its first color's first available size if it has variants (picked by earliest `createdAt`, in-stock preferred).
+
+**3. Admin All Products table — name/tags 2-line clamp + narrower Tags column.**
+Name and Tags cells now clamp to 2 lines with an ellipsis (full text still available via `title=""` on hover) instead of stretching the row; Tags column narrowed to make room for the new Notify column, inserted between Sync and Actions.
+
+**4. Out-of-stock "Notify Me" is now push-based and actually sends, automatically.**
+Previously this only saved an email address to Firestore with nothing wired up to send anything later. Reworked end-to-end:
+- `product.html`: the email form is gone — "Notify Me" is now one tap that subscribes the browser to push (same permission flow already used for order updates) and calls `/api/notify-stock` with the device id.
+- `functions/api/notify-stock.js`: now records `{productId, deviceId, productUrl, notified:false}` waiting-list rows instead of emails.
+- `functions/api/notify-restock.js` (new): admin-protected — given a list of just-restocked products, looks up everyone waiting on each, pushes "✅ Back in Stock" to their devices, and clears the waiting list.
+- `js/admin.js`'s `handleProductSave()` now snapshots stock before saving and, for any product/variant whose stock just went from 0 (or unset) to available, fires `/api/notify-restock` right after the save succeeds — the admin never clicks anything extra beyond the normal stock edit + Save/Publish they were already doing.
+
 ## 2026-08-02 (4) — Check button now always asks for location permission, even with a pincode already typed
 
 Tweak on top of the previous fix: clicking **Check** now triggers the geolocation permission ask every time (so it still gets resolved even if the shopper already typed a pincode) — it just no longer overwrites whatever they've already typed in the field. Detected location is only used to auto-fill when the input was empty.

@@ -1,11 +1,17 @@
 // functions/api/send-push.js
 //
 // Two ways this gets called:
-//   1. Targeted: { deviceId, title, body, url } — fired automatically by
-//      admin.js right after an order's status changes, so only the
+//   1. Targeted: { deviceId, title, body, url, image? } — fired automatically
+//      by admin.js right after an order's status changes, so only the
 //      customer who placed THAT order gets notified.
-//   2. Broadcast: { broadcast: true, title, body, url } — the
-//      Notifications panel in admin.html, sends to every subscriber.
+//   2. Broadcast: { broadcast: true, title, body, url, image? } — the
+//      Notifications panel in admin.html (custom announcements), AND the
+//      "Push Notify" button on a product row (semi-automatic New Arrival
+//      announcement) — both send to every subscriber.
+//
+// `image` is optional and just a hosted image URL (this store already
+// hosts every product photo that way) — see sw.js's push handler for how
+// it turns into the big banner-style picture inside the notification.
 //
 // Admin-auth-protected either way — this endpoint can push arbitrary
 // text to real devices, so it must never be callable by an unauthenticated
@@ -38,7 +44,7 @@ export async function onRequestPost(context) {
   }
 
   try {
-    const { deviceId, broadcast, title, body: message, url } = body || {};
+    const { deviceId, broadcast, title, body: message, url, image } = body || {};
     if (!title || !message) return json({ error: "Title and message are required." }, 400);
     if (!broadcast && !deviceId) return json({ error: "Missing deviceId (or set broadcast: true)." }, 400);
 
@@ -47,6 +53,9 @@ export async function onRequestPost(context) {
       : await getDocs(env, "push_subscriptions", { where: [["deviceId", "==", deviceId]] });
 
     const payload = { title, body: message, url: url || "/" };
+    // Keep the payload lean when there's no image — cheaper to encrypt/send
+    // and avoids shipping a stray `image: undefined` key.
+    if (image && typeof image === "string") payload.image = image;
     let delivered = 0;
     const staleIds = [];
 
@@ -69,7 +78,7 @@ export async function onRequestPost(context) {
     // panel's "Send History" table has something to show.
     if (broadcast) {
       await createDoc(env, "push_log", crypto.randomUUID().replace(/-/g, ""), {
-        title, body: message, url: url || "/",
+        title, body: message, url: url || "/", image: payload.image || null,
         attempted: subs.length, delivered,
         sentAt: new Date().toISOString()
       }).catch((err) => console.error("send-push: history log failed (non-fatal):", err.message));

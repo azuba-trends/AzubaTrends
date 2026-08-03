@@ -111,10 +111,11 @@ service cloud.firestore {
     }
 
     // "Notify me when back in stock" requests (product.html Notify Me
-    // button, see api/notify-stock.js). Same pattern as reviews above —
-    // guests never write this collection directly from the browser (that
-    // would let anyone read back every email address ever submitted);
-    // everything goes through the Admin SDK on the server instead.
+    // button, see api/notify-stock.js + api/notify-restock.js). Same
+    // pattern as reviews above — guests never write this collection
+    // directly from the browser (that would let anyone read back every
+    // device's waiting-list entries); everything goes through the
+    // Admin SDK on the server instead.
     match /stock_notifications/{notifyId} {
       allow read, write: if isAdmin();
     }

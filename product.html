@@ -117,13 +117,15 @@
               <button type="button" id="buy-now-btn" class="btn btn-primary">Buy Now</button>
             </div>
 
-            <!-- Out-of-stock replacement for the actions row above. -->
+            <!-- Out-of-stock replacement for the actions row above. One
+                 tap: enables push notifications on this browser (if not
+                 already) and adds it to this product's back-in-stock
+                 waiting list — see js/layout.js's AzubaPush.subscribe()
+                 and functions/api/notify-stock.js / notify-restock.js.
+                 No email form anymore; the same push permission already
+                 used for order updates does the job here. -->
             <div class="notify-me-block" id="notify-me-block" hidden>
               <button type="button" class="btn btn-outline btn-block" id="notify-me-btn">🔔 Notify Me</button>
-              <form class="notify-me-form" id="notify-me-form" novalidate>
-                <input type="email" id="notify-me-email" placeholder="Your email address" required autocomplete="email">
-                <button type="submit" class="btn btn-primary">Notify Me</button>
-              </form>
               <p class="notify-me-status" id="notify-me-status"></p>
             </div>
           </div>
@@ -953,10 +955,8 @@
     const productActionsEl = document.getElementById("product-actions");
     const notifyBlock = document.getElementById("notify-me-block");
     const notifyBtn = document.getElementById("notify-me-btn");
-    const notifyForm = document.getElementById("notify-me-form");
-    const notifyEmailInput = document.getElementById("notify-me-email");
     const notifyStatus = document.getElementById("notify-me-status");
-    const notifySubmitBtn = notifyForm.querySelector('button[type="submit"]');
+    const notifyBtnDefaultLabel = "🔔 Notify Me";
 
     function renderVariantDependentUI(vp) {
       activeProduct = vp;
@@ -976,13 +976,11 @@
       }
 
       // Reset Notify Me back to its default state for the newly-selected size.
-      notifyForm.classList.remove("is-open");
-      notifyForm.hidden = false;
       notifyBtn.hidden = false;
+      notifyBtn.disabled = false;
+      notifyBtn.textContent = notifyBtnDefaultLabel;
       notifyStatus.textContent = "";
       notifyStatus.removeAttribute("data-tone");
-      notifySubmitBtn.disabled = false;
-      notifySubmitBtn.textContent = "Notify Me";
 
       stockStatusEl.innerHTML = "";
       if (ProductLoader.isUnavailable(vp)) {
@@ -1048,36 +1046,45 @@
       }
     }
 
-    notifyBtn.addEventListener("click", () => {
-      notifyForm.classList.add("is-open");
-      notifyBtn.hidden = true;
-      notifyEmailInput.focus();
-    });
-
-    notifyForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const email = notifyEmailInput.value.trim();
-      if (!email) return;
-      notifySubmitBtn.disabled = true;
-      notifySubmitBtn.textContent = "Sending...";
+    // One tap: enable push on this browser (asks the native permission
+    // prompt right here, since this IS the genuine click the soft-prompt
+    // policy requires — see js/layout.js's subscribe() comment) and add
+    // this device to the product's back-in-stock waiting list. No email,
+    // no separate form — matches the single-tap flow used on big
+    // platforms. functions/api/notify-restock.js is what actually pushes
+    // "Back in Stock" later, fired from admin.js the moment the admin
+    // saves stock > 0 for this product again.
+    notifyBtn.addEventListener("click", async () => {
+      notifyBtn.disabled = true;
+      notifyBtn.textContent = "Enabling notifications...";
       notifyStatus.removeAttribute("data-tone");
       notifyStatus.textContent = "";
       try {
+        const subscribed = window.AzubaPush ? await window.AzubaPush.subscribe() : false;
+        if (!subscribed) {
+          throw new Error("Please allow notifications for this site to get notified — check your browser's site settings if you don't see a prompt.");
+        }
+        const deviceId = window.getAzubaDeviceId ? window.getAzubaDeviceId() : null;
         const res = await fetch("/api/notify-stock", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ productId: activeProduct.id, productTitle: activeProduct.title, email })
+          body: JSON.stringify({
+            productId: activeProduct.id,
+            productTitle: activeProduct.title,
+            productUrl: ProductLoader.productUrl(activeProduct),
+            deviceId
+          })
         });
         const data = await res.json();
         if (!res.ok || !data.ok) throw new Error(data.error || "Couldn't save your request. Please try again.");
-        notifyForm.hidden = true;
+        notifyBtn.hidden = true;
         notifyStatus.setAttribute("data-tone", "success");
-        notifyStatus.textContent = "You're on the list — we'll email you when this is back in stock.";
+        notifyStatus.textContent = "You're on the list — we'll notify you the moment this is back in stock.";
       } catch (err) {
         notifyStatus.setAttribute("data-tone", "error");
         notifyStatus.textContent = err.message || "Something went wrong. Please try again.";
-        notifySubmitBtn.disabled = false;
-        notifySubmitBtn.textContent = "Notify Me";
+        notifyBtn.disabled = false;
+        notifyBtn.textContent = notifyBtnDefaultLabel;
       }
     });
 

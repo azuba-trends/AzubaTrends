@@ -1,23 +1,27 @@
 // functions/api/notify-stock.js
 //
-// Backs the "Notify Me" button on product.html for out-of-stock products
-// (see js/reviews.js's sibling module js/notify-stock.js on the frontend).
+// Backs the "Notify Me" button on product.html for out-of-stock products.
 // Same shape as api/submit-review.js: guests can never write the
 // `stock_notifications` collection directly from the browser (see
 // firestore.rules) — this is the only path in, using server-side Firestore
 // REST calls, so the simple rate-limit below can't be bypassed by hitting
 // Firestore directly.
 //
-// NOTE: this only RECORDS interest. Actually emailing/texting people once
-// the product is restocked is a separate job the store owner runs later
-// (e.g. exporting this collection, or a future scheduled function) — not
-// implemented here, since sending real notifications needs an email/SMS
-// provider that hasn't been wired up yet.
+// Push-based (not email): the "device" here is the same per-browser
+// azuba_device_id already used for order-status push (see
+// js/layout.js's getDeviceId()) and js/push-subscribe's push_subscriptions
+// collection. A tap on "Notify Me" subscribes the browser to push (if not
+// already) and records ONE waiting-list row here. When the admin later
+// brings the product back in stock (js/admin.js's handleProductSave),
+// functions/api/notify-restock.js looks up every waiting row for that
+// product, pushes "Back in Stock" to each device, and clears the rows —
+// no email/SMS provider needed, and nothing for the admin or the customer
+// to do beyond what they were already doing (saving stock / tapping the
+// button once).
 
 import { getDocs, createDoc, runTransaction, increment } from "../../lib/firestore-rest.js";
 
 const MAX_REQUESTS_PER_IP_PER_DAY = 10;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -77,7 +81,7 @@ export async function onRequestPost(context) {
   }
 
   try {
-    const { productId, productTitle, email, website } = body || {};
+    const { productId, productTitle, productUrl, deviceId, website } = body || {};
 
     // Honeypot — same pattern used across the rest of the site.
     if (website) return json({ ok: true });
@@ -85,9 +89,11 @@ export async function onRequestPost(context) {
     if (!productId || typeof productId !== "string") {
       return json({ error: "Missing product." }, 400);
     }
-    const trimmedEmail = String(email || "").trim();
-    if (!EMAIL_RE.test(trimmedEmail)) {
-      return json({ error: "Please enter a valid email address." }, 400);
+    if (!deviceId || typeof deviceId !== "string") {
+      // Storage disabled / private browsing — js/layout.js's getDeviceId()
+      // can return null in that case. Nothing to key the waiting-list row
+      // on, so fail clearly instead of silently recording a useless row.
+      return json({ error: "Couldn't enable notifications on this browser. Please check your browser settings and try again." }, 400);
     }
 
     const ip = getClientIp(request);
@@ -96,11 +102,12 @@ export async function onRequestPost(context) {
       return json({ error: "Too many requests from this device today. Please try again tomorrow." }, 429);
     }
 
-    // Don't stack up duplicate requests for the same product+email.
+    // Don't stack up duplicate waiting-list rows for the same product+device.
     const existing = await getDocs(env, "stock_notifications", {
       where: [
         ["productId", "==", productId],
-        ["email", "==", trimmedEmail.toLowerCase()]
+        ["deviceId", "==", deviceId],
+        ["notified", "==", false]
       ]
     });
 
@@ -113,7 +120,8 @@ export async function onRequestPost(context) {
       await createDoc(env, "stock_notifications", id, {
         productId,
         productTitle: productTitle ? String(productTitle).slice(0, 200) : "",
-        email: trimmedEmail.toLowerCase(),
+        productUrl: productUrl ? String(productUrl).slice(0, 300) : "/",
+        deviceId,
         notified: false,
         createdAt: new Date().toISOString()
       });

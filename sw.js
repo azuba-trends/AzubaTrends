@@ -26,7 +26,7 @@
 // this: /sw.js itself is served with Cache-Control: no-cache, so
 // Cloudflare's edge and the browser both always ask the origin for the
 // latest copy of this exact file instead of serving a cached one.)
-const SW_VERSION = "2";
+const SW_VERSION = "3";
 
 self.addEventListener("install", (event) => {
   // Don't wait for existing tabs to close before activating — take over
@@ -59,7 +59,24 @@ self.addEventListener("fetch", (event) => {
 
 // ---- Web Push ---------------------------------------------------------
 // Payload shape sent from functions/api/send-push.js:
-//   { title, body, url, icon? }
+//   { title, body, url, icon?, image? }
+//
+// `image` (optional) is the big banner-style picture shown inside the
+// notification body — same idea as Meesho/big-platform push, e.g. a
+// product photo. It's just a URL: the actual bytes never travel through
+// the push payload (which stays well under the ~4KB limit either way);
+// the browser fetches it itself at display time, same as icon/badge.
+//
+// `renotify: true` + a shared `tag` means a second push about the SAME
+// thing (e.g. re-sending a broadcast) still re-alerts (vibrate/sound)
+// instead of silently replacing the old one with no signal. Each push
+// still gets its own tag when the caller doesn't send one, so unrelated
+// notifications never collapse into each other.
+//
+// `requireInteraction` is deliberately left unset (defaults to false) —
+// this is what makes the notification float in as a heads-up banner and
+// then auto-dismiss after a few seconds, instead of staying stuck on
+// screen until the user manually closes it.
 self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (err) { /* ignore malformed payload */ }
@@ -69,8 +86,12 @@ self.addEventListener("push", (event) => {
     body: data.body || "",
     icon: data.icon || "/images/icons/icon-192.png",
     badge: "/images/icons/icon-192.png",
+    vibrate: [200, 80, 200],
+    renotify: true,
+    tag: data.tag || `azuba-${Date.now()}`,
     data: { url: data.url || "/" }
   };
+  if (data.image) options.image = data.image;
   event.waitUntil(self.registration.showNotification(title, options));
 });
 

@@ -2207,15 +2207,20 @@ setTimeout(() => {
     const nameCell = opts.isChild
       ? `<span style="padding-left:24px; color:var(--color-ink-soft);">↳ ${esc(p.size || "")} / ${esc(p.color || "")} — </span>${esc(p.title)}`
       : `${opts.hasChildren ? `<button type="button" class="product-expand-btn" data-id="${p.id}" style="background:none; border:none; cursor:pointer; font-size:0.85rem; margin-right:6px; transform:rotate(${isExpanded ? "90deg" : "0deg"}); transition:transform .15s;">▸</button>` : `<span style="display:inline-block; width:18px;"></span>`}${esc(p.title)}`;
+    // 2-line clamp with an ellipsis once truncated — keeps a very long
+    // title/tag list from blowing out the row height or the column width;
+    // full text is still in the title="" attribute on hover.
+    const nameClampStyle = "display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-overflow:ellipsis; max-width:260px;";
+    const tagsClampStyle = "display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-overflow:ellipsis; max-width:110px;";
 
     const tr = document.createElement("tr");
     if (opts.isChild) tr.style.background = "#fafaf7";
     tr.innerHTML = `
       <td><input type="checkbox" class="row-select" data-id="${p.id}"></td>
       <td><img src="${esc(img)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" alt=""></td>
-      <td>${nameCell}${missingCostPrice ? ` <span title="Cost Price not set — profit reports will show N/A for this product until you add it in Edit" style="color:var(--color-accent-dark); font-size:0.8rem; white-space:nowrap;">⚠ Cost price missing</span>` : ""}${(!opts.isChild && p.hasVariants) ? ` <span style="color:var(--color-ink-soft); font-size:0.78rem;">(${opts.childCount} color${opts.childCount === 1 ? "" : "s"})</span>` : ""}</td>
+      <td style="${nameClampStyle}" title="${esc(p.title)}">${nameCell}${missingCostPrice ? ` <span title="Cost Price not set — profit reports will show N/A for this product until you add it in Edit" style="color:var(--color-accent-dark); font-size:0.8rem; white-space:nowrap;">⚠ Cost price missing</span>` : ""}${(!opts.isChild && p.hasVariants) ? ` <span style="color:var(--color-ink-soft); font-size:0.78rem;">(${opts.childCount} color${opts.childCount === 1 ? "" : "s"})</span>` : ""}</td>
       <td>${esc(p.brand || "—")}</td>
-      <td>${esc((p.tags || []).join(", "))}</td>
+      <td style="${tagsClampStyle}" title="${esc((p.tags || []).join(", "))}">${esc((p.tags || []).join(", "))}</td>
       <td>${esc(p.category)}</td>
       <td>${dateStr}</td>
       <td style="color:${p.stock > 0 ? 'inherit' : 'var(--color-danger)'}; font-weight:bold;">${(!opts.isChild && p.hasVariants) ? "—" : p.stock}${p.paused ? ` <span title="Manually paused — off sale even though stock is unaffected" style="color:var(--color-accent-dark); font-weight:normal; font-size:0.75rem;">⏸ Paused</span>` : ""}</td>
@@ -2227,6 +2232,11 @@ setTimeout(() => {
           : (opts.hasChildren
               ? `<button class="btn btn-outline sync-all-btn" data-id="${p.id}" title="Auto Sync every variant of this product from the parent, then publish them all" style="padding:4px 8px; font-size:0.8rem;">🔄 Sync All</button>`
               : '<span style="color:var(--color-ink-soft); font-size:0.8rem;">—</span>')
+      }</td>
+      <td>${
+        opts.isChild
+          ? '<span style="color:var(--color-ink-soft); font-size:0.8rem;">—</span>'
+          : `<button class="btn btn-outline push-notify-btn" data-id="${p.id}" title="Send a New Arrival push notification to every subscriber, using this product's own image + link (or its first variant's, if it has colors/sizes)" style="padding:4px 8px; font-size:0.8rem;">🔔 Push Notify</button>`
       }</td>
       <td>
         <button class="btn btn-outline pause-prod-btn" data-id="${p.id}" data-status="${p.status}" style="padding:4px 8px; font-size:0.8rem;">${p.status === 'active' ? 'Pause' : 'Live'}</button>
@@ -2259,15 +2269,16 @@ setTimeout(() => {
     tr.innerHTML = `
       <td></td>
       <td><img src="${esc(img)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" alt=""></td>
-      <td><span style="padding-left:24px; color:var(--color-ink-soft);">↳ ${esc(color || "(no color)")} — </span>${esc(rep.title)}${missingCostPrice ? ` <span title="Cost Price not set — profit reports will show N/A for this product until you add it in Edit" style="color:var(--color-accent-dark); font-size:0.8rem; white-space:nowrap;">⚠ Cost price missing</span>` : ""} <span style="color:var(--color-ink-soft); font-size:0.78rem;">(${docs.length} size${docs.length === 1 ? "" : "s"}${sizesLabel ? ": " + esc(sizesLabel) : ""})</span></td>
+      <td style="display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-overflow:ellipsis; max-width:260px;" title="${esc(rep.title)}"><span style="padding-left:24px; color:var(--color-ink-soft);">↳ ${esc(color || "(no color)")} — </span>${esc(rep.title)}${missingCostPrice ? ` <span title="Cost Price not set — profit reports will show N/A for this product until you add it in Edit" style="color:var(--color-accent-dark); font-size:0.8rem; white-space:nowrap;">⚠ Cost price missing</span>` : ""} <span style="color:var(--color-ink-soft); font-size:0.78rem;">(${docs.length} size${docs.length === 1 ? "" : "s"}${sizesLabel ? ": " + esc(sizesLabel) : ""})</span></td>
       <td>${esc(rep.brand || "—")}</td>
-      <td>${esc((rep.tags || []).join(", "))}</td>
+      <td style="display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-overflow:ellipsis; max-width:110px;" title="${esc((rep.tags || []).join(", "))}">${esc((rep.tags || []).join(", "))}</td>
       <td>${esc(rep.category)}</td>
       <td>${dateStr}</td>
       <td style="color:${totalStock > 0 ? 'inherit' : 'var(--color-danger)'}; font-weight:bold;">${totalStock}${pausedBadge}</td>
       <td style="color:${sColor}; font-weight:bold;">${esc((rep.status || "").toUpperCase())}</td>
       <td>${rep.sourcePlatformUrl ? `<button class="btn btn-outline source-platform-btn" data-url="${esc(rep.sourcePlatformUrl)}" style="padding:4px 8px; font-size:0.8rem;">Source Platform</button>` : '<span style="color:var(--color-ink-soft); font-size:0.8rem;">—</span>'}</td>
       <td><button class="btn btn-outline sync-color-btn" data-parent="${parent.id}" data-color="${esc(color)}" title="Pull Name, Description, Category, Brand, Tags, Delivery info and Images from the parent for every size in this color, then publish" style="padding:4px 8px; font-size:0.8rem;">🔄 Auto Sync</button></td>
+      <td><span style="color:var(--color-ink-soft); font-size:0.8rem;" title="Push Notify is only available on the main product row — a color/size variant isn't its own visible store listing.">—</span></td>
       <td>
         <button class="btn btn-outline pause-color-btn" data-parent="${parent.id}" data-color="${esc(color)}" data-status="${rep.status}" style="padding:4px 8px; font-size:0.8rem;">${rep.status === 'active' ? 'Pause' : 'Live'}</button>
         <button class="btn btn-outline edit-color-btn" data-parent="${parent.id}" data-color="${esc(color)}" style="padding:4px 8px; font-size:0.8rem;">Edit</button>
@@ -2306,6 +2317,7 @@ setTimeout(() => {
     tbody.querySelectorAll(".source-platform-btn").forEach((b) => b.addEventListener("click", () => window.open(b.dataset.url, "_blank", "noopener,noreferrer")));
     tbody.querySelectorAll(".sync-variant-btn").forEach((b) => b.addEventListener("click", () => syncVariantFromListRow(b.dataset.id)));
     tbody.querySelectorAll(".sync-all-btn").forEach((b) => b.addEventListener("click", () => syncAllVariantsFromListRow(b.dataset.id)));
+    tbody.querySelectorAll(".push-notify-btn").forEach((b) => b.addEventListener("click", () => pushNotifyNewArrival(b.dataset.id)));
 
     // Color-group row actions — every one of these acts on ALL size docs
     // sharing that (parentId, color) pair at once.
@@ -2386,6 +2398,84 @@ setTimeout(() => {
     } catch (err) {
       alert("Couldn't sync all variants: " + err.message);
       if (btn) { btn.disabled = false; btn.textContent = "🔄 Sync All"; }
+    }
+  }
+
+  // "New Arrival" push — one click, no typing. Picks the product's own
+  // image+link if it's a plain product, or its first color's first
+  // available size if it has variants (the parent itself is never a real
+  // store page — see the big comment at the top of the VARIANTS section
+  // below — so a variant is the only thing that can actually be linked
+  // to/shown). Sends to every subscriber via the same broadcast path the
+  // Notifications panel already uses (functions/api/send-push.js).
+  function pickDefaultVariantForNotify(children) {
+    if (!children || children.length === 0) return null;
+    // Group by color, keep the FIRST color encountered (i.e. the color
+    // whose size doc was created earliest) — a stable, predictable choice
+    // rather than whatever order Firestore happens to return.
+    const byColor = new Map();
+    children.forEach((c) => {
+      const key = c.color || "";
+      if (!byColor.has(key)) byColor.set(key, []);
+      byColor.get(key).push(c);
+    });
+    let firstColorKey = null;
+    let firstColorCreatedAt = null;
+    byColor.forEach((docs, key) => {
+      const earliest = docs.reduce((min, d) => (!min || (d.createdAt || "") < (min.createdAt || "") ? d : min), null);
+      if (!firstColorCreatedAt || (earliest && earliest.createdAt < firstColorCreatedAt)) {
+        firstColorKey = key;
+        firstColorCreatedAt = earliest ? earliest.createdAt : firstColorCreatedAt;
+      }
+    });
+    const sameColorDocs = byColor.get(firstColorKey) || children;
+    // Prefer an available (in-stock, not paused) size; fall back to the
+    // first size overall so an all-sold-out color still resolves to
+    // something sendable.
+    const available = sameColorDocs.filter((d) => Number(d.stock) > 0 && !d.paused);
+    const pool = available.length > 0 ? available : sameColorDocs;
+    return pool[0] || null;
+  }
+
+  async function pushNotifyNewArrival(parentId) {
+    const parent = productsList.find((p) => p.id === parentId);
+    if (!parent) return alert("Can't find this product — it may have been deleted.");
+
+    const children = parent.hasVariants ? productsList.filter((c) => c.isVariant && c.parentId === parentId) : [];
+    let target, url, image;
+    if (children.length > 0) {
+      target = pickDefaultVariantForNotify(children);
+      if (!target) return alert("This product has no sizes/colors saved yet — add at least one variant before sending a Push Notify.");
+      url = `/products/${encodeURIComponent(parentId)}/${encodeURIComponent(target.variantSlug || "")}`;
+      image = (target.images && target.images[0]) || (parent.images && parent.images[0]) || "";
+    } else {
+      target = parent;
+      url = parent.slug ? `/products/${encodeURIComponent(parent.slug)}` : `/product.html?id=${encodeURIComponent(parent.id)}`;
+      image = (parent.images && parent.images[0]) || "";
+    }
+
+    const title = `✨ New Arrival: ${parent.title}`;
+    const message = "Just landed — take a look before it's gone!";
+
+    if (!confirm(`Send a "New Arrival" push notification for "${parent.title}" to every subscriber?`)) return;
+
+    const btn = document.querySelector(`.push-notify-btn[data-id="${parentId}"]`);
+    const originalText = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = "Sending..."; }
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+      const res = await fetch("/api/send-push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ broadcast: true, title, body: message, url, image: image || undefined })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Couldn't send the notification.");
+      if (btn) { btn.textContent = `Sent ✓ (${data.delivered}/${data.attempted})`; }
+      setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = originalText; } }, 2000);
+    } catch (err) {
+      alert("Couldn't send Push Notify: " + (err.message || err));
+      if (btn) { btn.disabled = false; btn.textContent = originalText; }
     }
   }
 
@@ -2607,6 +2697,16 @@ setTimeout(() => {
       }
     }
 
+    // Snapshot of every product/variant's stock BEFORE this save, so we
+    // can tell afterwards which ones just went from 0 (or unset) to
+    // available — that's what triggers the automatic "Back in Stock" push
+    // to anyone who tapped Notify Me on product.html (see
+    // functions/api/notify-restock.js). Cheap: just an id->stock map from
+    // data already loaded in productsList.
+    const previousStockById = new Map();
+    productsList.forEach((p) => previousStockById.set(p.id, Number(p.stock) || 0));
+    const restockedItems = [];
+
     const saveBtn = status === "active" ? document.getElementById("publish-prod-btn") : document.getElementById("draft-prod-btn");
     const originalText = saveBtn.textContent;
     saveBtn.textContent = "Uploading..."; saveBtn.disabled = true;
@@ -2718,6 +2818,20 @@ setTimeout(() => {
           const ref = await addDoc(collection(db, "products"), pData);
           docId = ref.id;
         }
+        // Plain product only (a parent WITH variants doesn't carry real
+        // stock on its own doc — the size docs below do) — flag it for
+        // a restock push if it just went from 0/unset to available.
+        if (!hasVariants && pId) {
+          const prevStock = previousStockById.get(pId) || 0;
+          if (prevStock <= 0 && Number(pData.stock) > 0) {
+            restockedItems.push({
+              productId: pId,
+              title: pData.title,
+              url: pData.slug ? `/products/${encodeURIComponent(pData.slug)}` : `/product.html?id=${encodeURIComponent(pId)}`,
+              image: (pData.images && pData.images[0]) || ""
+            });
+          }
+        }
       }
 
       // Create/update one real product doc PER SIZE, grouped by color box.
@@ -2795,6 +2909,19 @@ setTimeout(() => {
               if (sourceVal !== "") patch.sourcePlatformUrl = sourceVal;
               if (isVariant) Object.assign(patch, sharedFields);
               await updateDoc(doc(db, "products", row.dataset.existingId), patch);
+
+              // Restock check — same 0/unset -> available transition as
+              // the plain-product branch above, just per size-doc here.
+              const prevStock = previousStockById.get(row.dataset.existingId) || 0;
+              if (prevStock <= 0 && patch.stock > 0 && !patch.paused) {
+                const existingEntry = productsList.find((x) => x.id === row.dataset.existingId) || {};
+                restockedItems.push({
+                  productId: row.dataset.existingId,
+                  title: patch.title || existingEntry.title || pData.title,
+                  url: `/products/${encodeURIComponent(actualParentId)}/${encodeURIComponent(variantSlug)}`,
+                  image: (patch.images && patch.images[0]) || (existingEntry.images && existingEntry.images[0]) || (pData.images && pData.images[0]) || ""
+                });
+              }
             } else {
               // New rows (no data-existing-id) get a full copy of
               // everything just saved above, EXCEPT MRP/Sale
@@ -2836,6 +2963,20 @@ setTimeout(() => {
       pendingGalleryFiles = [];
       resetProductForm();
       goToSection("store-products");
+
+      // Fire the "Back in Stock" push for anyone waiting on whatever just
+      // came back — fire-and-forget, same reasoning as the order-status
+      // push above: this never blocks or fails the save itself, which
+      // already succeeded.
+      if (restockedItems.length > 0) {
+        auth.currentUser.getIdToken().then((idToken) => {
+          fetch("/api/notify-restock", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+            body: JSON.stringify({ items: restockedItems })
+          }).catch((err) => console.warn("Restock push failed (non-fatal):", err));
+        }).catch((err) => console.warn("Restock push failed (non-fatal):", err));
+      }
     } catch (err) {
       document.getElementById("product-save-status").textContent = "Error: " + err.message;
       document.getElementById("product-save-status").style.color = "var(--color-danger)";
