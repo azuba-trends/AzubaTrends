@@ -93,12 +93,19 @@ input, textarea, select { font: inherit; color: inherit; }
 
 html {
   -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   /* Belt-and-suspenders against horizontal overflow: any one element with
      unusually long unbroken text (e.g. a product title that ended up being
      a raw URL from a failed import) should never be able to widen the
-     whole page and push content off-screen. */
+     whole page and push content off-screen.
+     NOTE: intentionally `100%` here, not `100vw` — on older Android
+     Chrome/WebView builds, `100vw` is computed slightly wider (~1-2%)
+     than the actual visible screen width, which was making the whole
+     page render pre-zoomed to ~101-102% by default on those phones.
+     `100%` is relative to the actual rendered box instead, so it doesn't
+     have that historical bug. */
   overflow-x: hidden;
-  max-width: 100vw;
+  max-width: 100%;
 }
 
 body {
