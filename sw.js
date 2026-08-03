@@ -26,7 +26,7 @@
 // this: /sw.js itself is served with Cache-Control: no-cache, so
 // Cloudflare's edge and the browser both always ask the origin for the
 // latest copy of this exact file instead of serving a cached one.)
-const SW_VERSION = "1";
+const SW_VERSION = "2";
 
 self.addEventListener("install", (event) => {
   // Don't wait for existing tabs to close before activating — take over
@@ -41,7 +41,19 @@ self.addEventListener("activate", (event) => {
 });
 
 // Pure passthrough — no caching, see the big comment above.
+// Pure passthrough — see the big comment above. Only same-origin requests
+// are re-issued through this worker's own fetch(); everything else (fonts,
+// CDNs, product images on i.ibb.co, etc.) is left completely alone so the
+// browser handles it exactly as if this service worker didn't exist. This
+// also sidesteps a real gotcha: a request re-issued via fetch() *inside* a
+// service worker is checked against the page's CSP `connect-src` directive
+// regardless of what kind of resource it actually is (image, font, script)
+// — so intercepting cross-origin requests here would mean every third-
+// party domain the site ever uses has to also be listed in connect-src
+// (see _headers) or it silently breaks, which is exactly what happened
+// the first time this file went from 404 to actually being installed.
 self.addEventListener("fetch", (event) => {
+  if (new URL(event.request.url).origin !== self.location.origin) return;
   event.respondWith(fetch(event.request));
 });
 
