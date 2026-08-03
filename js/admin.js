@@ -2210,6 +2210,11 @@ setTimeout(() => {
     // 2-line clamp with an ellipsis once truncated — keeps a very long
     // title/tag list from blowing out the row height or the column width;
     // full text is still in the title="" attribute on hover.
+    // NOTE: this has to be applied to a wrapper <div> INSIDE the <td>, not
+    // to the <td> itself — putting display:-webkit-box directly on a table
+    // cell breaks its table-cell layout (width/height no longer behave
+    // like a normal cell), which is what caused the text to look abruptly
+    // "cut off" with no ellipsis instead of cleanly clamping.
     const nameClampStyle = "display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-overflow:ellipsis; max-width:260px;";
     const tagsClampStyle = "display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-overflow:ellipsis; max-width:110px;";
 
@@ -2218,9 +2223,9 @@ setTimeout(() => {
     tr.innerHTML = `
       <td><input type="checkbox" class="row-select" data-id="${p.id}"></td>
       <td><img src="${esc(img)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" alt=""></td>
-      <td style="${nameClampStyle}" title="${esc(p.title)}">${nameCell}${missingCostPrice ? ` <span title="Cost Price not set — profit reports will show N/A for this product until you add it in Edit" style="color:var(--color-accent-dark); font-size:0.8rem; white-space:nowrap;">⚠ Cost price missing</span>` : ""}${(!opts.isChild && p.hasVariants) ? ` <span style="color:var(--color-ink-soft); font-size:0.78rem;">(${opts.childCount} color${opts.childCount === 1 ? "" : "s"})</span>` : ""}</td>
+      <td><div style="${nameClampStyle}" title="${esc(p.title)}">${nameCell}${missingCostPrice ? ` <span title="Cost Price not set — profit reports will show N/A for this product until you add it in Edit" style="color:var(--color-accent-dark); font-size:0.8rem; white-space:nowrap;">⚠ Cost price missing</span>` : ""}${(!opts.isChild && p.hasVariants) ? ` <span style="color:var(--color-ink-soft); font-size:0.78rem;">(${opts.childCount} color${opts.childCount === 1 ? "" : "s"})</span>` : ""}</div></td>
       <td>${esc(p.brand || "—")}</td>
-      <td style="${tagsClampStyle}" title="${esc((p.tags || []).join(", "))}">${esc((p.tags || []).join(", "))}</td>
+      <td><div style="${tagsClampStyle}" title="${esc((p.tags || []).join(", "))}">${esc((p.tags || []).join(", "))}</div></td>
       <td>${esc(p.category)}</td>
       <td>${dateStr}</td>
       <td style="color:${p.stock > 0 ? 'inherit' : 'var(--color-danger)'}; font-weight:bold;">${(!opts.isChild && p.hasVariants) ? "—" : p.stock}${p.paused ? ` <span title="Manually paused — off sale even though stock is unaffected" style="color:var(--color-accent-dark); font-weight:normal; font-size:0.75rem;">⏸ Paused</span>` : ""}</td>
@@ -2269,9 +2274,9 @@ setTimeout(() => {
     tr.innerHTML = `
       <td></td>
       <td><img src="${esc(img)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" alt=""></td>
-      <td style="display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-overflow:ellipsis; max-width:260px;" title="${esc(rep.title)}"><span style="padding-left:24px; color:var(--color-ink-soft);">↳ ${esc(color || "(no color)")} — </span>${esc(rep.title)}${missingCostPrice ? ` <span title="Cost Price not set — profit reports will show N/A for this product until you add it in Edit" style="color:var(--color-accent-dark); font-size:0.8rem; white-space:nowrap;">⚠ Cost price missing</span>` : ""} <span style="color:var(--color-ink-soft); font-size:0.78rem;">(${docs.length} size${docs.length === 1 ? "" : "s"}${sizesLabel ? ": " + esc(sizesLabel) : ""})</span></td>
+      <td><div style="display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-overflow:ellipsis; max-width:260px;" title="${esc(rep.title)}"><span style="padding-left:24px; color:var(--color-ink-soft);">↳ ${esc(color || "(no color)")} — </span>${esc(rep.title)}${missingCostPrice ? ` <span title="Cost Price not set — profit reports will show N/A for this product until you add it in Edit" style="color:var(--color-accent-dark); font-size:0.8rem; white-space:nowrap;">⚠ Cost price missing</span>` : ""} <span style="color:var(--color-ink-soft); font-size:0.78rem;">(${docs.length} size${docs.length === 1 ? "" : "s"}${sizesLabel ? ": " + esc(sizesLabel) : ""})</span></div></td>
       <td>${esc(rep.brand || "—")}</td>
-      <td style="display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-overflow:ellipsis; max-width:110px;" title="${esc((rep.tags || []).join(", "))}">${esc((rep.tags || []).join(", "))}</td>
+      <td><div style="display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-overflow:ellipsis; max-width:110px;" title="${esc((rep.tags || []).join(", "))}">${esc((rep.tags || []).join(", "))}</div></td>
       <td>${esc(rep.category)}</td>
       <td>${dateStr}</td>
       <td style="color:${totalStock > 0 ? 'inherit' : 'var(--color-danger)'}; font-weight:bold;">${totalStock}${pausedBadge}</td>
@@ -5199,6 +5204,7 @@ setTimeout(() => {
       const title = document.getElementById("push-title").value.trim();
       const bodyText = document.getElementById("push-body").value.trim();
       const url = document.getElementById("push-url").value.trim();
+      const image = document.getElementById("push-image").value.trim();
       const btn = document.getElementById("push-broadcast-btn");
       const statusEl = document.getElementById("push-broadcast-status");
       if (!title || !bodyText) return;
@@ -5212,7 +5218,7 @@ setTimeout(() => {
         const res = await fetch("/api/send-push", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
-          body: JSON.stringify({ broadcast: true, title, body: bodyText, url: url || "/" })
+          body: JSON.stringify({ broadcast: true, title, body: bodyText, url: url || "/", image: image || undefined })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to send.");
