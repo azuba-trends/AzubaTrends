@@ -238,53 +238,88 @@
       becomeSellerLink.addEventListener("click", (e) => { e.preventDefault(); });
     }
 
-    // Push notification permission — ask directly via the browser's own
-    // native prompt as soon as the site loads (no custom banner/button
-    // in between). If the visitor hasn't decided yet ("default"), we
-    // retry once every 24 hours on future visits until they Allow or
-    // Block it — same effect as a server-side "check every 24h" cron,
-    // just done client-side since permission state lives in the browser,
-    // not on our server.
-    maybeRequestPushPermission();
+    // Push notification permission — shows automatically on load like
+    // any other storefront banner. See showPushPermissionBanner() below
+    // for why the actual native prompt only fires from its Allow button.
+    setTimeout(maybeRequestPushPermission, 900);
 
     window.dispatchEvent(new CustomEvent("layout:ready"));
   }
 
-  // Ask directly via the browser's own native permission popup — no
-  // custom banner/button in between, same as most storefronts. If the
-  // visitor hasn't decided yet ("default", i.e. never Allowed or
-  // Blocked), we try again once every 24 hours on future visits until
-  // they do. This 24h re-check is what stands in for a server-side
-  // "cron" here — permission state lives entirely in the visitor's
-  // browser, not on our server, so there's nothing for an actual
-  // backend cron job to check; re-running this on each page load
-  // achieves the same result.
+  // Looks automatic (shows up on load, no button to build/customize),
+  // but the actual native permission popup only fires from a genuine
+  // click — the banner's own "Allow" button. Two reasons this matters:
   //
-  // Heads up: some browsers (notably Chrome) apply "quiet" throttling
-  // to permission prompts that fire without a click first, and can
-  // eventually suppress the popup for a site that repeatedly gets
-  // dismissed. If you'd rather have a guaranteed prompt at the cost of
-  // one extra tap, a click-triggered version of this is easy to bring
-  // back — just ask.
-  const PUSH_PERMISSION_LAST_TRY_KEY = "pushPermissionLastTry";
-  const PUSH_PERMISSION_RETRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+  // 1. Chrome applies "quiet" throttling to permission prompts that
+  //    fire without a click first, and can eventually suppress the
+  //    popup for a site entirely (silently — no "denied" state, it just
+  //    stops asking) if it keeps firing automatically and gets ignored.
+  //    A prompt that's the direct result of a tap is exempt from this.
+  // 2. A visitor who just tapped "Allow" on OUR banner (which already
+  //    explained why) is far more likely to also tap "Allow" on the
+  //    browser's native popup right after, vs. being surprised by a
+  //    popup the instant the page loads.
+  //
+  // If dismissed ("Not now"), we wait a few days before showing it
+  // again instead of nagging on every visit.
+  const PUSH_BANNER_DISMISS_KEY = "pushBannerDismissedAt";
+  const PUSH_BANNER_DISMISS_COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
+
+  function showPushPermissionBanner() {
+    if (document.getElementById("push-permission-banner")) return; // already showing
+    try {
+      const dismissedAt = parseInt(localStorage.getItem(PUSH_BANNER_DISMISS_KEY) || "0", 10);
+      if (Date.now() - dismissedAt < PUSH_BANNER_DISMISS_COOLDOWN_MS) return;
+    } catch (err) { /* storage disabled — show it anyway, no real harm */ }
+
+    const banner = document.createElement("div");
+    banner.id = "push-permission-banner";
+    banner.className = "push-permission-banner";
+    banner.setAttribute("role", "dialog");
+    banner.setAttribute("aria-label", "Enable notifications");
+    banner.innerHTML = `
+      <div class="push-permission-banner__icon" aria-hidden="true">🔔</div>
+      <div class="push-permission-banner__text">
+        <strong>Get order updates instantly</strong>
+        <span>Turn on notifications to know the moment your order ships.</span>
+      </div>
+      <div class="push-permission-banner__actions">
+        <button type="button" class="push-permission-banner__allow">Allow</button>
+        <button type="button" class="push-permission-banner__dismiss">Not now</button>
+      </div>
+    `;
+    document.body.appendChild(banner);
+    // Added in the same frame as `hidden` would be, so give the browser
+    // one frame to paint the initial (off-screen) state before animating.
+    requestAnimationFrame(() => banner.classList.add("is-visible"));
+
+    function removeBanner() {
+      banner.classList.remove("is-visible");
+      setTimeout(() => banner.remove(), 250);
+    }
+
+    banner.querySelector(".push-permission-banner__allow").addEventListener("click", () => {
+      removeBanner();
+      subscribe(); // real click just happened — this is what asks the browser
+    });
+    banner.querySelector(".push-permission-banner__dismiss").addEventListener("click", () => {
+      try { localStorage.setItem(PUSH_BANNER_DISMISS_KEY, String(Date.now())); } catch (err) { /* ignore */ }
+      removeBanner();
+    });
+  }
 
   function maybeRequestPushPermission() {
     if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
-    if (Notification.permission === "denied") return; // browser blocks re-prompting anyway
+    if (Notification.permission === "denied") return; // browser blocks re-prompting anyway; nothing we can do
     if (Notification.permission === "granted") {
       // Already allowed at some point — make sure it's actually saved
-      // server-side (harmless no-op if it already is).
+      // server-side (harmless no-op if it already is). No banner needed.
       if (!isSubscribedLocally()) subscribe();
       return;
     }
-    // Notification.permission === "default" (not yet decided)
-    try {
-      const last = parseInt(localStorage.getItem(PUSH_PERMISSION_LAST_TRY_KEY) || "0", 10);
-      if (Date.now() - last < PUSH_PERMISSION_RETRY_MS) return;
-      localStorage.setItem(PUSH_PERMISSION_LAST_TRY_KEY, String(Date.now()));
-    } catch (err) { /* storage disabled — just try every load, no real harm */ }
-    subscribe();
+    // Notification.permission === "default" (not yet decided) — show
+    // the banner; subscribe() only runs from its Allow button click.
+    showPushPermissionBanner();
   }
 
   if (document.readyState === "loading") {
