@@ -238,7 +238,53 @@
       becomeSellerLink.addEventListener("click", (e) => { e.preventDefault(); });
     }
 
+    // Push notification permission — ask directly via the browser's own
+    // native prompt as soon as the site loads (no custom banner/button
+    // in between). If the visitor hasn't decided yet ("default"), we
+    // retry once every 24 hours on future visits until they Allow or
+    // Block it — same effect as a server-side "check every 24h" cron,
+    // just done client-side since permission state lives in the browser,
+    // not on our server.
+    maybeRequestPushPermission();
+
     window.dispatchEvent(new CustomEvent("layout:ready"));
+  }
+
+  // Ask directly via the browser's own native permission popup — no
+  // custom banner/button in between, same as most storefronts. If the
+  // visitor hasn't decided yet ("default", i.e. never Allowed or
+  // Blocked), we try again once every 24 hours on future visits until
+  // they do. This 24h re-check is what stands in for a server-side
+  // "cron" here — permission state lives entirely in the visitor's
+  // browser, not on our server, so there's nothing for an actual
+  // backend cron job to check; re-running this on each page load
+  // achieves the same result.
+  //
+  // Heads up: some browsers (notably Chrome) apply "quiet" throttling
+  // to permission prompts that fire without a click first, and can
+  // eventually suppress the popup for a site that repeatedly gets
+  // dismissed. If you'd rather have a guaranteed prompt at the cost of
+  // one extra tap, a click-triggered version of this is easy to bring
+  // back — just ask.
+  const PUSH_PERMISSION_LAST_TRY_KEY = "pushPermissionLastTry";
+  const PUSH_PERMISSION_RETRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+  function maybeRequestPushPermission() {
+    if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    if (Notification.permission === "denied") return; // browser blocks re-prompting anyway
+    if (Notification.permission === "granted") {
+      // Already allowed at some point — make sure it's actually saved
+      // server-side (harmless no-op if it already is).
+      if (!isSubscribedLocally()) subscribe();
+      return;
+    }
+    // Notification.permission === "default" (not yet decided)
+    try {
+      const last = parseInt(localStorage.getItem(PUSH_PERMISSION_LAST_TRY_KEY) || "0", 10);
+      if (Date.now() - last < PUSH_PERMISSION_RETRY_MS) return;
+      localStorage.setItem(PUSH_PERMISSION_LAST_TRY_KEY, String(Date.now()));
+    } catch (err) { /* storage disabled — just try every load, no real harm */ }
+    subscribe();
   }
 
   if (document.readyState === "loading") {
