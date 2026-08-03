@@ -290,6 +290,7 @@
       </div>
       <button class="nav-btn" data-target="store-orders">All Orders</button>
       <button class="nav-btn" data-target="store-notifications">Notifications</button>
+      <button class="nav-btn" data-target="store-support-tickets">Support Tickets</button>
 
       <div class="nav-group-title">Blog</div>
       <div class="nav-item">
@@ -505,6 +506,16 @@
             <div class="form-field">
               <label>HSN Code <span class="field-hint" style="display:inline;">(optional — shown on invoices, GST classification)</span></label>
               <input type="text" id="prod-hsn">
+            </div>
+            <div class="form-field" style="display:flex; align-items:center; gap:8px; padding-top:22px;">
+              <label style="display:flex; align-items:center; gap:6px; font-weight:normal; margin:0;">
+                <input type="checkbox" id="prod-return-available" style="width:auto;">
+                Return available <span class="field-hint" style="display:inline;">(shows an "X-Day Returns" badge on the product page; leave off to show "Non-returnable")</span>
+              </label>
+            </div>
+            <div class="form-field" id="prod-return-days-wrap" style="display:none;">
+              <label>Return window (days)</label>
+              <input type="number" id="prod-return-days" min="1" max="365" value="7">
             </div>
           </div>
 
@@ -1015,6 +1026,56 @@
         </div>
       </div>
     </div>
+    <!-- ============ STORE: SUPPORT TICKETS (Contact Us submissions) ============ -->
+    <div id="store-support-tickets" class="section">
+      <div class="section-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>Support Tickets</h2>
+      </div>
+      <p style="color:var(--color-ink-soft); font-size:0.9rem; margin-top:-12px; margin-bottom:20px;">
+        Every submission from the site's <a href="/contact" target="_blank" rel="noopener">Contact Us</a> form lands here as a ticket.
+        Reply from here to email the customer back directly (needs the "Support Reply Template ID" set in Settings &gt; Account).
+      </p>
+      <div class="tab-strip">
+        <button class="tab-btn active" data-ticket-tab="open">Open</button>
+        <button class="tab-btn" data-ticket-tab="closed">Closed</button>
+        <button class="tab-btn" data-ticket-tab="all">All</button>
+      </div>
+      <div class="card">
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr><th>Date</th><th>Name</th><th>Email</th><th>Subject</th><th>Status</th><th>Action</th></tr>
+            </thead>
+            <tbody id="tickets-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Ticket Detail / Reply Modal -->
+      <div id="ticket-details-modal" class="card" style="display: none; border: 2px solid var(--color-primary); margin-top: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 15px;">
+          <h3 style="margin: 0;" id="modal-ticket-subject">Ticket</h3>
+          <button class="btn btn-outline" id="close-ticket-modal">Close [X]</button>
+        </div>
+        <p style="font-size:0.9rem; margin: 0 0 12px;">
+          <strong id="modal-ticket-name"></strong> &lt;<span id="modal-ticket-email"></span>&gt;
+          &nbsp;·&nbsp; <span id="modal-ticket-date"></span>
+          &nbsp;·&nbsp; <span id="modal-ticket-status" style="font-weight:bold;"></span>
+        </p>
+        <div id="modal-ticket-thread" style="max-height:340px; overflow-y:auto; border:1px solid #eee; border-radius:8px; padding:12px; margin-bottom:16px;"></div>
+
+        <div class="form-field">
+          <label>Reply to customer</label>
+          <textarea id="modal-ticket-reply-text" rows="4" placeholder="Type your reply — this will be emailed to the customer if a reply template is configured."></textarea>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+          <button class="btn btn-primary" id="send-ticket-reply-btn">Send Reply</button>
+          <button class="btn btn-outline" id="toggle-ticket-status-btn"></button>
+        </div>
+        <p class="field-hint" id="ticket-reply-status-note" style="margin-top:8px;"></p>
+      </div>
+    </div>
+
     <div id="blog-posts" class="section">
       <div class="section-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h2>All Blog Posts</h2>
@@ -1478,6 +1539,14 @@
             <div class="form-field full-width">
               <label>Order Status Update Template ID <span class="field-hint" style="display:inline;">(optional — separate EmailJS template addressed to the CUSTOMER, not you. Leave blank to skip customer status emails.)</span></label>
               <input type="text" id="set-email-status-tpl" placeholder="e.g. template_xyz123">
+            </div>
+            <div class="form-field full-width">
+              <label>Contact Form Template ID <span class="field-hint" style="display:inline;">(EmailJS template addressed to YOU — sent whenever a customer submits the Contact Us form. Leave blank to skip this email; the ticket is always saved in Support Tickets either way.)</span></label>
+              <input type="text" id="set-email-contact-tpl" placeholder="e.g. template_contact1">
+            </div>
+            <div class="form-field full-width">
+              <label>Support Reply Template ID <span class="field-hint" style="display:inline;">(optional — EmailJS template addressed to the CUSTOMER, used when you reply to a ticket from Support Tickets. Leave blank to skip customer reply emails.)</span></label>
+              <input type="text" id="set-email-contact-reply-tpl" placeholder="e.g. template_contactreply1">
             </div>
             <div class="form-field full-width">
               <label>Telegram Notify API Key <span class="field-hint" style="display:inline;">(must exactly match the TELEGRAM_NOTIFY_API_KEY value you set in Vercel — see SERVICE-ACCOUNT-SETUP-GUIDE.md. This is what lets the storefront trigger a "new review" Telegram alert.)</span></label>

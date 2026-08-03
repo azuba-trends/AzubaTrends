@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/images/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/images/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="/images/icons/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1F3A5F">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="AzubaTrends" id="apple-app-title-meta">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shipping &amp; Delivery Policy — AzubaTrends</title>
+<meta name="description" content="Delivery area, timelines, charges, and shipping partners for AzubaTrends orders.">
+<link rel="canonical" href="https://azubatrends.pages.dev/shipping-policy">
+
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://azubatrends.pages.dev/shipping-policy">
+<meta property="og:title" content="Shipping &amp; Delivery Policy — AzubaTrends">
+<meta property="og:description" content="Delivery area, timelines, charges, and shipping partners for AzubaTrends orders.">
+<meta property="og:image" content="https://azubatrends.pages.dev/images/icons/icon-512.png">
+<meta property="og:site_name" content="AzubaTrends">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Shipping &amp; Delivery Policy — AzubaTrends">
+<meta name="twitter:description" content="Delivery area, timelines, charges, and shipping partners for AzubaTrends orders.">
+<meta name="twitter:image" content="https://azubatrends.pages.dev/images/icons/icon-512.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+
+<div id="header-mount"></div>
+
+<main>
+  <div class="container">
+    <section class="page-header">
+      <div class="breadcrumb"><a href="/">Home</a> / Shipping &amp; Delivery Policy</div>
+      <h1>Shipping &amp; Delivery Policy</h1>
+      <p>Last updated: <span id="shipping-updated-date"></span></p>
+    </section>
+
+    <article class="prose">
+      <h2 id="delivery-area">1. Where we deliver</h2>
+      <p>
+        AzubaTrends currently delivers <strong>within West Bengal, India
+        only</strong> — we're based in Kolkata, and our catalog is sourced
+        largely from local artisans and sellers in and around the state.
+        Addresses outside West Bengal cannot be accepted at checkout; the
+        City field will only let you pick a serviceable location.
+      </p>
+
+      <h2 id="dispatch-timelines">2. Dispatch &amp; delivery timelines</h2>
+      <p>
+        Orders are typically dispatched within 1–3 business days of being
+        placed (subject to stock availability), and delivered within a
+        further few business days depending on your city/district within
+        West Bengal. Exact delivery estimates for your pincode are shown at
+        checkout using the "Check Delivery Date &amp; Availability" tool on
+        each product page.
+      </p>
+
+      <h2 id="delivery-partners">3. Delivery partners</h2>
+      <p>
+        Some products ship directly through the specific delivery partner
+        shown on that product's page (e.g. "This product comes from
+        &lt;Partner Name&gt;"), since we work with multiple local
+        artisans/sellers who each handle their own dispatch. Where no
+        specific partner is shown, we handle dispatch ourselves.
+      </p>
+
+      <h2 id="charges">4. Delivery &amp; COD charges</h2>
+      <p>
+        Some products carry a small per-order delivery fee, shown clearly on
+        the product page and at checkout before you pay — most orders have
+        no separate delivery fee. Cash on Delivery (COD) orders may include
+        an additional COD handling charge, also shown at checkout before you
+        confirm the order.
+      </p>
+
+      <h2 id="payment-methods">5. Payment methods</h2>
+      <p>
+        We currently accept UPI (pay and upload your payment screenshot for
+        quick verification) and Cash on Delivery. No card or net-banking
+        gateway is integrated at this time.
+      </p>
+
+      <h2 id="order-tracking">6. Tracking your order</h2>
+      <p>
+        We don't yet offer live courier tracking links, but we do send
+        order-status updates (Processing, Shipped, Delivered, etc.) to the
+        email address you provide at checkout. For any update on a specific
+        order, reach us via the <a href="/contact">Contact Us</a> page with
+        your order number.
+      </p>
+
+      <h2 id="delivery-issues">7. Delivery issues</h2>
+      <p>
+        If your order hasn't arrived within the estimated window, or arrives
+        damaged, please contact us within 7 days of the expected/actual
+        delivery date — see our
+        <a href="/refund-policy">Refund &amp; Cancellation Policy</a> for
+        what happens next.
+      </p>
+
+      <h2 id="contact">8. Questions</h2>
+      <p>
+        For anything not covered above, reach us via the
+        <a href="/contact">Contact Us</a> page or email
+        <a href="mailto:azubatrends@gmail.com" id="shipping-contact-email">azubatrends@gmail.com</a>.
+      </p>
+    </article>
+  </div>
+</main>
+
+<div id="footer-mount"></div>
+
+<script src="js/site-config.js"></script>
+<script src="js/tracking.js"></script>
+<script src="js/security.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/loading-overlay.js"></script>
+<script src="js/a2hs.js"></script>
+<script src="js/cart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
+<script src="js/product-loader.js"></script>
+<script src="js/search.js"></script>
+<script>
+  window.addEventListener("layout:ready", () => ProductLoader.initHeader());
+  document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("shipping-updated-date").textContent = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+    window.SITE_CONFIG_READY.then(() => {
+      Security.setTextSafely(document.getElementById("shipping-contact-email"), SITE_CONFIG.adminEmail);
+      document.getElementById("shipping-contact-email").href = "mailto:" + SITE_CONFIG.adminEmail;
+    });
+  });
+</script>
+</body>
+</html>

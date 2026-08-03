@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/images/favicon.svg">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/images/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="/images/icons/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1F3A5F">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="AzubaTrends" id="apple-app-title-meta">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contact Us — AzubaTrends</title>
+<meta name="description" content="Get in touch with AzubaTrends — general queries, order help, payment issues, or refund requests.">
+<link rel="canonical" href="https://azubatrends.pages.dev/contact">
+
+<!-- OPEN GRAPH (Facebook, WhatsApp) -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://azubatrends.pages.dev/contact">
+<meta property="og:title" content="Contact Us — AzubaTrends">
+<meta property="og:description" content="Get in touch with AzubaTrends — general queries, order help, payment issues, or refund requests.">
+<meta property="og:image" content="https://azubatrends.pages.dev/images/icons/icon-512.png">
+<meta property="og:site_name" content="AzubaTrends">
+
+<!-- TWITTER -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Contact Us — AzubaTrends">
+<meta name="twitter:description" content="Get in touch with AzubaTrends — general queries, order help, payment issues, or refund requests.">
+<meta name="twitter:image" content="https://azubatrends.pages.dev/images/icons/icon-512.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/components.css">
+<style>
+  .contact-layout { display: grid; grid-template-columns: 1.3fr 1fr; gap: 28px; align-items: start; }
+  @media (max-width: 860px) { .contact-layout { grid-template-columns: 1fr; } }
+  .contact-card { background: white; border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); padding: 24px; }
+  .contact-card h2 { margin-bottom: var(--space-5); }
+  .field-error { color: var(--color-danger); font-size: 0.8rem; display: block; margin-top: 4px; min-height: 1em; }
+  .hp-field { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+  #contact-message { min-height: 120px; resize: vertical; }
+  .contact-info-item { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 18px; }
+  .contact-info-item svg { flex-shrink: 0; width: 22px; height: 22px; color: var(--color-primary); margin-top: 2px; }
+  .contact-info-item h4 { margin: 0 0 3px; font-size: 0.95rem; }
+  .contact-info-item p, .contact-info-item a { margin: 0; color: var(--color-ink-soft); font-size: 0.9rem; }
+  #contact-form-status { margin-top: 12px; font-size: 0.9rem; }
+  #contact-form-status.success { color: var(--color-success, #1a7f37); }
+  #contact-form-status.error { color: var(--color-danger); }
+  #custom-subject-wrap { display: none; }
+</style>
+</head>
+<body>
+
+<div id="header-mount"></div>
+
+<main>
+  <div class="container">
+    <section class="page-header">
+      <div class="breadcrumb"><a href="/">Home</a> / Contact Us</div>
+      <h1>Contact Us</h1>
+      <p>Have a question about an order, payment, refund, or a product? Send us a message below — we usually reply within 1–2 business days.</p>
+    </section>
+
+    <div class="contact-layout">
+      <div class="contact-card">
+        <h2>Send a Message</h2>
+        <form id="contact-form" novalidate>
+          <!-- Honeypot field — real users never see or fill this in -->
+          <div class="hp-field" aria-hidden="true">
+            <label for="contact-website">Website</label>
+            <input type="text" id="contact-website" name="website" tabindex="-1" autocomplete="off">
+          </div>
+
+          <div class="form-field">
+            <label for="contact-name">Your Name</label>
+            <input type="text" id="contact-name" required maxlength="100">
+            <span class="field-error" id="error-contact-name"></span>
+          </div>
+
+          <div class="form-field">
+            <label for="contact-email">Your Email</label>
+            <input type="email" id="contact-email" placeholder="you@example.com" required>
+            <span class="field-error" id="error-contact-email"></span>
+          </div>
+
+          <div class="form-field">
+            <label for="contact-subject">Subject</label>
+            <select id="contact-subject" required>
+              <option value="">Select a subject</option>
+              <option value="General Query">General Query</option>
+              <option value="Order Related">Order Related</option>
+              <option value="Payment Related">Payment Related</option>
+              <option value="Refund / Return">Refund / Return</option>
+              <option value="Copyright / Product Issue">Copyright / Product Issue</option>
+              <option value="Other">Other</option>
+            </select>
+            <span class="field-error" id="error-contact-subject"></span>
+          </div>
+
+          <div class="form-field" id="custom-subject-wrap">
+            <label for="contact-custom-subject">Please specify</label>
+            <input type="text" id="contact-custom-subject" maxlength="150" placeholder="Briefly describe your subject">
+          </div>
+
+          <div class="form-field">
+            <label for="contact-message">Message</label>
+            <textarea id="contact-message" rows="5" required maxlength="5000" placeholder="Tell us more — include your order number if this is about an order."></textarea>
+            <span class="field-error" id="error-contact-message"></span>
+          </div>
+
+          <button type="submit" class="btn btn-primary" id="contact-submit-btn" style="width:100%; margin-top:6px;">Send Message</button>
+          <p id="contact-form-status" role="status"></p>
+        </form>
+      </div>
+
+      <div class="contact-card">
+        <h2>Reach Us Directly</h2>
+        <div class="contact-info-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" fill="none" stroke="none"/><path d="M22 6l-10 7L2 6"/><path d="M2 6h20v12H2z"/></svg>
+          <div>
+            <h4>Email</h4>
+            <a href="mailto:azubatrends@gmail.com" id="contact-email-link">azubatrends@gmail.com</a>
+          </div>
+        </div>
+        <div class="contact-info-item" id="contact-phone-item" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <div>
+            <h4>Phone / WhatsApp</h4>
+            <a href="#" id="contact-phone-link"></a>
+          </div>
+        </div>
+        <div class="contact-info-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <div>
+            <h4>Delivery Area</h4>
+            <p>Kolkata &amp; across West Bengal, India</p>
+          </div>
+        </div>
+        <div class="contact-info-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <div>
+            <h4>Response Time</h4>
+            <p>Usually within 1–2 business days</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="footer-mount"></div>
+
+<script src="js/site-config.js"></script>
+<script src="js/tracking.js"></script>
+<script src="js/security.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/loading-overlay.js"></script>
+<script src="js/a2hs.js"></script>
+<script src="js/cart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
+<script src="js/product-loader.js"></script>
+<script src="js/search.js"></script>
+<script src="js/contact-form.js"></script>
+<script>
+  window.addEventListener("layout:ready", () => ProductLoader.initHeader());
+  document.addEventListener("DOMContentLoaded", () => {
+    window.SITE_CONFIG_READY.then(() => {
+      Security.setTextSafely(document.getElementById("contact-email-link"), SITE_CONFIG.adminEmail);
+      document.getElementById("contact-email-link").href = "mailto:" + SITE_CONFIG.adminEmail;
+      if (SITE_CONFIG.supportPhone) {
+        document.getElementById("contact-phone-item").hidden = false;
+        Security.setTextSafely(document.getElementById("contact-phone-link"), SITE_CONFIG.supportPhone);
+        document.getElementById("contact-phone-link").href = "https://wa.me/" + SITE_CONFIG.supportPhone.replace(/\D/g, "");
+      }
+    });
+  });
+</script>
+</body>
+</html>

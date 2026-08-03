@@ -149,5 +149,19 @@ service cloud.firestore {
     match /telegram_bots/{botId} {
       allow read, write: if isAdmin();
     }
+
+    // Contact Us form submissions (contact.html -> api/submit-contact.js).
+    // Same pattern as stock_notifications/reviews above: guests never
+    // write this collection directly from the browser (that would let
+    // anyone read back every name/email/message ever submitted) —
+    // everything goes through the server-side Admin SDK route instead.
+    // Only the signed-in admin can read/reply/close/reopen tickets, via
+    // the Admin Panel > Support Tickets screen.
+    match /contactTickets/{ticketId} {
+      allow read, write: if isAdmin();
+    }
+    match /contact_rate_limits/{limitId} {
+      allow read, write: if isAdmin();
+    }
   }
 }

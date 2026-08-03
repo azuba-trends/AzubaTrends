@@ -1824,6 +1824,11 @@ setTimeout(() => {
     scheduleProductDraftSave();
   });
 
+  document.getElementById("prod-return-available").addEventListener("change", (e) => {
+    document.getElementById("prod-return-days-wrap").style.display = e.target.checked ? "block" : "none";
+    scheduleProductDraftSave();
+  });
+
   document.getElementById("prod-name").addEventListener("input", (e) => {
     document.getElementById("prod-slug").value = generateSlug(e.target.value);
     renderSeoChecklist();
@@ -2167,6 +2172,9 @@ setTimeout(() => {
     document.getElementById("variant-sync-wrap").style.display = "none";
     document.getElementById("prod-custom-availability").checked = false;
     document.getElementById("prod-availability-mount").hidden = true;
+    document.getElementById("prod-return-available").checked = false;
+    document.getElementById("prod-return-days").value = 7;
+    document.getElementById("prod-return-days-wrap").style.display = "none";
     if (productAvailabilityPicker) { productAvailabilityPicker.destroy(); productAvailabilityPicker = null; }
     renderSeoChecklist();
     updateProductPricePreview();
@@ -2407,6 +2415,9 @@ setTimeout(() => {
     document.getElementById("prod-tags").value = (p.tags || []).join(", ");
     document.getElementById("prod-sku").value = p.sku || "";
     document.getElementById("prod-hsn").value = p.hsnCode || "";
+    document.getElementById("prod-return-available").checked = p.returnAvailable === true;
+    document.getElementById("prod-return-days").value = (p.returnDays !== undefined && p.returnDays !== null) ? p.returnDays : 7;
+    document.getElementById("prod-return-days-wrap").style.display = p.returnAvailable === true ? "block" : "none";
     document.getElementById("prod-source-url").value = p.sourcePlatformUrl || "";
     sdRTE.setHTML(p.shortDescription || "");
     ldRTE.setHTML(p.description || "");
@@ -2659,6 +2670,10 @@ setTimeout(() => {
         paused: document.getElementById("prod-paused").checked === true,
         sku: document.getElementById("prod-sku").value,
         hsnCode: document.getElementById("prod-hsn").value.trim(),
+        returnAvailable: document.getElementById("prod-return-available").checked === true,
+        returnDays: document.getElementById("prod-return-available").checked
+          ? (Number(document.getElementById("prod-return-days").value) || 7)
+          : null,
         sourcePlatformUrl: document.getElementById("prod-source-url").value.trim(),
         tags: document.getElementById("prod-tags").value.split(",").map((t) => t.trim()).filter(Boolean),
         shortDescription: sdRTE.getHTML(),
@@ -4665,6 +4680,8 @@ setTimeout(() => {
     document.getElementById("set-email-tpl").value = SETTINGS.emailjs_templateId || "";
     document.getElementById("set-email-customer-tpl").value = SETTINGS.emailjs_customerTemplateId || "";
     document.getElementById("set-email-status-tpl").value = SETTINGS.emailjs_statusTemplateId || "";
+    document.getElementById("set-email-contact-tpl").value = SETTINGS.emailjs_contactTemplateId || "";
+    document.getElementById("set-email-contact-reply-tpl").value = SETTINGS.emailjs_contactReplyTemplateId || "";
     document.getElementById("set-telegram-api-key").value = SETTINGS.telegramApiKey || "";
     document.getElementById("set-ga4-id").value = SETTINGS.ga4MeasurementId || "";
     document.getElementById("set-meta-pixel-id").value = SETTINGS.metaPixelId || "";
@@ -4716,6 +4733,8 @@ setTimeout(() => {
       emailjs_templateId: document.getElementById("set-email-tpl").value,
       emailjs_customerTemplateId: document.getElementById("set-email-customer-tpl").value,
       emailjs_statusTemplateId: document.getElementById("set-email-status-tpl").value,
+      emailjs_contactTemplateId: document.getElementById("set-email-contact-tpl").value,
+      emailjs_contactReplyTemplateId: document.getElementById("set-email-contact-reply-tpl").value,
       telegramApiKey: document.getElementById("set-telegram-api-key").value,
     }, document.getElementById("save-account-settings-btn"));
   });
@@ -5009,6 +5028,7 @@ setTimeout(() => {
   async function loadPushHistory() {
     const tbody = document.getElementById("push-history-table-body");
     if (!tbody) return;
+    if (!auth.currentUser) return; // not signed in yet — startRealtimeSync() calls this again once auth is ready
     try {
       const idToken = await auth.currentUser.getIdToken();
       const res = await fetch("/api/push-history", { headers: { Authorization: `Bearer ${idToken}` } });
@@ -5066,8 +5086,180 @@ setTimeout(() => {
         btn.disabled = false; btn.textContent = "Send to All Subscribers";
       }
     });
-    loadPushHistory();
   }
+
+  // ================================================================
+  // SUPPORT TICKETS (Contact Us form submissions — api/submit-contact.js
+  // writes these into the `contactTickets` collection; this is the admin
+  // side: list, reply — which emails the customer back via EmailJS using
+  // SETTINGS.emailjs_contactReplyTemplateId — and Close/Reopen.)
+  // ================================================================
+  let ticketsList = [];
+  let currentTicketTab = "open";
+  let unsubTickets = null;
+  let currentEditingTicketId = null;
+
+  function ticketMatchesTab(ticket, tab) {
+    const status = ticket.status || "open";
+    if (tab === "all") return true;
+    if (tab === "open") return status === "open";
+    if (tab === "closed") return status === "closed";
+    return true;
+  }
+
+  function listenTickets() {
+    if (unsubTickets) return;
+    unsubTickets = onSnapshot(collection(db, "contactTickets"), (snap) => {
+      ticketsList = [];
+      snap.forEach((d) => ticketsList.push({ id: d.id, ...d.data() }));
+      ticketsList.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      renderTicketsTable();
+      // Keep an already-open ticket modal in sync (e.g. a new reply came
+      // in from another tab/device while this admin had it open).
+      if (currentEditingTicketId && document.getElementById("ticket-details-modal").style.display !== "none") {
+        const stillExists = ticketsList.some((t) => t.id === currentEditingTicketId);
+        if (stillExists) viewTicket(currentEditingTicketId);
+      }
+    }, (err) => console.error("tickets listener error", err));
+  }
+
+  wireTabStrip("#store-support-tickets .tab-strip", "ticketTab", (tab) => { currentTicketTab = tab; renderTicketsTable(); });
+
+  function renderTicketsTable() {
+    const tbody = document.getElementById("tickets-table-body");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    ticketsList.filter((t) => ticketMatchesTab(t, currentTicketTab)).forEach((t) => {
+      const dateStr = t.createdAt ? new Date(t.createdAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
+      const isClosed = t.status === "closed";
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${dateStr}</td>
+        <td>${esc(t.name)}</td>
+        <td>${esc(t.email)}</td>
+        <td>${esc(t.subject)}</td>
+        <td style="color:${isClosed ? 'var(--color-ink-soft)' : 'var(--color-success)'}; font-weight:bold;">${isClosed ? 'Closed' : 'Open'}</td>
+        <td><button class="btn btn-primary view-ticket-btn" data-id="${t.id}" style="padding:4px 8px; font-size:0.8rem;">${(t.replies || []).length ? 'View / Reply' : 'Reply'}</button></td>`;
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll(".view-ticket-btn").forEach((b) => b.addEventListener("click", () => viewTicket(b.dataset.id)));
+  }
+
+  function viewTicket(id) {
+    const t = ticketsList.find((x) => x.id === id);
+    if (!t) return;
+    currentEditingTicketId = id;
+
+    Security.setTextSafely(document.getElementById("modal-ticket-subject"), t.subject || "Ticket");
+    Security.setTextSafely(document.getElementById("modal-ticket-name"), t.name || "");
+    Security.setTextSafely(document.getElementById("modal-ticket-email"), t.email || "");
+    Security.setTextSafely(document.getElementById("modal-ticket-date"), t.createdAt ? new Date(t.createdAt).toLocaleString("en-IN") : "");
+    const isClosed = t.status === "closed";
+    const statusEl = document.getElementById("modal-ticket-status");
+    statusEl.textContent = isClosed ? "Closed" : "Open";
+    statusEl.style.color = isClosed ? "var(--color-ink-soft)" : "var(--color-success)";
+
+    const thread = document.getElementById("modal-ticket-thread");
+    thread.innerHTML = "";
+    const origWrap = document.createElement("div");
+    origWrap.style.cssText = "padding:8px 10px; background:#f7f5f0; border-radius:6px; margin-bottom:10px;";
+    const origLabel = document.createElement("div");
+    origLabel.style.cssText = "font-size:0.75rem; color:var(--color-ink-soft); margin-bottom:4px;";
+    origLabel.textContent = `${t.name} wrote:`;
+    const origMsg = document.createElement("div");
+    origMsg.style.cssText = "white-space:pre-wrap; font-size:0.9rem;";
+    origMsg.textContent = t.message || "";
+    origWrap.appendChild(origLabel);
+    origWrap.appendChild(origMsg);
+    thread.appendChild(origWrap);
+
+    (t.replies || []).forEach((r) => {
+      const replyWrap = document.createElement("div");
+      replyWrap.style.cssText = "padding:8px 10px; background:#eaf2ff; border-radius:6px; margin-bottom:10px; margin-left:20px;";
+      const replyLabel = document.createElement("div");
+      replyLabel.style.cssText = "font-size:0.75rem; color:var(--color-ink-soft); margin-bottom:4px;";
+      replyLabel.textContent = `You replied — ${r.repliedAt ? new Date(r.repliedAt).toLocaleString("en-IN") : ""}`;
+      const replyMsg = document.createElement("div");
+      replyMsg.style.cssText = "white-space:pre-wrap; font-size:0.9rem;";
+      replyMsg.textContent = r.message || "";
+      replyWrap.appendChild(replyLabel);
+      replyWrap.appendChild(replyMsg);
+      thread.appendChild(replyWrap);
+    });
+
+    document.getElementById("modal-ticket-reply-text").value = "";
+    document.getElementById("ticket-reply-status-note").textContent = "";
+    const toggleBtn = document.getElementById("toggle-ticket-status-btn");
+    toggleBtn.textContent = isClosed ? "Reopen Ticket" : "Close Ticket";
+    document.getElementById("ticket-details-modal").style.display = "block";
+  }
+
+  document.getElementById("close-ticket-modal").addEventListener("click", () => {
+    document.getElementById("ticket-details-modal").style.display = "none";
+    currentEditingTicketId = null;
+  });
+
+  async function sendTicketReplyEmail(ticket, replyMessage) {
+    if (!SETTINGS.emailjs_contactReplyTemplateId || !SETTINGS.emailjs_publicKey || !SETTINGS.emailjs_serviceId) {
+      throw new Error("Support Reply Template ID not configured in Settings > Account — reply was saved but no email was sent.");
+    }
+    await loadEmailJsSdk();
+    return window.emailjs.send(SETTINGS.emailjs_serviceId, SETTINGS.emailjs_contactReplyTemplateId, {
+      customer_name: ticket.name,
+      subject: ticket.subject,
+      original_message: ticket.message,
+      reply_message: replyMessage,
+      to_email: ticket.email
+    });
+  }
+
+  document.getElementById("send-ticket-reply-btn").addEventListener("click", async () => {
+    const ticket = ticketsList.find((t) => t.id === currentEditingTicketId);
+    if (!ticket) return;
+    const replyText = document.getElementById("modal-ticket-reply-text").value.trim();
+    const noteEl = document.getElementById("ticket-reply-status-note");
+    if (!replyText) { noteEl.textContent = "Type a reply first."; noteEl.style.color = "var(--color-danger)"; return; }
+
+    const btn = document.getElementById("send-ticket-reply-btn");
+    btn.disabled = true; btn.textContent = "Sending...";
+    try {
+      const newReply = { message: replyText, repliedAt: new Date().toISOString() };
+      await updateDoc(doc(db, "contactTickets", ticket.id), {
+        replies: [...(ticket.replies || []), newReply],
+        updatedAt: new Date().toISOString()
+      });
+      try {
+        await sendTicketReplyEmail(ticket, replyText);
+        noteEl.style.color = "var(--color-success)";
+        noteEl.textContent = "Reply saved and emailed to the customer.";
+      } catch (emailErr) {
+        // Non-fatal — the reply itself is already saved above.
+        noteEl.style.color = "var(--color-danger)";
+        noteEl.textContent = emailErr.message || "Reply saved, but the email could not be sent.";
+      }
+      document.getElementById("modal-ticket-reply-text").value = "";
+    } catch (err) {
+      noteEl.style.color = "var(--color-danger)";
+      noteEl.textContent = "Failed to save reply: " + (err.message || err);
+    } finally {
+      btn.disabled = false; btn.textContent = "Send Reply";
+    }
+  });
+
+  document.getElementById("toggle-ticket-status-btn").addEventListener("click", async () => {
+    const ticket = ticketsList.find((t) => t.id === currentEditingTicketId);
+    if (!ticket) return;
+    const newStatus = ticket.status === "closed" ? "open" : "closed";
+    const btn = document.getElementById("toggle-ticket-status-btn");
+    btn.disabled = true;
+    try {
+      await updateDoc(doc(db, "contactTickets", ticket.id), { status: newStatus, updatedAt: new Date().toISOString() });
+    } catch (err) {
+      alert("Could not update ticket status: " + (err.message || err));
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   // ================================================================
   // Boot sequence — realtime sync
@@ -5088,6 +5280,8 @@ setTimeout(() => {
     listenCoupons();
     listenProducts();
     listenOrders();
+    listenTickets();
+    loadPushHistory();
     listenTelegramBots();
     listenBlogPosts();
     listenBlogCategories();
@@ -5105,10 +5299,10 @@ setTimeout(() => {
   }
 
   function stopRealtimeSync() {
-    [unsubCategories, unsubBrands, unsubCoupons, unsubProducts, unsubOrders, unsubTelegramBots, unsubBlogPosts, unsubBlogCategories, unsubPages].forEach((unsub) => {
+    [unsubCategories, unsubBrands, unsubCoupons, unsubProducts, unsubOrders, unsubTickets, unsubTelegramBots, unsubBlogPosts, unsubBlogCategories, unsubPages].forEach((unsub) => {
       if (typeof unsub === "function") unsub();
     });
-    unsubCategories = unsubBrands = unsubCoupons = unsubProducts = unsubOrders = unsubTelegramBots = unsubBlogPosts = unsubBlogCategories = unsubPages = null;
+    unsubCategories = unsubBrands = unsubCoupons = unsubProducts = unsubOrders = unsubTickets = unsubTelegramBots = unsubBlogPosts = unsubBlogCategories = unsubPages = null;
     syncStarted = false;
     pagesSeeded = false;
   }

@@ -85,6 +85,8 @@
             <strong id="delivery-partner-name"></strong>
           </div>
 
+          <div class="return-policy-note" id="return-policy-note"></div>
+
           <!-- Check Delivery Date & Availability — placed above the action
                buttons so the "not available at your location" status is
                impossible to miss before someone tries to buy. Card holds
@@ -917,6 +919,20 @@
       deliveryNote.hidden = false;
     } else {
       deliveryNote.hidden = true;
+    }
+
+    // Return policy badge — set by the admin per-product (Add/Edit
+    // Product > "Return available"). Shows a positive "X-Day Returns"
+    // badge when eligible, or a plain "Non-returnable" note otherwise, so
+    // this is never left ambiguous before someone buys.
+    const returnNote = document.getElementById("return-policy-note");
+    if (product.returnAvailable && Number(product.returnDays) > 0) {
+      returnNote.innerHTML = "";
+      returnNote.className = "return-policy-note return-policy-note--ok";
+      Security.setTextSafely(returnNote, `↩ ${Number(product.returnDays)}-Day Returns`);
+    } else {
+      returnNote.className = "return-policy-note return-policy-note--none";
+      Security.setTextSafely(returnNote, "Non-returnable / Non-refundable");
     }
 
     // ---- Price / Stock status / actions / Notify Me ---------------------------

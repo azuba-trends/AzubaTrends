@@ -68,7 +68,14 @@ window.SITE_CONFIG_READY = (async function() {
         publicKey: data.emailjs_publicKey || "",
         serviceId: data.emailjs_serviceId || "",
         templateId: data.emailjs_templateId || "",
-        customerTemplateId: data.emailjs_customerTemplateId || ""
+        customerTemplateId: data.emailjs_customerTemplateId || "",
+        // Contact Us form (contact.html) — emails the admin inbox with
+        // whatever the customer typed. Separate from the order templates
+        // above since the fields (subject/message vs order items) differ.
+        contactTemplateId: data.emailjs_contactTemplateId || "",
+        // Support Tickets reply (Admin Panel) — emails the CUSTOMER back
+        // when the admin replies to their ticket.
+        contactReplyTemplateId: data.emailjs_contactReplyTemplateId || ""
       };
       // Used by reviews.js so a guest submitting a review photo can upload
       // it the same way the admin panel uploads product images — same

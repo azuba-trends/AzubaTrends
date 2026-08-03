@@ -888,9 +888,33 @@ html {
   color: var(--color-ink-soft);
   margin-bottom: var(--space-4);
 }
+.delivery-partner-note[hidden] {
+  display: none;
+}
 
 .delivery-partner-note strong {
   color: var(--color-ink);
+}
+
+.return-policy-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm, 6px);
+  margin-bottom: var(--space-4);
+}
+.return-policy-note--ok {
+  color: var(--color-success, #1a7f37);
+  background: rgba(26, 127, 55, 0.08);
+  border: 1px solid rgba(26, 127, 55, 0.25);
+}
+.return-policy-note--none {
+  color: var(--color-ink-soft);
+  background: #f2f2f2;
+  border: 1px solid var(--color-border, #e2ddd0);
 }
 
 /* Small and crisp, never stretched — object-fit keeps the partner's logo
@@ -2212,6 +2236,17 @@ html {
   border-radius: 8px;
   font-size: 0.88rem;
   margin-bottom: var(--space-3);
+}
+/* `.availability-status[hidden]` has to be spelled out explicitly: the
+   class rule above sets `display: flex` unconditionally, and that class
+   selector ties in specificity with the browser's built-in `[hidden] {
+   display: none }` rule — so without this, setting `el.hidden = true`
+   from JS (see product.html's setProductAvailableUI) added the attribute
+   but the element stayed visually flexed on screen. This is what caused
+   an earlier pincode's "not available" banner to keep showing even after
+   checking a second, serviceable pincode. */
+.availability-status[hidden] {
+  display: none;
 }
 .availability-status--unavailable {
   background: var(--color-danger-tint);

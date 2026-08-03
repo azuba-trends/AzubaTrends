@@ -8,6 +8,7 @@
     "/config/*",
     "/partials/*",
     "/favicon.ico",
+    "/sw.js",
     "/firestore.rules",
     "/about",
     "/admin",
@@ -20,6 +21,10 @@
     "/product",
     "/search",
     "/terms",
+    "/contact",
+    "/privacy-policy",
+    "/refund-policy",
+    "/shipping-policy",
     "/wishlist",
     "/product-import-tester",
     "/share-preview-tester"
