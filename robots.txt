@@ -15,4 +15,4 @@ Allow: /api/blog-posts
 # AI/LLM-friendly site map (static file, see llms.txt for details)
 Allow: /llms.txt
 
-Sitemap: https://azuba-trends.vercel.app/sitemap.xml
+Sitemap: https://azubatrends.pages.dev/sitemap.xml
