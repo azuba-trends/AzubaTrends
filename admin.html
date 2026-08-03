@@ -1012,6 +1012,11 @@
           <div class="form-field">
             <label for="push-image">Image URL (optional)</label>
             <input type="text" id="push-image" placeholder="https://... — shown as a big banner image inside the notification">
+            <div style="margin-top:8px;">
+              <label for="push-image-file" class="btn btn-outline" style="display:inline-block; padding:6px 12px; font-size:0.85rem; cursor:pointer;">Upload Image</label>
+              <input type="file" id="push-image-file" accept="image/*" style="display:none;">
+            </div>
+            <div id="push-image-preview" style="margin-top:8px;"></div>
           </div>
           <button type="submit" class="btn btn-primary" id="push-broadcast-btn" style="width:100%; margin-top:8px;">Send to All Subscribers</button>
           <p class="field-hint" id="push-broadcast-status" style="margin-top:10px;"></p>

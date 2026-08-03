@@ -437,19 +437,42 @@ setTimeout(() => {
   // camera photos are often 3-10 MB at 4000px+ wide, which is massive
   // overkill for a product card/gallery and makes the storefront feel slow
   // on customers' mobile data. This scales the longest edge down to a
-  // sensible max and re-encodes as JPEG at a quality that keeps the file
-  // small while still looking sharp when zoomed in the lightbox.
+  // sensible max and re-encodes as WEBP at a quality that keeps the file
+  // small while still looking sharp when zoomed in the lightbox — WebP
+  // gives a noticeably smaller file than JPEG at the same visual quality,
+  // which is why this got switched over from JPEG.
   const MAX_IMAGE_DIMENSION = 1600; // px, longest edge
   const IMAGE_QUALITY = 0.82;
 
+  // Not every browser's canvas can actually encode WebP (older Safari,
+  // some embedded webviews silently hand back a PNG instead if you ask
+  // for "image/webp" and it isn't supported) — detect it once up front
+  // and cache the result, instead of trusting toBlob's mimeType blindly
+  // and shipping giant PNGs without noticing.
+  let webpSupportPromise = null;
+  function supportsWebP() {
+    if (!webpSupportPromise) {
+      webpSupportPromise = new Promise((resolve) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1; canvas.height = 1;
+        canvas.toBlob((blob) => resolve(!!blob && blob.type === "image/webp"), "image/webp");
+      });
+    }
+    return webpSupportPromise;
+  }
+
   function compressImage(file) {
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       // Only compress actual raster images ImgBB/browsers can re-encode;
       // pass anything else (e.g. an already-tiny file, or a format canvas
       // can't touch) straight through rather than risk breaking it.
       if (!file.type || !file.type.startsWith("image/") || file.type === "image/gif") {
         return resolve(file);
       }
+
+      const canEncodeWebp = await supportsWebP();
+      const outType = canEncodeWebp ? "image/webp" : "image/jpeg";
+      const outExt = canEncodeWebp ? ".webp" : ".jpg";
 
       const img = new Image();
       const objectUrl = URL.createObjectURL(file);
@@ -458,12 +481,16 @@ setTimeout(() => {
         URL.revokeObjectURL(objectUrl);
 
         let { width, height } = img;
-        if (width <= MAX_IMAGE_DIMENSION && height <= MAX_IMAGE_DIMENSION && file.size < 700 * 1024) {
-          // Already small enough — skip re-encoding to avoid needless
-          // quality loss on images that don't need it.
+        if (file.type === outType && width <= MAX_IMAGE_DIMENSION && height <= MAX_IMAGE_DIMENSION && file.size < 700 * 1024) {
+          // Already small AND already in our target format — skip
+          // re-encoding to avoid needless quality loss on images that
+          // don't need it.
           return resolve(file);
         }
 
+        // Resize only if it's actually oversized — a small image just
+        // gets re-encoded to WebP at its current dimensions, which alone
+        // shrinks the file without touching visual quality.
         const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(width, height));
         const canvas = document.createElement("canvas");
         canvas.width = Math.round(width * scale);
@@ -474,9 +501,9 @@ setTimeout(() => {
         canvas.toBlob(
           (blob) => {
             if (!blob) return resolve(file); // fallback: upload original if canvas export fails
-            resolve(new File([blob], (file.name || "image").replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }));
+            resolve(new File([blob], (file.name || "image").replace(/\.\w+$/, "") + outExt, { type: outType }));
           },
-          "image/jpeg",
+          outType,
           IMAGE_QUALITY
         );
       };
@@ -5197,6 +5224,60 @@ setTimeout(() => {
     }
   }
 
+  // Notification image: pick a file -> compress/WebP-convert -> upload to
+  // ImgBB (same pipeline as product/category/brand images) -> drop the
+  // hosted URL into the (still-editable) Image URL text field, with a
+  // preview + × remove button matching the rest of the admin.
+  const pushImageFileInput = document.getElementById("push-image-file");
+  const pushImageUrlInput = document.getElementById("push-image");
+  const pushImagePreview = document.getElementById("push-image-preview");
+  function renderPushImagePreview(url) {
+    pushImagePreview.innerHTML = "";
+    if (!url) return;
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "position:relative; display:inline-block;";
+    const img = document.createElement("img");
+    img.src = url;
+    img.style.cssText = "width:80px; height:80px; object-fit:cover; border-radius:4px; cursor:zoom-in;";
+    img.addEventListener("click", () => openAdminLightbox(url));
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.textContent = "×";
+    removeBtn.title = "Remove this image";
+    removeBtn.style.cssText = "position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%; border:none; background:var(--color-danger,#c0392b); color:#fff; cursor:pointer; line-height:1; font-size:14px;";
+    removeBtn.addEventListener("click", () => {
+      pushImageUrlInput.value = "";
+      pushImageFileInput.value = "";
+      pushImagePreview.innerHTML = "";
+    });
+    wrap.appendChild(img);
+    wrap.appendChild(removeBtn);
+    pushImagePreview.appendChild(wrap);
+  }
+  if (pushImageFileInput) {
+    pushImageFileInput.addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const label = document.querySelector('label[for="push-image-file"]');
+      const originalLabelText = label.textContent;
+      try {
+        label.textContent = "Uploading...";
+        const url = await uploadToImgBB(file);
+        pushImageUrlInput.value = url;
+        renderPushImagePreview(url);
+      } catch (err) {
+        alert(err.message || "Image upload failed.");
+      } finally {
+        label.textContent = originalLabelText;
+        pushImageFileInput.value = "";
+      }
+    });
+  }
+  // Typing/pasting a URL directly should update the preview too.
+  if (pushImageUrlInput) {
+    pushImageUrlInput.addEventListener("change", () => renderPushImagePreview(pushImageUrlInput.value.trim()));
+  }
+
   const pushBroadcastForm = document.getElementById("push-broadcast-form");
   if (pushBroadcastForm) {
     pushBroadcastForm.addEventListener("submit", async (e) => {
@@ -5225,6 +5306,7 @@ setTimeout(() => {
         statusEl.style.color = "var(--color-success)";
         statusEl.textContent = `Sent — delivered to ${data.delivered} of ${data.attempted} subscribers.`;
         pushBroadcastForm.reset();
+        pushImagePreview.innerHTML = "";
         loadPushHistory();
       } catch (err) {
         statusEl.style.color = "var(--color-danger)";
