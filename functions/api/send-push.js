@@ -44,7 +44,7 @@ export async function onRequestPost(context) {
   }
 
   try {
-    const { deviceId, broadcast, title, body: message, url, image } = body || {};
+    const { deviceId, broadcast, title, body: message, url, image, buttonText } = body || {};
     if (!title || !message) return json({ error: "Title and message are required." }, 400);
     if (!broadcast && !deviceId) return json({ error: "Missing deviceId (or set broadcast: true)." }, 400);
 
@@ -56,6 +56,10 @@ export async function onRequestPost(context) {
     // Keep the payload lean when there's no image — cheaper to encrypt/send
     // and avoids shipping a stray `image: undefined` key.
     if (image && typeof image === "string") payload.image = image;
+    // Optional action button label (e.g. "Shop Now") — sw.js turns this
+    // into a tappable `actions` entry on platforms that support it; tapping
+    // it (or anywhere else on the notification) opens the same `url` above.
+    if (buttonText && typeof buttonText === "string") payload.buttonText = buttonText;
     let delivered = 0;
     const staleIds = [];
 
@@ -78,7 +82,7 @@ export async function onRequestPost(context) {
     // panel's "Send History" table has something to show.
     if (broadcast) {
       await createDoc(env, "push_log", crypto.randomUUID().replace(/-/g, ""), {
-        title, body: message, url: url || "/", image: payload.image || null,
+        title, body: message, url: url || "/", image: payload.image || null, buttonText: payload.buttonText || null,
         attempted: subs.length, delivered,
         sentAt: new Date().toISOString()
       }).catch((err) => console.error("send-push: history log failed (non-fatal):", err.message));

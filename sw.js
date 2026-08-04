@@ -59,13 +59,20 @@ self.addEventListener("fetch", (event) => {
 
 // ---- Web Push ---------------------------------------------------------
 // Payload shape sent from functions/api/send-push.js:
-//   { title, body, url, icon?, image? }
+//   { title, body, url, icon?, image?, buttonText? }
 //
 // `image` (optional) is the big banner-style picture shown inside the
 // notification body — same idea as Meesho/big-platform push, e.g. a
 // product photo. It's just a URL: the actual bytes never travel through
 // the push payload (which stays well under the ~4KB limit either way);
 // the browser fetches it itself at display time, same as icon/badge.
+//
+// `buttonText` (optional) adds a single tappable action button (e.g.
+// "Shop Now") inside the notification — Android Chrome/Firefox render it,
+// desktop Chrome/Edge render it too; iOS and a few others just show the
+// plain notification with no button. Either way it opens the exact same
+// `url` as tapping the notification body does — see notificationclick
+// below, which doesn't branch on which part was tapped for that reason.
 //
 // `renotify: true` + a shared `tag` means a second push about the SAME
 // thing (e.g. re-sending a broadcast) still re-alerts (vibrate/sound)
@@ -92,9 +99,14 @@ self.addEventListener("push", (event) => {
     data: { url: data.url || "/" }
   };
   if (data.image) options.image = data.image;
+  if (data.buttonText) options.actions = [{ action: "open_url", title: data.buttonText }];
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
+// Fires for BOTH a tap on the notification body AND a tap on the action
+// button above (event.action is only set for the latter) — every path
+// here goes to the same targetUrl, so there's deliberately no branching
+// on event.action.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const targetUrl = (event.notification.data && event.notification.data.url) || "/";

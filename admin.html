@@ -526,16 +526,21 @@
               <label>HSN Code <span class="field-hint" style="display:inline;">(optional — shown on invoices, GST classification)</span></label>
               <input type="text" id="prod-hsn">
             </div>
-            <div class="form-field" style="display:flex; align-items:center; gap:8px; padding-top:22px;">
-              <label style="display:flex; align-items:center; gap:6px; font-weight:normal; margin:0;">
-                <input type="checkbox" id="prod-return-available" style="width:auto;">
-                Return available <span class="field-hint" style="display:inline;">(shows an "X-Day Returns" badge on the product page; leave off to show "Non-returnable")</span>
-              </label>
-            </div>
-            <div class="form-field" id="prod-return-days-wrap" style="display:none;">
-              <label>Return window (days)</label>
-              <input type="number" id="prod-return-days" min="1" max="365" value="7">
-            </div>
+          </div>
+
+          <!-- Kept OUTSIDE #variant-top-pricing-wrap on purpose — that wrap
+               is hidden while editing one color/size (isVariant), but a
+               variant is its own live product page and needs its own
+               Return policy exactly like a plain product does. -->
+          <div class="form-field" style="display:flex; align-items:center; gap:8px; padding-top:22px;">
+            <label style="display:flex; align-items:center; gap:6px; font-weight:normal; margin:0;">
+              <input type="checkbox" id="prod-return-available" style="width:auto;">
+              Return available <span class="field-hint" style="display:inline;">(shows an "X-Day Returns" badge on the product page; leave off to show "Non-returnable")</span>
+            </label>
+          </div>
+          <div class="form-field" id="prod-return-days-wrap" style="display:none;">
+            <label>Return window (days)</label>
+            <input type="number" id="prod-return-days" min="1" max="365" value="7">
           </div>
 
           <div class="form-field">
@@ -1027,6 +1032,11 @@
           <div class="form-field">
             <label for="push-url">Link when tapped (optional)</label>
             <input type="text" id="push-url" placeholder="/category/womens-ethnic-wear or leave blank for homepage">
+          </div>
+          <div class="form-field">
+            <label for="push-button-text">Button text (optional)</label>
+            <input type="text" id="push-button-text" maxlength="20" placeholder="e.g. Shop Now — leave blank for no button">
+            <p class="field-hint" style="margin-top:4px;">Adds a tappable button inside the notification with this label. It opens the same link above — so does tapping anywhere else on the notification. Not shown on every device (some phones/browsers only show the plain notification), so the link-on-tap always works either way.</p>
           </div>
           <div class="form-field">
             <label for="push-image">Image URL (optional)</label>

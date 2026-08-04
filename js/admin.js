@@ -2312,7 +2312,7 @@ setTimeout(() => {
       <td style="color:${sColor}; font-weight:bold;">${esc((rep.status || "").toUpperCase())}</td>
       <td>${rep.sourcePlatformUrl ? `<button class="btn btn-outline source-platform-btn" data-url="${esc(rep.sourcePlatformUrl)}" style="padding:4px 8px; font-size:0.8rem;">Source Platform</button>` : '<span style="color:var(--color-ink-soft); font-size:0.8rem;">—</span>'}</td>
       <td><button class="btn btn-outline sync-color-btn" data-parent="${parent.id}" data-color="${esc(color)}" title="Pull Name, Description, Category, Brand, Tags, Delivery info and Images from the parent for every size in this color, then publish" style="padding:4px 8px; font-size:0.8rem;">🔄 Auto Sync</button></td>
-      <td><span style="color:var(--color-ink-soft); font-size:0.8rem;" title="Push Notify is only available on the main product row — a color/size variant isn't its own visible store listing.">—</span></td>
+      <td><button class="btn btn-outline push-notify-variant-btn" data-parent="${parent.id}" data-color="${esc(color)}" title="Send a New Arrival push notification to every subscriber, using this color's own image + link" style="padding:4px 8px; font-size:0.8rem;">🔔 Push Notify</button></td>
       <td>
         <button class="btn btn-outline pause-color-btn" data-parent="${parent.id}" data-color="${esc(color)}" data-status="${rep.status}" style="padding:4px 8px; font-size:0.8rem;">${rep.status === 'active' ? 'Pause' : 'Live'}</button>
         <button class="btn btn-outline edit-color-btn" data-parent="${parent.id}" data-color="${esc(color)}" style="padding:4px 8px; font-size:0.8rem;">Edit</button>
@@ -2352,6 +2352,7 @@ setTimeout(() => {
     tbody.querySelectorAll(".sync-variant-btn").forEach((b) => b.addEventListener("click", () => syncVariantFromListRow(b.dataset.id)));
     tbody.querySelectorAll(".sync-all-btn").forEach((b) => b.addEventListener("click", () => syncAllVariantsFromListRow(b.dataset.id)));
     tbody.querySelectorAll(".push-notify-btn").forEach((b) => b.addEventListener("click", () => pushNotifyNewArrival(b.dataset.id)));
+    tbody.querySelectorAll(".push-notify-variant-btn").forEach((b) => b.addEventListener("click", () => pushNotifyVariantColor(b.dataset.parent, b.dataset.color)));
     tbody.querySelectorAll(".reviews-prod-btn").forEach((b) => b.addEventListener("click", () => openProductReviewsModal(b.dataset.id, b.dataset.title)));
 
     // Color-group row actions — every one of these acts on ALL size docs
@@ -2495,6 +2496,47 @@ setTimeout(() => {
     if (!confirm(`Send a "New Arrival" push notification for "${parent.title}" to every subscriber?`)) return;
 
     const btn = document.querySelector(`.push-notify-btn[data-id="${parentId}"]`);
+    const originalText = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = "Sending..."; }
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+      const res = await fetch("/api/send-push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ broadcast: true, title, body: message, url, image: image || undefined })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Couldn't send the notification.");
+      if (btn) { btn.textContent = `Sent ✓ (${data.delivered}/${data.attempted})`; }
+      setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = originalText; } }, 2000);
+    } catch (err) {
+      alert("Couldn't send Push Notify: " + (err.message || err));
+      if (btn) { btn.disabled = false; btn.textContent = originalText; }
+    }
+  }
+
+  // Same broadcast as pushNotifyNewArrival() above, but scoped to ONE
+  // color group row — used because a color/size variant IS its own live
+  // store page (parent + variantSlug), so it deserves its own Push Notify
+  // instead of only ever going out under the parent's default color.
+  async function pushNotifyVariantColor(parentId, color) {
+    const parent = productsList.find((p) => p.id === parentId);
+    if (!parent) return alert("Can't find this product — it may have been deleted.");
+
+    const docs = productsList.filter((c) => c.isVariant && c.parentId === parentId && (c.color || "") === color);
+    if (docs.length === 0) return alert("Can't find this color — it may have been deleted or renamed.");
+
+    const available = docs.filter((d) => Number(d.stock) > 0 && !d.paused);
+    const target = (available.length > 0 ? available : docs)[0];
+
+    const url = `/products/${encodeURIComponent(parentId)}/${encodeURIComponent(target.variantSlug || "")}`;
+    const image = (target.images && target.images[0]) || (parent.images && parent.images[0]) || "";
+    const title = `✨ New Arrival: ${parent.title}${color ? ` — ${color}` : ""}`;
+    const message = "Just landed — take a look before it's gone!";
+
+    if (!confirm(`Send a "New Arrival" push notification for "${parent.title}" (${color || "this color"}) to every subscriber?`)) return;
+
+    const btn = document.querySelector(`.push-notify-variant-btn[data-parent="${parentId}"][data-color="${CSS.escape(color)}"]`);
     const originalText = btn ? btn.textContent : "";
     if (btn) { btn.disabled = true; btn.textContent = "Sending..."; }
     try {
@@ -5467,6 +5509,7 @@ setTimeout(() => {
       const title = document.getElementById("push-title").value.trim();
       const bodyText = document.getElementById("push-body").value.trim();
       const url = document.getElementById("push-url").value.trim();
+      const buttonText = document.getElementById("push-button-text").value.trim();
       const image = document.getElementById("push-image").value.trim();
       const btn = document.getElementById("push-broadcast-btn");
       const statusEl = document.getElementById("push-broadcast-status");
@@ -5481,7 +5524,7 @@ setTimeout(() => {
         const res = await fetch("/api/send-push", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
-          body: JSON.stringify({ broadcast: true, title, body: bodyText, url: url || "/", image: image || undefined })
+          body: JSON.stringify({ broadcast: true, title, body: bodyText, url: url || "/", buttonText: buttonText || undefined, image: image || undefined })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to send.");
