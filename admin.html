@@ -429,7 +429,10 @@
       <div id="product-reviews-modal" class="card" style="display: none; border: 2px solid var(--color-primary); margin-top: 20px;">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 15px;">
           <h3 style="margin: 0;" id="reviews-modal-title">Reviews</h3>
-          <button class="btn btn-outline" id="close-reviews-modal">Close [X]</button>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button class="btn btn-outline" id="recalc-reviews-btn" title="Recompute this product's star rating from its actual current reviews — use this if a card is showing a stale rating/count (e.g. after deleting a review whose count didn't update).">🔄 Recalculate Rating</button>
+            <button class="btn btn-outline" id="close-reviews-modal">Close [X]</button>
+          </div>
         </div>
         <div id="reviews-modal-summary" style="margin-bottom: 15px; font-size: 0.95rem; color: var(--color-ink-soft);"></div>
         <div id="reviews-modal-list"></div>

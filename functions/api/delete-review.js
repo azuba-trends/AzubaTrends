@@ -88,13 +88,29 @@ export async function onRequestPost(context) {
 
     await deleteDoc(env, `reviews/${reviewId}`);
 
-    // Keep the product's displayed rating in sync — best-effort, same as
-    // submit-review.js's aggregate update (non-fatal if it fails).
+    // Keep the product's displayed rating in sync — AWAITED, unlike a
+    // typical "fire and forget" background update: this is the very last
+    // thing this function does before returning, so on Cloudflare Pages
+    // Functions a non-awaited promise here would very often get cut off
+    // mid-write the instant the response is sent (the isolate can be torn
+    // down right after `return`, unless the promise is either awaited or
+    // handed to `context.waitUntil()`). That's exactly why deleting a
+    // review was leaving the OLD rating/count still showing on every
+    // product card — the decrement almost never actually reached
+    // Firestore. Awaiting it adds one small round-trip, but the delete
+    // itself already isn't a hot/critical path, so that's the right
+    // trade for "always correct" over "usually fast."
     if (review.productId && Number.isFinite(Number(review.rating))) {
-      updateDoc(env, `products/${review.productId}`, {
-        ratingSum: increment(-Number(review.rating)),
-        ratingCount: increment(-1)
-      }).catch((err) => console.error("Rating aggregate update failed (non-fatal):", err.message));
+      try {
+        await updateDoc(env, `products/${review.productId}`, {
+          ratingSum: increment(-Number(review.rating)),
+          ratingCount: increment(-1)
+        });
+      } catch (err) {
+        // The review is already deleted either way — don't fail the
+        // whole request over the aggregate not updating, just log it.
+        console.error("Rating aggregate update failed (non-fatal):", err.message);
+      }
     }
 
     return json({ ok: true });

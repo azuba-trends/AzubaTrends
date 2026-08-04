@@ -1,5 +1,15 @@
 # AzubaTrends — Update Changelog
 
+## 2026-08-04 (2) — Fixed: deleting a review didn't update the product card's ★ rating/count
+
+**Root cause:** `functions/api/delete-review.js` decremented the product's `ratingSum`/`ratingCount` (what every product card's star rating is computed from) as an un-awaited "fire and forget" write — the very last thing the function did before returning. On Cloudflare Pages Functions, a promise like that can get cut off mid-write the instant the response is sent back, unless it's either `await`ed or handed to `context.waitUntil()`. That's why the count/rating kept showing on the card even after the review itself was successfully deleted — the decrement usually just never actually reached Firestore.
+
+**Fix:** that update is now `await`ed before the function returns — adds one small round-trip, but delete isn't a hot path, so correctness wins here.
+
+**Also added — fixing already-stale data:** the code fix only prevents this going forward; any product that already had a review deleted before this fix is still sitting on the old, wrong `ratingSum`/`ratingCount` in Firestore. Added a **🔄 Recalculate Rating** button to the admin "Reviews" panel (`admin.html` + `js/admin.js`) that re-derives the correct numbers straight from that product's actual current reviews (covering the product AND every variant involved, including ones that now have zero reviews but still show an old nonzero count) and writes them back.
+
+Note: `/api/list` (what the storefront's product grid reads from) is edge-cached for `s-maxage=60` — after recalculating, a card can take up to ~60 seconds to reflect the corrected number.
+
 ## 2026-08-04 — Admin can delete any review (on the product page AND in a new admin Reviews panel), with pagination
 
 **1. Admin can now delete any review directly from the product page.**

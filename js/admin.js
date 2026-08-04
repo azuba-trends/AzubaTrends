@@ -2558,9 +2558,51 @@ setTimeout(() => {
       return;
     }
 
-    reviewsModalState = { items: allReviews, shown: 0, productId };
+    reviewsModalState = { items: allReviews, shown: 0, productId, ids };
     renderReviewsModalSummary(allReviews);
     renderReviewsModalBatch(true);
+  }
+
+  // Fixes the exact bug that prompted this: deleting a review is supposed
+  // to decrement the product doc's ratingSum/ratingCount (that's what
+  // every card site-wide reads its ★ rating from), but that write could
+  // previously get cut off before it finished (see delete-review.js's
+  // comment on why — now fixed there for anything deleted from now on).
+  // Any product a review was deleted from BEFORE that fix can still be
+  // sitting on a stale ratingSum/ratingCount, showing a rating/count that
+  // no longer matches its actual reviews. This button re-derives the
+  // correct numbers straight from the reviews this modal already fetched
+  // (the source of truth) and writes them back — covers every id involved
+  // (the product AND all its variants), including ones that now have
+  // ZERO current reviews but still show an old nonzero count.
+  async function recalcProductRatings() {
+    const { items, ids } = reviewsModalState;
+    if (!ids || ids.length === 0) return;
+
+    const btn = document.getElementById("recalc-reviews-btn");
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Recalculating...";
+    try {
+      const totals = new Map(ids.map((id) => [id, { sum: 0, count: 0 }]));
+      items.forEach((review) => {
+        const t = totals.get(review.productId);
+        if (t && Number.isFinite(Number(review.rating))) {
+          t.sum += Number(review.rating);
+          t.count += 1;
+        }
+      });
+      await Promise.all(ids.map((id) => {
+        const t = totals.get(id);
+        return updateDoc(doc(db, "products", id), { ratingSum: t.sum, ratingCount: t.count });
+      }));
+      btn.textContent = "Fixed ✓";
+      setTimeout(() => { btn.disabled = false; btn.textContent = originalText; }, 2000);
+    } catch (err) {
+      alert("Couldn't recalculate ratings: " + (err.message || err));
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
   }
 
   function renderReviewsModalSummary(list) {
@@ -2649,6 +2691,7 @@ setTimeout(() => {
   document.getElementById("close-reviews-modal").addEventListener("click", () => {
     document.getElementById("product-reviews-modal").style.display = "none";
   });
+  document.getElementById("recalc-reviews-btn").addEventListener("click", recalcProductRatings);
 
   function editProduct(id) {
     const p = productsList.find((x) => x.id === id);
