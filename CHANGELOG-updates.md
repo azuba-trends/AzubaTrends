@@ -1,5 +1,16 @@
 # AzubaTrends — Update Changelog
 
+## 2026-08-04 — Admin can delete any review (on the product page AND in a new admin Reviews panel), with pagination
+
+**1. Admin can now delete any review directly from the product page.**
+Previously "Delete" only ever showed on a review if THIS browser was the one that submitted it (via a localStorage token). Now, if the admin is signed in (their session from `admin.html`, detected automatically — see below), a Delete button appears on **every** review, not just their own — that's the "moderate while browsing the live site" option that was missing. `functions/api/delete-review.js` now accepts either the guest's existing `deleteToken` OR an admin `Authorization: Bearer <idToken>` header; the admin path skips the ownership check entirely and can delete any review.
+- `js/site-config.js`: now also sets up Firebase Auth and exposes `window.AzubaAdmin.isAdmin` / `window.AzubaAdminReady` / an `azubaadmin:change` event — since there's no separate customer-account system on this store (any signed-in Firebase user IS the admin, per `firestore.rules`' `isAdmin()`), and Firebase Auth's session persists per-origin, this picks up an already-logged-in admin session from `admin.html` automatically, with no extra login step needed on the storefront.
+- `js/reviews.js`: `buildReviewItem` now shows Delete for the admin on every review (labeled "Delete (admin)" when it's not their own), re-rendering once the (near-instant but async) admin check resolves.
+
+**2. New "Reviews" admin panel — product-wise, with pagination.**
+Every top-level row in All Products (`admin.html` / `js/admin.js`) now has a **★ Reviews** button that opens a "Product Reviews" panel showing that product's average rating, total review count, and every review (text + photos), aggregated across the product **and all its color/size variants** (reviews are stored per exact size-doc). Each review has its own Delete button (admin-auth, same endpoint as above).
+- Rendered in pages of 10 with a "Load more" button — the full list is fetched once (cheap, small text docs) but only rendered into the DOM a page at a time, so a product with hundreds of reviews doesn't hang the tab loading them all at once.
+
 ## 2026-08-03 — Push notification images + heads-up banner, semi-automatic "New Arrival" Push Notify, admin table cleanup, push-based back-in-stock alerts
 
 **1. Notification images + real heads-up/floating banner (Meesho-style).**

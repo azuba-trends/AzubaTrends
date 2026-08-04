@@ -178,7 +178,7 @@ const Reviews = (function () {
     return [];
   }
 
-  function buildReviewItem(review, onDeleted) {
+  function buildReviewItem(review, onDeleted, isAdminViewer) {
     const item = document.createElement("div");
     item.className = "review-item";
 
@@ -202,33 +202,46 @@ const Reviews = (function () {
     head.appendChild(author);
     head.appendChild(date);
 
-    // Only shown for reviews THIS browser submitted (its delete token is
-    // in localStorage) — nobody else sees a Delete button on it.
+    // Shown for reviews THIS BROWSER submitted (its delete token is in
+    // localStorage — nobody else sees a Delete button on it that way), OR
+    // for the signed-in admin, on every review — that's the moderation
+    // path (see js/site-config.js's window.AzubaAdmin / onAuthStateChanged
+    // comment for how "admin" is detected on a storefront page).
     const myTokens = getMyTokens();
     const myToken = myTokens[review.id];
-    if (myToken) {
+    if (myToken || isAdminViewer) {
       const deleteBtn = document.createElement("button");
       deleteBtn.type = "button";
       deleteBtn.className = "review-item__delete-btn";
-      deleteBtn.textContent = "Delete";
+      deleteBtn.textContent = isAdminViewer && !myToken ? "Delete (admin)" : "Delete";
       deleteBtn.addEventListener("click", async () => {
-        if (!confirm("Delete your review? This can't be undone.")) return;
+        if (!confirm("Delete this review? This can't be undone.")) return;
         deleteBtn.disabled = true;
         deleteBtn.textContent = "Deleting...";
         try {
+          const requestBody = { reviewId: review.id };
+          const headers = { "Content-Type": "application/json" };
+          if (myToken) {
+            requestBody.deleteToken = myToken;
+          } else {
+            // Admin path — no deleteToken needed, the idToken alone
+            // authorizes deleting ANY review server-side.
+            const idToken = await window.FirebaseApp.auth.currentUser.getIdToken();
+            headers.Authorization = `Bearer ${idToken}`;
+          }
           const res = await fetch("/api/delete-review", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ reviewId: review.id, deleteToken: myToken })
+            headers,
+            body: JSON.stringify(requestBody)
           });
           const data = await res.json();
-          if (!res.ok || !data.ok) throw new Error(data.error || "Couldn't delete your review.");
-          forgetMyReview(review.id);
+          if (!res.ok || !data.ok) throw new Error(data.error || "Couldn't delete this review.");
+          if (myToken) forgetMyReview(review.id);
           if (typeof onDeleted === "function") onDeleted();
         } catch (err) {
-          alert(err.message || "Couldn't delete your review. Please try again.");
+          alert(err.message || "Couldn't delete this review. Please try again.");
           deleteBtn.disabled = false;
-          deleteBtn.textContent = "Delete";
+          deleteBtn.textContent = isAdminViewer && !myToken ? "Delete (admin)" : "Delete";
         }
       });
       head.appendChild(deleteBtn);
@@ -260,7 +273,7 @@ const Reviews = (function () {
     return item;
   }
 
-  function renderReviewList(container, list, { emptyMessage, onDeleted } = {}) {
+  function renderReviewList(container, list, { emptyMessage, onDeleted, isAdminViewer } = {}) {
     container.innerHTML = "";
     if (list.length === 0) {
       const empty = document.createElement("p");
@@ -269,7 +282,7 @@ const Reviews = (function () {
       container.appendChild(empty);
       return;
     }
-    list.forEach((review) => container.appendChild(buildReviewItem(review, onDeleted)));
+    list.forEach((review) => container.appendChild(buildReviewItem(review, onDeleted, isAdminViewer)));
   }
 
   // Reuses the page's existing #lightbox (already present on product.html
@@ -334,6 +347,22 @@ const Reviews = (function () {
     let selectedRating = 0;
     let selectedFiles = []; // File objects queued for upload on submit
     let fullList = []; // last fetched review list, reused by the drawer
+    let isAdminViewer = false;
+
+    // Admin state loads async (waiting on the persisted Firebase Auth
+    // session — see site-config.js) and can arrive slightly AFTER the
+    // first review render, so re-render once it's known/changes rather
+    // than only checking it once up front.
+    if (window.AzubaAdminReady) {
+      window.AzubaAdminReady.then(() => {
+        isAdminViewer = !!(window.AzubaAdmin && window.AzubaAdmin.isAdmin);
+        if (isAdminViewer) { renderPagePreview(fullList); }
+      }).catch(() => {});
+    }
+    window.addEventListener("azubaadmin:change", (e) => {
+      isAdminViewer = !!(e.detail && e.detail.isAdmin);
+      renderPagePreview(fullList);
+    });
 
     function paintStarInput() {
       Array.from(els.starInput.children).forEach((btn, i) => {
@@ -447,7 +476,7 @@ const Reviews = (function () {
 
     function renderPagePreview(list) {
       const preview = list.slice(0, PAGE_PREVIEW_COUNT);
-      renderReviewList(els.list, preview, { onDeleted: refresh });
+      renderReviewList(els.list, preview, { onDeleted: refresh, isAdminViewer });
       if (els.viewAllBtn) {
         els.viewAllBtn.hidden = list.length <= PAGE_PREVIEW_COUNT;
         Security.setTextSafely(els.viewAllBtn, `View all ${list.length} reviews →`);
@@ -474,7 +503,7 @@ const Reviews = (function () {
       nextBatch.forEach((review) => listWrap.appendChild(buildReviewItem(review, async () => {
         await refresh();
         renderDrawerBatch(true);
-      })));
+      }, isAdminViewer)));
       drawerShown += nextBatch.length;
 
       let moreBtn = els.drawerBody.querySelector(".review-load-more-btn");

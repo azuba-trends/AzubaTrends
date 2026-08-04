@@ -1,5 +1,6 @@
 import {
-  collection, addDoc, doc, deleteDoc, updateDoc, setDoc, getDoc, onSnapshot, writeBatch
+  collection, addDoc, doc, deleteDoc, updateDoc, setDoc, getDoc, onSnapshot, writeBatch,
+  query, where, getDocs
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
 const esc = (s) => (window.Security ? window.Security.escapeHTML(s) : String(s ?? ""));
@@ -2273,6 +2274,7 @@ setTimeout(() => {
       <td>
         <button class="btn btn-outline pause-prod-btn" data-id="${p.id}" data-status="${p.status}" style="padding:4px 8px; font-size:0.8rem;">${p.status === 'active' ? 'Pause' : 'Live'}</button>
         <button class="btn btn-outline edit-prod-btn" data-id="${p.id}" style="padding:4px 8px; font-size:0.8rem;">Edit</button>
+        ${!opts.isChild ? `<button class="btn btn-outline reviews-prod-btn" data-id="${p.id}" data-title="${esc(p.title)}" style="padding:4px 8px; font-size:0.8rem;">★ Reviews</button>` : ""}
         <button class="btn btn-outline del-prod-btn" data-id="${p.id}" style="color:var(--color-danger); padding:4px 8px; font-size:0.8rem;">Delete</button>
       </td>`;
     return tr;
@@ -2350,6 +2352,7 @@ setTimeout(() => {
     tbody.querySelectorAll(".sync-variant-btn").forEach((b) => b.addEventListener("click", () => syncVariantFromListRow(b.dataset.id)));
     tbody.querySelectorAll(".sync-all-btn").forEach((b) => b.addEventListener("click", () => syncAllVariantsFromListRow(b.dataset.id)));
     tbody.querySelectorAll(".push-notify-btn").forEach((b) => b.addEventListener("click", () => pushNotifyNewArrival(b.dataset.id)));
+    tbody.querySelectorAll(".reviews-prod-btn").forEach((b) => b.addEventListener("click", () => openProductReviewsModal(b.dataset.id, b.dataset.title)));
 
     // Color-group row actions — every one of these acts on ALL size docs
     // sharing that (parentId, color) pair at once.
@@ -2510,6 +2513,142 @@ setTimeout(() => {
       if (btn) { btn.disabled = false; btn.textContent = originalText; }
     }
   }
+
+  // ---- Product Reviews modal -------------------------------------------
+  // Aggregates every review across a product AND all its color/size
+  // variants (reviews are stored per exact size-doc — see js/reviews.js —
+  // so "this product's reviews" from the admin's point of view means
+  // every variant under this parent row, not just one specific size).
+  // Renders in pages of REVIEWS_PAGE_SIZE via a "Load more" button so a
+  // product with hundreds of reviews never dumps everything into the DOM
+  // at once and hangs the tab — only the network fetch is done in full up
+  // front (reviews are small text+URL docs; the fetch itself is cheap).
+  const REVIEWS_PAGE_SIZE = 10;
+  let reviewsModalState = { items: [], shown: 0, productId: null };
+
+  async function openProductReviewsModal(productId, productTitle) {
+    const modal = document.getElementById("product-reviews-modal");
+    const titleEl = document.getElementById("reviews-modal-title");
+    const summaryEl = document.getElementById("reviews-modal-summary");
+    const listEl = document.getElementById("reviews-modal-list");
+    const paginationEl = document.getElementById("reviews-modal-pagination");
+
+    titleEl.textContent = `Reviews — ${productTitle}`;
+    summaryEl.textContent = "Loading reviews...";
+    listEl.innerHTML = "";
+    paginationEl.innerHTML = "";
+    modal.style.display = "block";
+    modal.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    const ids = [productId, ...productsList.filter((c) => c.isVariant && c.parentId === productId).map((c) => c.id)];
+
+    let allReviews = [];
+    try {
+      // Firestore 'in' queries cap at 30 values — chunk in the unlikely
+      // case a product has more than 30 variants.
+      const chunks = [];
+      for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30));
+      const results = await Promise.all(chunks.map((chunk) =>
+        getDocs(query(collection(db, "reviews"), where("productId", "in", chunk)))
+      ));
+      results.forEach((snap) => snap.forEach((d) => allReviews.push({ id: d.id, ...d.data() })));
+      allReviews.sort((a, b) => new Date(b.date) - new Date(a.date));
+    } catch (err) {
+      summaryEl.textContent = "Couldn't load reviews: " + err.message;
+      return;
+    }
+
+    reviewsModalState = { items: allReviews, shown: 0, productId };
+    renderReviewsModalSummary(allReviews);
+    renderReviewsModalBatch(true);
+  }
+
+  function renderReviewsModalSummary(list) {
+    const summaryEl = document.getElementById("reviews-modal-summary");
+    if (list.length === 0) {
+      summaryEl.textContent = "No reviews yet for this product.";
+      return;
+    }
+    const avg = list.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) / list.length;
+    summaryEl.textContent = `${avg.toFixed(1)} ★ average — ${list.length} review${list.length === 1 ? "" : "s"}`;
+  }
+
+  function renderReviewsModalBatch(reset) {
+    const listEl = document.getElementById("reviews-modal-list");
+    const paginationEl = document.getElementById("reviews-modal-pagination");
+    if (reset) { listEl.innerHTML = ""; reviewsModalState.shown = 0; }
+
+    const { items } = reviewsModalState;
+    if (items.length === 0) {
+      listEl.innerHTML = '<p style="color:var(--color-ink-soft);">No reviews yet for this product.</p>';
+      paginationEl.innerHTML = "";
+      return;
+    }
+
+    const nextBatch = items.slice(reviewsModalState.shown, reviewsModalState.shown + REVIEWS_PAGE_SIZE);
+    nextBatch.forEach((review) => listEl.appendChild(buildAdminReviewRow(review)));
+    reviewsModalState.shown += nextBatch.length;
+
+    paginationEl.innerHTML = "";
+    if (reviewsModalState.shown < items.length) {
+      const moreBtn = document.createElement("button");
+      moreBtn.type = "button";
+      moreBtn.className = "btn btn-outline";
+      moreBtn.textContent = `Load more (${items.length - reviewsModalState.shown} left)`;
+      moreBtn.addEventListener("click", () => renderReviewsModalBatch(false));
+      paginationEl.appendChild(moreBtn);
+    }
+  }
+
+  function buildAdminReviewRow(review) {
+    const row = document.createElement("div");
+    row.style.cssText = "border-bottom:1px solid #eee; padding:10px 0;";
+    const imgs = Array.isArray(review.imageUrls) && review.imageUrls.length > 0 ? review.imageUrls : (review.imageUrl ? [review.imageUrl] : []);
+    const imagesHtml = imgs.length > 0
+      ? `<div style="display:flex; gap:6px; margin-top:6px;">${imgs.map((u) => `<img src="${esc(u)}" style="width:52px;height:52px;object-fit:cover;border-radius:4px;" alt="">`).join("")}</div>`
+      : "";
+    row.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;">
+        <div>
+          <strong>${Number(review.rating || 0).toFixed(1)} ★</strong>
+          <span style="color:var(--color-ink-soft); margin-left:8px;">${esc(review.authorLabel || "Guest")}</span>
+          <span style="color:var(--color-ink-soft); margin-left:8px; font-size:0.85rem;">${review.date ? new Date(review.date).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" }) : ""}</span>
+        </div>
+        <button type="button" class="btn btn-outline admin-review-del-btn" style="color:var(--color-danger); padding:4px 8px; font-size:0.8rem;">Delete</button>
+      </div>
+      <p style="margin:6px 0 0;">${esc(review.comment || "")}</p>
+      ${imagesHtml}`;
+
+    row.querySelector(".admin-review-del-btn").addEventListener("click", async (e) => {
+      if (!confirm("Delete this review? This can't be undone.")) return;
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      btn.textContent = "Deleting...";
+      try {
+        const idToken = await auth.currentUser.getIdToken();
+        const res = await fetch("/api/delete-review", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+          body: JSON.stringify({ reviewId: review.id })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || "Couldn't delete this review.");
+        reviewsModalState.items = reviewsModalState.items.filter((r) => r.id !== review.id);
+        renderReviewsModalSummary(reviewsModalState.items);
+        renderReviewsModalBatch(true);
+      } catch (err) {
+        alert(err.message || "Couldn't delete this review. Please try again.");
+        btn.disabled = false;
+        btn.textContent = "Delete";
+      }
+    });
+
+    return row;
+  }
+
+  document.getElementById("close-reviews-modal").addEventListener("click", () => {
+    document.getElementById("product-reviews-modal").style.display = "none";
+  });
 
   function editProduct(id) {
     const p = productsList.find((x) => x.id === id);

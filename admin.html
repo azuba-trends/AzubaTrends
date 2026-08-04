@@ -419,6 +419,22 @@
           </table>
         </div>
       </div>
+
+      <!-- Product Reviews Modal — opened by the "Reviews" button on a
+           product row (js/admin.js's openProductReviewsModal). Aggregates
+           every review across the product AND all its color/size variants
+           (reviews are stored per exact size-doc, see js/reviews.js), with
+           its own DOM-level pagination so a product with hundreds of
+           reviews doesn't render/hang the page all at once. -->
+      <div id="product-reviews-modal" class="card" style="display: none; border: 2px solid var(--color-primary); margin-top: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 15px;">
+          <h3 style="margin: 0;" id="reviews-modal-title">Reviews</h3>
+          <button class="btn btn-outline" id="close-reviews-modal">Close [X]</button>
+        </div>
+        <div id="reviews-modal-summary" style="margin-bottom: 15px; font-size: 0.95rem; color: var(--color-ink-soft);"></div>
+        <div id="reviews-modal-list"></div>
+        <div id="reviews-modal-pagination" style="text-align: center; margin-top: 15px;"></div>
+      </div>
     </div>
 
     <!-- ============ STORE: ADD / EDIT PRODUCT ============ -->

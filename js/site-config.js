@@ -41,6 +41,30 @@ window.SITE_CONFIG_READY = (async function() {
   const db = getFirestore(app);
   window.FirebaseApp = { app, db };
 
+  // Storefront-wide admin detection — reviews.js uses this to show the
+  // Delete button on EVERY review (not just "my own") when the admin is
+  // browsing the live site. There's no separate customer-account system
+  // here (see firestore.rules' isAdmin(): any signed-in Firebase Auth
+  // user IS the admin), and Firebase Auth's session persistence is keyed
+  // per-origin, not per-page — so if the admin is already logged in via
+  // admin.html in this same browser, onAuthStateChanged below picks up
+  // that same session immediately, with no separate login step needed on
+  // the storefront pages themselves.
+  const { getAuth, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js");
+  const auth = getAuth(app);
+  window.FirebaseApp.auth = auth;
+  window.AzubaAdmin = { isAdmin: false };
+  let resolveAdminReady;
+  // Other scripts can `await window.AzubaAdminReady` to be sure the
+  // (persisted, so effectively instant) initial auth check has actually
+  // completed before reading window.AzubaAdmin.isAdmin.
+  window.AzubaAdminReady = new Promise((resolve) => { resolveAdminReady = resolve; });
+  onAuthStateChanged(auth, (user) => {
+    window.AzubaAdmin.isAdmin = !!user;
+    window.dispatchEvent(new CustomEvent("azubaadmin:change", { detail: { isAdmin: !!user } }));
+    if (resolveAdminReady) { resolveAdminReady(); resolveAdminReady = null; }
+  });
+
   // Fetch Settings from Firebase
   try {
     const docSnap = await getDoc(doc(db, "settings", "store_config"));
