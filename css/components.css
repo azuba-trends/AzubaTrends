@@ -2775,3 +2775,29 @@ html {
     justify-content: flex-end;
   }
 }
+
+/* ---------- iOS Safari auto-zoom fix (mobile only) ----------
+   iOS Safari force-zooms the whole page in the moment a user taps into
+   any text input/textarea/select whose font-size is below 16px — this
+   is a fixed iOS behavior, not a bug in this site's layout, and it does
+   NOT depend on cache: it hits every visitor on iPhone/iPad the same
+   way, old or new. Several fields across the site (search bar, checkout
+   form, contact form, delivery checker, notify-me, newsletter footer)
+   were sitting at 14–15px, which is what was triggering it.
+   Fix: on mobile widths only, force every real text-entry field to
+   16px so iOS never has a reason to zoom. Desktop sizing above 767px
+   is untouched. */
+@media (max-width: 767px) {
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="password"],
+  input[type="search"],
+  input[type="url"],
+  input[type="date"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
