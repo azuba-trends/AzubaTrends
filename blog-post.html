@@ -22,30 +22,62 @@
   function layoutWidth() {
     return document.documentElement.clientWidth || window.innerWidth;
   }
+  function mismatched() {
+    var real = Math.round(realWidth());
+    var layout = Math.round(layoutWidth());
+    return real && layout && Math.abs(layout - real) > 4;
+  }
+  function rewriteMeta() {
+    var real = Math.round(realWidth());
+    var meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute('name', 'viewport');
+      document.head.insertBefore(meta, document.head.firstChild);
+    }
+    meta.setAttribute(
+      'content',
+      'width=' + real + ', initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover'
+    );
+  }
+  // Rewriting the <meta viewport> content alone is often not enough on
+  // OEM/old WebView browsers (Tecno/Infinix/Transsion stock browser, old
+  // MIUI browser, UC/QQ/360 browser): they commit a wrong layout
+  // viewport at parse time and only ever recompute it in response to an
+  // actual pinch/zoom gesture — a JS content change doesn't trigger that
+  // recompute. A tiny CSS zoom toggle forces the same kind of recompute
+  // these engines do on a real pinch, without needing real touch input.
+  function nudge() {
+    var html = document.documentElement;
+    html.style.zoom = '99.9%';
+    requestAnimationFrame(function () {
+      html.style.zoom = '100%';
+      requestAnimationFrame(function () {
+        html.style.zoom = '';
+      });
+    });
+    try { window.scrollTo(0, 1); window.scrollTo(0, 0); } catch (e) {}
+    try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+  }
+  var attempts = 0;
   function fix() {
-    try {
-      var real = Math.round(realWidth());
-      var layout = Math.round(layoutWidth());
-      if (!real || !layout) return;
-      if (Math.abs(layout - real) > 4) {
-        var meta = document.querySelector('meta[name="viewport"]');
-        if (!meta) {
-          meta = document.createElement('meta');
-          meta.setAttribute('name', 'viewport');
-          document.head.insertBefore(meta, document.head.firstChild);
-        }
-        meta.setAttribute(
-          'content',
-          'width=' + real + ', initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover'
-        );
-        document.documentElement.style.width = real + 'px';
-      }
-    } catch (e) {}
+    if (!mismatched()) return;
+    rewriteMeta();
+    nudge();
+    attempts++;
+    // Retry with backoff — on a very slow connection the page keeps
+    // reflowing as images/content arrive, which can re-trigger the bug
+    // after the first fix looked successful.
+    if (attempts < 8) {
+      setTimeout(function () { if (mismatched()) fix(); }, attempts * 250);
+    }
   }
   fix();
   document.addEventListener('DOMContentLoaded', fix);
   window.addEventListener('load', fix);
-  window.addEventListener('orientationchange', function () { setTimeout(fix, 150); });
+  window.addEventListener('pageshow', fix);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) fix(); });
+  window.addEventListener('orientationchange', function () { setTimeout(fix, 200); });
   window.addEventListener('resize', fix);
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', fix);
