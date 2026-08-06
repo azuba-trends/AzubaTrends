@@ -121,6 +121,14 @@
         ? `⚠ MISMATCH: window.innerWidth (${innerW}px) ≠ visualViewport.width (${vv.width.toFixed(1)}px) — this browser is NOT respecting width=device-width. That alone explains a "zoomed out / everything small" look: the page is being laid out for a ${innerW}px canvas then squeezed into a ${vv.width.toFixed(1)}px screen.`
         : `viewport OK: innerWidth matches visualViewport.width (no engine-level mismatch).`,
       `devicePixelRatio: ${dpr}`,
+      (() => {
+        const meta = document.querySelector('meta[name="viewport"]');
+        const content = meta ? meta.getAttribute("content") : "(no viewport meta found)";
+        const fixApplied = content && content.indexOf("user-scalable=no") !== -1;
+        return fixApplied
+          ? `AZUBA-VIEWPORT-FIX: triggered — rewrote viewport meta to "${content}"`
+          : `AZUBA-VIEWPORT-FIX: not triggered (layout/visual width matched, no rewrite needed) — current content="${content}"`;
+      })(),
       `UA: ${navigator.userAgent}`,
       flagged.length
         ? `Elements wider than the true screen width (${Math.round(referenceW)}px) — red outline:`

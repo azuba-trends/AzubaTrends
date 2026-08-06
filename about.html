@@ -3,6 +3,55 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="HandheldFriendly" content="true">
+<meta name="MobileOptimized" content="width">
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+<meta name="renderer" content="webkit">
+<meta name="force-rendering" content="webkit">
+<meta name="format-detection" content="telephone=no">
+<!-- AZUBA-VIEWPORT-FIX: forces the real device width on OEM/old WebView
+     browsers (Transsion/Tecno/Infinix stock browser, old MIUI browser,
+     UC/QQ/360 browser, older Android System WebView) that ignore
+     width=device-width and instead lay the page out on a wider phantom
+     canvas, making everything except fixed elements render too small. -->
+<script>
+(function () {
+  function realWidth() {
+    return (window.visualViewport && window.visualViewport.width) || window.screen.width || window.innerWidth;
+  }
+  function layoutWidth() {
+    return document.documentElement.clientWidth || window.innerWidth;
+  }
+  function fix() {
+    try {
+      var real = Math.round(realWidth());
+      var layout = Math.round(layoutWidth());
+      if (!real || !layout) return;
+      if (Math.abs(layout - real) > 4) {
+        var meta = document.querySelector('meta[name="viewport"]');
+        if (!meta) {
+          meta = document.createElement('meta');
+          meta.setAttribute('name', 'viewport');
+          document.head.insertBefore(meta, document.head.firstChild);
+        }
+        meta.setAttribute(
+          'content',
+          'width=' + real + ', initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover'
+        );
+        document.documentElement.style.width = real + 'px';
+      }
+    } catch (e) {}
+  }
+  fix();
+  document.addEventListener('DOMContentLoaded', fix);
+  window.addEventListener('load', fix);
+  window.addEventListener('orientationchange', function () { setTimeout(fix, 150); });
+  window.addEventListener('resize', fix);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', fix);
+  }
+})();
+</script>
 <link rel="icon" type="image/svg+xml" href="/images/favicon.svg">
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="/images/icons/favicon-32.png">
