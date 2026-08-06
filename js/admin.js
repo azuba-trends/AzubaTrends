@@ -5176,10 +5176,19 @@ setTimeout(() => {
     if (status) status.textContent = label;
   }
 
+  const migrateSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
   // Downloads `url`, re-uploads it to ImageKit, and returns the new URL.
   // Throws if the download or the upload fails — caller decides whether
   // that's fatal for the whole run or just skips this one image.
-  async function migrateOneImageToImageKit(url, publicKey, urlEndpoint) {
+  //
+  // The auth-signing endpoint (functions/api/imagekit-auth.js) rate-limits
+  // per IP — fine for normal traffic, but a bulk migration calls it once
+  // per image back-to-back, so a run of any real size WILL hit "Too many
+  // requests" partway through. Rather than treat that as a hard failure,
+  // retry that one image with backoff (a plain 429 is transient, unlike a
+  // real download/upload error, which we still fail fast on).
+  async function migrateOneImageToImageKit(url, publicKey, urlEndpoint, onRetry) {
     let blob;
     try {
       const res = await fetch(url);
@@ -5190,10 +5199,21 @@ setTimeout(() => {
     }
     const nameGuess = (url.split("/").pop() || "image").split("?")[0].split("#")[0] || "image.jpg";
     const file = new File([blob], nameGuess, { type: blob.type || "image/jpeg" });
-    try {
-      return await window.AzubaImageUpload.uploadToImageKit(file, publicKey, urlEndpoint);
-    } catch (err) {
-      throw new Error("upload failed (" + err.message + ")");
+
+    const MAX_RATE_LIMIT_RETRIES = 8;
+    let delay = 3000; // ms — first backoff; roughly matches the auth endpoint's 60s/60-req window
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await window.AzubaImageUpload.uploadToImageKit(file, publicKey, urlEndpoint);
+      } catch (err) {
+        const isRateLimit = /too many requests/i.test(err.message || "");
+        if (!isRateLimit || attempt >= MAX_RATE_LIMIT_RETRIES) {
+          throw new Error("upload failed (" + err.message + ")");
+        }
+        if (onRetry) onRetry(attempt + 1, delay);
+        await migrateSleep(delay);
+        delay = Math.min(delay * 1.6, 20000);
+      }
     }
   }
 
@@ -5319,8 +5339,16 @@ setTimeout(() => {
 
       for (const job of jobs) {
         migrateSetProgress(done, jobs.length, `Migrating ${job.label}…`);
+        // Small pacing gap between every request, on top of the retry
+        // logic below — keeps a big run comfortably under the
+        // auth-signing endpoint's per-minute rate limit instead of
+        // relying on retries to dig it out of a hole.
+        if (done > 0) await migrateSleep(350);
         try {
-          const newUrl = await migrateOneImageToImageKit(job.url, publicKey, urlEndpoint);
+          const newUrl = await migrateOneImageToImageKit(job.url, publicKey, urlEndpoint, (attempt, delay) => {
+            migrateSetProgress(done, jobs.length, `${job.label} — rate-limited, retrying in ${Math.round(delay / 1000)}s (attempt ${attempt})…`);
+            migrateLog(`… ${job.label} rate-limited, waiting ${Math.round(delay / 1000)}s before retry ${attempt}`);
+          });
           const key = job.collectionName + "/" + job.docId;
           if (!byDoc.has(key)) byDoc.set(key, { collectionName: job.collectionName, docId: job.docId, patches: [] });
           byDoc.get(key).patches.push({ field: job.field, index: job.index, newUrl });

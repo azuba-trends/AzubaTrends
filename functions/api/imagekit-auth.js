@@ -22,7 +22,12 @@
 
 import { getDoc } from "../../lib/firestore-rest.js";
 
-const MAX_REQUESTS_PER_IP_PER_MINUTE = 20; // generous — this just signs a token, doesn't write anything
+const MAX_REQUESTS_PER_IP_PER_MINUTE = 60; // generous — this just signs a token, doesn't write anything.
+// (Bumped from 20 — the admin's bulk "Migrate Existing Images to ImageKit"
+// tool can legitimately call this once per image, back-to-back, for a
+// large catalog. Still safe: a signed token only ever permits ONE
+// actual upload before it's consumed/expires, so this limit is just an
+// abuse guard, not a security boundary.)
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
