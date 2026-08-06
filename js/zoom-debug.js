@@ -46,6 +46,13 @@
     const scrollW = document.documentElement.scrollWidth;
     const vv = window.visualViewport;
     const dpr = window.devicePixelRatio || 1;
+    // The TRUE visible width — on some OEM/WebView browsers window.innerWidth
+    // itself is wrong (reports a wider "layout viewport" than what's
+    // actually on screen, independent of any element overflowing). When
+    // that happens visualViewport.width is the one that's still accurate,
+    // so prefer it as the reference for "is this wider than the screen".
+    const referenceW = vv ? vv.width : innerW;
+    const viewportMismatch = vv && Math.abs(vv.width - innerW) > 2;
 
     // Clear any previous run's outlines/labels (in case of re-run after
     // dynamic content loads, e.g. products finishing rendering).
@@ -55,14 +62,15 @@
     });
     document.querySelectorAll(".zoom-debug-label").forEach((el) => el.remove());
 
-    // Find every element wider than the viewport (the actual overflow
-    // culprits), sorted worst-first. Skip elements with no rendered box.
+    // Find every element wider than the true visible width (the actual
+    // overflow culprits), sorted worst-first. Skip elements with no
+    // rendered box.
     const all = document.querySelectorAll("body *");
     const offenders = [];
     all.forEach((el) => {
       const rect = el.getBoundingClientRect();
       if (rect.width === 0 && rect.height === 0) return;
-      const overflowRight = rect.right - innerW;
+      const overflowRight = rect.right - referenceW;
       if (overflowRight > 1) {
         offenders.push({ el, rect, overflowRight });
       }
@@ -107,14 +115,17 @@
       document.body.appendChild(panel);
     }
     const lines = [
-      `innerWidth: ${innerW}px   scrollWidth: ${scrollW}px   overflow: ${scrollW - innerW}px`,
+      `innerWidth: ${innerW}px   scrollWidth: ${scrollW}px   overflow (vs innerWidth): ${scrollW - innerW}px`,
       vv ? `visualViewport: width=${vv.width.toFixed(1)} scale=${vv.scale.toFixed(3)} offsetLeft=${vv.offsetLeft.toFixed(1)}` : "visualViewport: not supported on this browser",
+      viewportMismatch
+        ? `⚠ MISMATCH: window.innerWidth (${innerW}px) ≠ visualViewport.width (${vv.width.toFixed(1)}px) — this browser is NOT respecting width=device-width. That alone explains a "zoomed out / everything small" look: the page is being laid out for a ${innerW}px canvas then squeezed into a ${vv.width.toFixed(1)}px screen.`
+        : `viewport OK: innerWidth matches visualViewport.width (no engine-level mismatch).`,
       `devicePixelRatio: ${dpr}`,
       `UA: ${navigator.userAgent}`,
       flagged.length
-        ? `Top offenders (red outline = wider than screen):`
-        : `No element wider than the screen was found on this render.`,
-      ...flagged.slice(0, 15).map((o, i) => `  #${i + 1} ${shortSelector(o.el)} — right edge is ${Math.round(o.overflowRight)}px past the screen edge`)
+        ? `Elements wider than the true screen width (${Math.round(referenceW)}px) — red outline:`
+        : `No element wider than the true screen width (${Math.round(referenceW)}px) was found.`,
+      ...flagged.slice(0, 15).map((o, i) => `  #${i + 1} ${shortSelector(o.el)} — right edge is ${Math.round(o.overflowRight)}px past the true screen edge`)
     ];
     panel.textContent = lines.join("\n");
   }
