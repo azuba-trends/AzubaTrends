@@ -5149,6 +5149,231 @@ setTimeout(() => {
   });
 
   // ================================================================
+  // MIGRATE EXISTING IMAGES TO IMAGEKIT (Settings > Image Hosting)
+  // One-off / re-runnable sweep: walks every collection that stores an
+  // image URL, re-uploads anything not already on the configured
+  // ImageKit URL Endpoint, and rewrites that field to the new URL.
+  // Re-running is safe — already-migrated URLs are skipped by a simple
+  // "does it start with my endpoint" check.
+  // ================================================================
+  const MIGRATE_LOG_MAX_LINES = 400;
+
+  function migrateLog(msg) {
+    const el = document.getElementById("migrate-images-log");
+    if (!el) return;
+    el.style.display = "block";
+    const line = document.createElement("div");
+    line.textContent = msg;
+    el.appendChild(line);
+    while (el.children.length > MIGRATE_LOG_MAX_LINES) el.removeChild(el.firstChild);
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function migrateSetProgress(done, total, label) {
+    const bar = document.getElementById("migrate-images-bar");
+    const status = document.getElementById("migrate-images-status");
+    if (bar) bar.style.width = (total ? Math.round((done / total) * 100) : 0) + "%";
+    if (status) status.textContent = label;
+  }
+
+  // Downloads `url`, re-uploads it to ImageKit, and returns the new URL.
+  // Throws if the download or the upload fails — caller decides whether
+  // that's fatal for the whole run or just skips this one image.
+  async function migrateOneImageToImageKit(url, publicKey, urlEndpoint) {
+    let blob;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      blob = await res.blob();
+    } catch (err) {
+      throw new Error("couldn't download original (" + err.message + ")");
+    }
+    const nameGuess = (url.split("/").pop() || "image").split("?")[0].split("#")[0] || "image.jpg";
+    const file = new File([blob], nameGuess, { type: blob.type || "image/jpeg" });
+    try {
+      return await window.AzubaImageUpload.uploadToImageKit(file, publicKey, urlEndpoint);
+    } catch (err) {
+      throw new Error("upload failed (" + err.message + ")");
+    }
+  }
+
+  function isAlreadyOnImageKit(url, urlEndpoint) {
+    if (!url || typeof url !== "string") return true; // nothing to migrate
+    if (!/^https?:\/\//i.test(url)) return true; // local/relative path (e.g. placeholder) — skip
+    if (urlEndpoint && url.indexOf(urlEndpoint) === 0) return true;
+    if (url.indexOf("ik.imagekit.io") !== -1) return true;
+    return false;
+  }
+
+  async function runImageMigration() {
+    const btn = document.getElementById("migrate-images-imagekit-btn");
+    const progressWrap = document.getElementById("migrate-images-progress");
+    const logEl = document.getElementById("migrate-images-log");
+    const publicKey = (SETTINGS.imagekitPublicKey || "").trim();
+    const urlEndpoint = (SETTINGS.imagekitUrlEndpoint || "").trim();
+
+    if (!publicKey || !urlEndpoint) {
+      alert("Save your ImageKit Public Key and URL Endpoint above first.");
+      return;
+    }
+
+    btn.disabled = true;
+    const originalText = btn.textContent;
+    btn.textContent = "Migrating…";
+    progressWrap.style.display = "block";
+    if (logEl) { logEl.style.display = "none"; logEl.innerHTML = ""; }
+    migrateSetProgress(0, 1, "Scanning collections…");
+
+    try {
+      // 1. Gather every job (one job = one image field on one doc that
+      // still needs migrating). Collections + field shapes are exactly
+      // what js/admin.js's own forms read/write elsewhere.
+      const jobs = [];
+
+      // Simple single-`image` field collections.
+      for (const collectionName of ["categories", "blogCategories", "brands", "pages"]) {
+        const snap = await getDocs(collection(db, collectionName));
+        snap.forEach((d) => {
+          const data = d.data();
+          if (!isAlreadyOnImageKit(data.image, urlEndpoint)) {
+            jobs.push({
+              kind: "single", collectionName, docId: d.id,
+              label: `${collectionName}/${d.id} (image)`,
+              url: data.image, field: "image"
+            });
+          }
+        });
+      }
+
+      // Products — images[] (array, may have several) + deliveryPartnerImage.
+      {
+        const snap = await getDocs(collection(db, "products"));
+        snap.forEach((d) => {
+          const data = d.data();
+          const images = Array.isArray(data.images) ? data.images : [];
+          images.forEach((url, idx) => {
+            if (!isAlreadyOnImageKit(url, urlEndpoint)) {
+              jobs.push({
+                kind: "array-item", collectionName: "products", docId: d.id,
+                label: `products/${d.id} (images[${idx}])`,
+                url, field: "images", index: idx
+              });
+            }
+          });
+          if (!isAlreadyOnImageKit(data.deliveryPartnerImage, urlEndpoint)) {
+            jobs.push({
+              kind: "single", collectionName: "products", docId: d.id,
+              label: `products/${d.id} (deliveryPartnerImage)`,
+              url: data.deliveryPartnerImage, field: "deliveryPartnerImage"
+            });
+          }
+        });
+      }
+
+      // Blog posts — coverImage.
+      {
+        const snap = await getDocs(collection(db, "blogPosts"));
+        snap.forEach((d) => {
+          const data = d.data();
+          if (!isAlreadyOnImageKit(data.coverImage, urlEndpoint)) {
+            jobs.push({
+              kind: "single", collectionName: "blogPosts", docId: d.id,
+              label: `blogPosts/${d.id} (coverImage)`,
+              url: data.coverImage, field: "coverImage"
+            });
+          }
+        });
+      }
+
+      // Reviews — imageUrls[] (guest review photos).
+      {
+        const snap = await getDocs(collection(db, "reviews"));
+        snap.forEach((d) => {
+          const data = d.data();
+          const urls = Array.isArray(data.imageUrls) ? data.imageUrls : [];
+          urls.forEach((url, idx) => {
+            if (!isAlreadyOnImageKit(url, urlEndpoint)) {
+              jobs.push({
+                kind: "array-item", collectionName: "reviews", docId: d.id,
+                label: `reviews/${d.id} (imageUrls[${idx}])`,
+                url, field: "imageUrls", index: idx
+              });
+            }
+          });
+        });
+      }
+
+      if (jobs.length === 0) {
+        migrateSetProgress(1, 1, "Nothing to migrate — everything is already on ImageKit.");
+        migrateLog("Nothing to migrate — every image already points at your ImageKit URL Endpoint.");
+        return;
+      }
+
+      migrateLog(`Found ${jobs.length} image(s) to migrate.`);
+
+      // 2. Group jobs by doc so array fields (images[], imageUrls[]) get
+      // written back once per doc instead of once per item (avoids
+      // clobbering earlier writes to the same array on the same doc).
+      const byDoc = new Map(); // "collection/docId" -> { collectionName, docId, patches: [{field, index?, newUrl}] }
+      let done = 0, failed = 0;
+
+      for (const job of jobs) {
+        migrateSetProgress(done, jobs.length, `Migrating ${job.label}…`);
+        try {
+          const newUrl = await migrateOneImageToImageKit(job.url, publicKey, urlEndpoint);
+          const key = job.collectionName + "/" + job.docId;
+          if (!byDoc.has(key)) byDoc.set(key, { collectionName: job.collectionName, docId: job.docId, patches: [] });
+          byDoc.get(key).patches.push({ field: job.field, index: job.index, newUrl });
+          migrateLog(`✓ ${job.label}`);
+        } catch (err) {
+          failed++;
+          migrateLog(`✗ ${job.label} — ${err.message}`);
+        }
+        done++;
+        migrateSetProgress(done, jobs.length, `${done}/${jobs.length} processed…`);
+      }
+
+      // 3. Write back — one updateDoc per affected document, re-reading
+      // current array values first so we only touch the indices we
+      // actually migrated (in case something else changed the doc
+      // mid-run).
+      migrateSetProgress(done, jobs.length, "Saving updated records…");
+      for (const { collectionName, docId, patches } of byDoc.values()) {
+        try {
+          const freshSnap = await getDoc(doc(db, collectionName, docId));
+          if (!freshSnap.exists()) { migrateLog(`✗ ${collectionName}/${docId} — doc no longer exists, skipped save`); continue; }
+          const freshData = freshSnap.data();
+          const update = {};
+          for (const patch of patches) {
+            if (patch.index === undefined) {
+              update[patch.field] = patch.newUrl;
+            } else {
+              const arr = Array.isArray(update[patch.field]) ? update[patch.field] : Array.isArray(freshData[patch.field]) ? [...freshData[patch.field]] : [];
+              arr[patch.index] = patch.newUrl;
+              update[patch.field] = arr;
+            }
+          }
+          await updateDoc(doc(db, collectionName, docId), update);
+        } catch (err) {
+          migrateLog(`✗ Failed saving ${collectionName}/${docId} — ${err.message}`);
+        }
+      }
+
+      migrateSetProgress(jobs.length, jobs.length, `Done — ${jobs.length - failed} migrated, ${failed} failed.`);
+      migrateLog(`Finished. ${jobs.length - failed} migrated, ${failed} failed.`);
+    } catch (err) {
+      migrateSetProgress(0, 1, "Migration stopped — " + err.message);
+      migrateLog("✗ Migration stopped: " + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  }
+
+  const migrateImagesBtn = document.getElementById("migrate-images-imagekit-btn");
+  if (migrateImagesBtn) migrateImagesBtn.addEventListener("click", runImageMigration);
+
+  // ================================================================
   // EMAIL (Settings > Email) — multiple EmailJS accounts, each an
   // expandable card. A purpose (newOrderAdmin / customerOrderConfirm /
   // orderStatusUpdate / contactForm / supportReply) is "covered" by

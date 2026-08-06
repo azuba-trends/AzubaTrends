@@ -7,8 +7,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin Panel - AzubaTrends</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="stylesheet" href="css/main.css?v=20260806b">
-<link rel="stylesheet" href="css/components.css?v=20260806b">
+<link rel="stylesheet" href="css/main.css?v=20260806c">
+<link rel="stylesheet" href="css/components.css?v=20260806c">
 <style>
   body { background: #f4f6f8; margin: 0; font-family: var(--font-body); }
   /* Login Screen */
@@ -1613,6 +1613,25 @@
             </div>
           </div>
           <button type="button" class="btn btn-primary" id="save-imagekit-btn" style="margin-top:6px;">Save ImageKit</button>
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+          <h3 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:8px;">Migrate Existing Images to ImageKit</h3>
+          <p class="field-hint">
+            Goes through every product photo, delivery-partner logo, category/brand/blog-category/page image,
+            blog post cover image, and review photo — downloads each one from wherever it's currently hosted
+            (ImgBB, etc.) and re-uploads it to ImageKit, then updates that record to point at the new ImageKit URL.
+            Anything already on your ImageKit URL Endpoint is skipped automatically, so this is safe to re-run.
+            Save your ImageKit keys above first.
+          </p>
+          <button type="button" class="btn btn-primary" id="migrate-images-imagekit-btn" style="margin-top:6px;">Migrate Existing Images to ImageKit</button>
+          <div id="migrate-images-progress" style="margin-top:14px; display:none;">
+            <div style="background:#f0f0f0; border-radius:6px; height:10px; overflow:hidden;">
+              <div id="migrate-images-bar" style="background:var(--color-primary,#C1502E); height:100%; width:0%; transition:width .2s ease;"></div>
+            </div>
+            <div id="migrate-images-status" class="field-hint" style="margin-top:6px;"></div>
+            <div id="migrate-images-log" style="margin-top:8px; max-height:220px; overflow-y:auto; font-size:12.5px; font-family:monospace; background:#fafafa; border:1px solid #eee; border-radius:6px; padding:8px; display:none;"></div>
+          </div>
         </div>
       </div>
 
