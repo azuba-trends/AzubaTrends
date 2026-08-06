@@ -518,18 +518,22 @@ setTimeout(() => {
     });
   }
 
-  // Helper: Upload image via ImgBB, using the key from Settings (never hardcoded)
+  // Uploads via whichever image host is active in Settings > Image
+  // Hosting (ImgBB or ImageKit), with automatic failover to the other one
+  // if it's configured too — see js/image-upload.js for the shared logic
+  // (also used by reviews.js for guest review photos, so both stay in
+  // sync automatically whenever the provider is switched here).
   async function uploadToImgBB(file) {
-    if (!SETTINGS.imgbbKey) {
-      throw new Error("No ImgBB API key set. Add one in Settings > Account before uploading images.");
+    if (!SETTINGS.imgbbKey && !(SETTINGS.imagekitPublicKey && SETTINGS.imagekitUrlEndpoint)) {
+      throw new Error("No image host configured. Add an ImgBB key or ImageKit keys in Settings > Image Hosting before uploading images.");
     }
     const uploadFile = await compressImage(file);
-    const formData = new FormData();
-    formData.append("image", uploadFile);
-    const res = await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(SETTINGS.imgbbKey)}`, { method: "POST", body: formData });
-    const data = await res.json();
-    if (data.success) return data.data.url;
-    throw new Error("Image upload failed: " + (data.error?.message || "unknown error"));
+    return window.AzubaImageUpload.upload(uploadFile, {
+      activeProvider: SETTINGS.activeImageProvider,
+      imgbbKey: SETTINGS.imgbbKey,
+      imagekitPublicKey: SETTINGS.imagekitPublicKey,
+      imagekitUrlEndpoint: SETTINGS.imagekitUrlEndpoint
+    });
   }
 
   // Reused for feature/gallery/delivery-partner image previews and the
@@ -2250,7 +2254,7 @@ setTimeout(() => {
     if (opts.isChild) tr.style.background = "#fafaf7";
     tr.innerHTML = `
       <td><input type="checkbox" class="row-select" data-id="${p.id}"></td>
-      <td><img src="${esc(img)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" alt=""></td>
+      <td><img src="${esc(img)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" alt="" onerror="this.onerror=null;this.src='/images/logo-placeholder.svg';"></td>
       <td><div style="${nameClampStyle}" title="${esc(p.title)}">${nameCell}${missingCostPrice ? ` <span title="Cost Price not set — profit reports will show N/A for this product until you add it in Edit" style="color:var(--color-accent-dark); font-size:0.8rem; white-space:nowrap;">⚠ Cost price missing</span>` : ""}${(!opts.isChild && p.hasVariants) ? ` <span style="color:var(--color-ink-soft); font-size:0.78rem;">(${opts.childCount} color${opts.childCount === 1 ? "" : "s"})</span>` : ""}</div></td>
       <td>${esc(p.brand || "—")}</td>
       <td><div style="${tagsClampStyle}" title="${esc((p.tags || []).join(", "))}">${esc((p.tags || []).join(", "))}</div></td>
@@ -2302,7 +2306,7 @@ setTimeout(() => {
     tr.style.background = "#fafaf7";
     tr.innerHTML = `
       <td></td>
-      <td><img src="${esc(img)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" alt=""></td>
+      <td><img src="${esc(img)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" alt="" onerror="this.onerror=null;this.src='/images/logo-placeholder.svg';"></td>
       <td><div style="display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-overflow:ellipsis; max-width:260px;" title="${esc(rep.title)}"><span style="padding-left:24px; color:var(--color-ink-soft);">↳ ${esc(color || "(no color)")} — </span>${esc(rep.title)}${missingCostPrice ? ` <span title="Cost Price not set — profit reports will show N/A for this product until you add it in Edit" style="color:var(--color-accent-dark); font-size:0.8rem; white-space:nowrap;">⚠ Cost price missing</span>` : ""} <span style="color:var(--color-ink-soft); font-size:0.78rem;">(${docs.length} size${docs.length === 1 ? "" : "s"}${sizesLabel ? ": " + esc(sizesLabel) : ""})</span></div></td>
       <td>${esc(rep.brand || "—")}</td>
       <td><div style="display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-overflow:ellipsis; max-width:110px;" title="${esc((rep.tags || []).join(", "))}">${esc((rep.tags || []).join(", "))}</div></td>
@@ -2689,7 +2693,7 @@ setTimeout(() => {
     row.style.cssText = "border-bottom:1px solid #eee; padding:10px 0;";
     const imgs = Array.isArray(review.imageUrls) && review.imageUrls.length > 0 ? review.imageUrls : (review.imageUrl ? [review.imageUrl] : []);
     const imagesHtml = imgs.length > 0
-      ? `<div style="display:flex; gap:6px; margin-top:6px;">${imgs.map((u) => `<img src="${esc(u)}" style="width:52px;height:52px;object-fit:cover;border-radius:4px;" alt="">`).join("")}</div>`
+      ? `<div style="display:flex; gap:6px; margin-top:6px;">${imgs.map((u) => `<img src="${esc(u)}" style="width:52px;height:52px;object-fit:cover;border-radius:4px;" alt="" onerror="this.onerror=null;this.src='/images/logo-placeholder.svg';">`).join("")}</div>`
       : "";
     row.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;">
@@ -4107,7 +4111,7 @@ setTimeout(() => {
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td><input type="checkbox" class="row-select" data-id="${p.id}"></td>
-        <td><img src="${esc(img)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" alt=""></td>
+        <td><img src="${esc(img)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" alt="" onerror="this.onerror=null;this.src='/images/logo-placeholder.svg';"></td>
         <td>${esc(p.title || "(untitled)")}</td>
         <td>${dateStr}</td>
         <td style="color:${sColor}; font-weight:bold;">${esc((p.status || "draft").toUpperCase())}</td>
@@ -4801,10 +4805,10 @@ setTimeout(() => {
 
     const notifyNote = document.getElementById("modal-notify-status-note");
     const notifyBox = document.getElementById("modal-notify-customer");
-    if (!SETTINGS.emailjs_statusTemplateId) {
+    if (!hasEmailConfigured("orderStatusUpdate")) {
       notifyBox.checked = false;
       notifyBox.disabled = true;
-      notifyNote.textContent = "Set up an \"Order Status Update Template ID\" in Settings > Account to enable this.";
+      notifyNote.textContent = "Set up an \"Order Status Update Template ID\" in Settings > Email to enable this.";
     } else if (!o.customerEmail) {
       notifyBox.checked = false;
       notifyBox.disabled = true;
@@ -4822,30 +4826,12 @@ setTimeout(() => {
   // Sends a status-change email directly to the GUEST's own address (the
   // one they typed at checkout — no customer account exists, so this is
   // the only "contact point" we have, same as OrderEmail.send in
-  // checkout.js but pointed at the customer instead of the admin, using a
-  // SEPARATE EmailJS template (SETTINGS.emailjs_statusTemplateId) so the
-  // wording can say "your order shipped" instead of "new order received".
-  let statusEmailSdkReady = false;
-  function loadEmailJsSdk() {
-    return new Promise((resolve, reject) => {
-      if (statusEmailSdkReady && window.emailjs) return resolve();
-      const script = document.createElement("script");
-      script.src = "https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js";
-      script.onload = () => {
-        try {
-          window.emailjs.init({ publicKey: SETTINGS.emailjs_publicKey });
-          statusEmailSdkReady = true;
-          resolve();
-        } catch (err) { reject(err); }
-      };
-      script.onerror = () => reject(new Error("Failed to load EmailJS SDK"));
-      document.head.appendChild(script);
-    });
-  }
-
+  // checkout.js but pointed at the customer instead of the admin, using
+  // the "orderStatusUpdate" purpose so the wording can say "your order
+  // shipped" instead of "new order received". Which configured account
+  // actually sends it is decided by js/email-router.js's round-robin.
   async function sendStatusUpdateEmail(order, newStatus) {
-    await loadEmailJsSdk();
-    return window.emailjs.send(SETTINGS.emailjs_serviceId, SETTINGS.emailjs_statusTemplateId, {
+    return window.AzubaEmailRouter.send("orderStatusUpdate", {
       order_id: order.orderId,
       customer_name: order.customerName,
       new_status: newStatus,
@@ -5071,14 +5057,6 @@ setTimeout(() => {
     document.getElementById("set-seller-state").value = SETTINGS.sellerState || "";
     document.getElementById("set-gst-number").value = SETTINGS.gstNumber || "";
     document.getElementById("set-tax-rate").value = SETTINGS.taxRate ?? 0;
-    document.getElementById("set-imgbb-key").value = SETTINGS.imgbbKey || "";
-    document.getElementById("set-email-pub").value = SETTINGS.emailjs_publicKey || "";
-    document.getElementById("set-email-srv").value = SETTINGS.emailjs_serviceId || "";
-    document.getElementById("set-email-tpl").value = SETTINGS.emailjs_templateId || "";
-    document.getElementById("set-email-customer-tpl").value = SETTINGS.emailjs_customerTemplateId || "";
-    document.getElementById("set-email-status-tpl").value = SETTINGS.emailjs_statusTemplateId || "";
-    document.getElementById("set-email-contact-tpl").value = SETTINGS.emailjs_contactTemplateId || "";
-    document.getElementById("set-email-contact-reply-tpl").value = SETTINGS.emailjs_contactReplyTemplateId || "";
     document.getElementById("set-telegram-api-key").value = SETTINGS.telegramApiKey || "";
     document.getElementById("set-ga4-id").value = SETTINGS.ga4MeasurementId || "";
     document.getElementById("set-meta-pixel-id").value = SETTINGS.metaPixelId || "";
@@ -5095,6 +5073,9 @@ setTimeout(() => {
     updateMarginExampleHint();
     const sidebarLabel = document.querySelector("[data-site-name]");
     if (sidebarLabel) sidebarLabel.textContent = (SETTINGS.storeName || "AzubaTrends") + " Admin";
+
+    renderImageSettings();
+    await renderEmailAccounts();
   }
 
   async function saveSettingsPatch(patch, btn) {
@@ -5111,6 +5092,235 @@ setTimeout(() => {
     }
   }
 
+  // ================================================================
+  // IMAGE HOSTING (Settings > Image Hosting)
+  // One active provider at a time (ImgBB or ImageKit) — js/image-
+  // upload.js reads SETTINGS.activeImageProvider and automatically
+  // fails over to the other one if it's configured too.
+  // ================================================================
+  function renderImageSettings() {
+    const provider = SETTINGS.activeImageProvider === "imagekit" ? "imagekit" : "imgbb";
+    document.getElementById(`img-provider-${provider}`).checked = true;
+    document.getElementById("img-imgbb-key").value = SETTINGS.imgbbKey || "";
+    document.getElementById("img-imagekit-public").value = SETTINGS.imagekitPublicKey || "";
+    document.getElementById("img-imagekit-endpoint").value = SETTINGS.imagekitUrlEndpoint || "";
+    // The Private Key lives in a SEPARATE, admin-only-readable doc (see
+    // firestore.rules) — never part of the publicly-readable store_config
+    // doc SETTINGS is loaded from — so it needs its own fetch here.
+    getDoc(doc(db, "settings", "imagekit_private")).then((snap) => {
+      document.getElementById("img-imagekit-private").value = (snap.exists() && snap.data().privateKey) || "";
+    }).catch(() => { /* leave blank — admin can just re-enter it */ });
+  }
+
+  document.querySelectorAll('input[name="active-image-provider"]').forEach((radio) => {
+    radio.addEventListener("change", async () => {
+      try {
+        await setDoc(doc(db, "settings", "store_config"), { activeImageProvider: radio.value }, { merge: true });
+        SETTINGS.activeImageProvider = radio.value;
+      } catch (err) {
+        alert("Failed to switch provider: " + err.message);
+      }
+    });
+  });
+
+  document.getElementById("save-imgbb-btn").addEventListener("click", () => {
+    saveSettingsPatch({ imgbbKey: document.getElementById("img-imgbb-key").value.trim() }, document.getElementById("save-imgbb-btn"));
+  });
+
+  document.getElementById("save-imagekit-btn").addEventListener("click", async () => {
+    const btn = document.getElementById("save-imagekit-btn");
+    const originalText = btn.textContent;
+    btn.textContent = "Saving..."; btn.disabled = true;
+    try {
+      const publicKey = document.getElementById("img-imagekit-public").value.trim();
+      const urlEndpoint = document.getElementById("img-imagekit-endpoint").value.trim();
+      const privateKey = document.getElementById("img-imagekit-private").value.trim();
+      await setDoc(doc(db, "settings", "store_config"), { imagekitPublicKey: publicKey, imagekitUrlEndpoint: urlEndpoint }, { merge: true });
+      // Private Key goes to its own locked-down doc — see firestore.rules'
+      // settings/imagekit_private rule (admin-only read/write).
+      await setDoc(doc(db, "settings", "imagekit_private"), { privateKey }, { merge: true });
+      Object.assign(SETTINGS, { imagekitPublicKey: publicKey, imagekitUrlEndpoint: urlEndpoint });
+      alert("Saved!");
+    } catch (err) {
+      alert("Failed to save: " + err.message);
+    } finally {
+      btn.textContent = originalText; btn.disabled = false;
+    }
+  });
+
+  // ================================================================
+  // EMAIL (Settings > Email) — multiple EmailJS accounts, each an
+  // expandable card. A purpose (newOrderAdmin / customerOrderConfirm /
+  // orderStatusUpdate / contactForm / supportReply) is "covered" by
+  // whichever accounts have that field filled in — that's what
+  // functions/api/next-email-account.js round-robins across. See that
+  // file's top comment for the full picture.
+  // ================================================================
+  const EMAIL_PURPOSES = [
+    { key: "newOrderAdmin", label: "Template ID", hint: "admin-facing \"New Order Received\" copy", fullWidth: false },
+    { key: "customerOrderConfirm", label: "Customer Order Confirmation Template ID", hint: "optional — separate EmailJS template addressed to the CUSTOMER with \"Thank you for your order!\" wording. If no account anywhere has this filled in, the New Order template above is reused for the customer copy too.", fullWidth: true },
+    { key: "orderStatusUpdate", label: "Order Status Update Template ID", hint: "optional — separate EmailJS template addressed to the CUSTOMER, not you. Leave blank to skip customer status emails.", fullWidth: true },
+    { key: "contactForm", label: "Contact Form Template ID", hint: "EmailJS template addressed to YOU — sent whenever a customer submits the Contact Us form. Leave blank to skip this email; the ticket is always saved in Support Tickets either way.", fullWidth: true },
+    { key: "supportReply", label: "Support Reply Template ID", hint: "optional — EmailJS template addressed to the CUSTOMER, used when you reply to a ticket from Support Tickets. Leave blank to skip customer reply emails.", fullWidth: true }
+  ];
+
+  function emailAccountsFor(purpose) {
+    return (SETTINGS.emailAccounts || []).filter((a) => a && a.enabled !== false && a.templates && a.templates[purpose]);
+  }
+  function hasEmailConfigured(purpose) {
+    return emailAccountsFor(purpose).length > 0;
+  }
+
+  // One-time, in-memory-only migration: if the OLD single-account fields
+  // are still there and no emailAccounts array has been saved yet, show
+  // them as "Account 1" so nothing looks empty/lost. Nothing is written
+  // to Firestore until the admin actually hits Save on this card — this
+  // just avoids the settings page looking broken on first load after the
+  // upgrade.
+  function migratedEmailAccounts() {
+    if (Array.isArray(SETTINGS.emailAccounts)) return SETTINGS.emailAccounts;
+    const hasOldFields = SETTINGS.emailjs_publicKey || SETTINGS.emailjs_serviceId || SETTINGS.emailjs_templateId;
+    if (!hasOldFields) return [];
+    return [{
+      id: "migrated_" + Math.random().toString(36).slice(2, 10),
+      name: "Account 1",
+      enabled: true,
+      publicKey: SETTINGS.emailjs_publicKey || "",
+      serviceId: SETTINGS.emailjs_serviceId || "",
+      templates: {
+        newOrderAdmin: SETTINGS.emailjs_templateId || "",
+        customerOrderConfirm: SETTINGS.emailjs_customerTemplateId || "",
+        orderStatusUpdate: SETTINGS.emailjs_statusTemplateId || "",
+        contactForm: SETTINGS.emailjs_contactTemplateId || "",
+        supportReply: SETTINGS.emailjs_contactReplyTemplateId || ""
+      }
+    }];
+  }
+
+  async function renderEmailAccounts() {
+    const list = document.getElementById("email-accounts-list");
+    const accounts = migratedEmailAccounts();
+    list.innerHTML = "";
+    if (accounts.length === 0) {
+      list.innerHTML = '<p class="field-hint">No email accounts added yet — click "+ Add Email Account" above to add your first one.</p>';
+      return;
+    }
+    accounts.forEach((account) => list.appendChild(buildEmailAccountCard(account)));
+  }
+
+  function buildEmailAccountCard(account) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.marginTop = "14px";
+    card.dataset.accountId = account.id;
+
+    const templateFieldsHtml = EMAIL_PURPOSES.map((p) => `
+      <div class="form-field${p.fullWidth ? " full-width" : ""}">
+        <label>${esc(p.label)} <span class="field-hint" style="display:inline;">(${esc(p.hint)})</span></label>
+        <input type="text" class="ea-template" data-purpose="${p.key}" value="${esc((account.templates && account.templates[p.key]) || "")}">
+      </div>`).join("");
+
+    card.innerHTML = `
+      <div class="ea-header" style="display:flex; align-items:center; gap:12px; cursor:pointer;">
+        <span class="ea-chevron" style="transition:transform .15s; display:inline-block;">▸</span>
+        <input type="text" class="ea-name" value="${esc(account.name || "Unnamed Account")}" placeholder="e.g. Personal Gmail account" style="flex:1; font-weight:bold; border:none; background:none; padding:6px 4px;" title="Just for your own reference — doesn't affect sending.">
+        <label style="display:flex; align-items:center; gap:6px; font-weight:normal; font-size:0.85rem; white-space:nowrap;">
+          <input type="checkbox" class="ea-enabled" style="width:auto;" ${account.enabled !== false ? "checked" : ""}>
+          Enabled
+        </label>
+      </div>
+      <div class="ea-body form-grid" style="display:none; margin-top:14px; border-top:1px solid #eee; padding-top:14px;">
+        <div class="form-field">
+          <label>Public Key</label>
+          <input type="text" class="ea-public-key" value="${esc(account.publicKey || "")}">
+        </div>
+        <div class="form-field">
+          <label>Service ID</label>
+          <input type="text" class="ea-service-id" value="${esc(account.serviceId || "")}">
+        </div>
+        ${templateFieldsHtml}
+        <div class="form-field full-width" style="display:flex; gap:10px; margin-top:6px;">
+          <button type="button" class="btn btn-primary ea-save-btn">Save Account</button>
+          <button type="button" class="btn btn-outline ea-remove-btn" style="color:var(--color-danger);">Remove</button>
+        </div>
+      </div>`;
+
+    const header = card.querySelector(".ea-header");
+    const body = card.querySelector(".ea-body");
+    const chevron = card.querySelector(".ea-chevron");
+    // Clicking the name input or checkbox shouldn't also toggle collapse.
+    header.addEventListener("click", (e) => {
+      if (e.target.closest(".ea-name") || e.target.closest(".ea-enabled")) return;
+      const isOpen = body.style.display !== "none";
+      body.style.display = isOpen ? "none" : "block";
+      chevron.style.transform = isOpen ? "rotate(0deg)" : "rotate(90deg)";
+    });
+
+    card.querySelector(".ea-save-btn").addEventListener("click", async () => {
+      const btn = card.querySelector(".ea-save-btn");
+      const originalText = btn.textContent;
+      btn.textContent = "Saving..."; btn.disabled = true;
+      try {
+        const templates = {};
+        card.querySelectorAll(".ea-template").forEach((input) => { templates[input.dataset.purpose] = input.value.trim(); });
+        const updated = {
+          id: account.id,
+          name: card.querySelector(".ea-name").value.trim() || "Unnamed Account",
+          enabled: card.querySelector(".ea-enabled").checked,
+          publicKey: card.querySelector(".ea-public-key").value.trim(),
+          serviceId: card.querySelector(".ea-service-id").value.trim(),
+          templates
+        };
+        const current = migratedEmailAccounts();
+        const idx = current.findIndex((a) => a.id === account.id);
+        const nextAccounts = idx >= 0 ? current.map((a, i) => (i === idx ? updated : a)) : [...current, updated];
+        await setDoc(doc(db, "settings", "store_config"), { emailAccounts: nextAccounts }, { merge: true });
+        SETTINGS.emailAccounts = nextAccounts;
+        account.name = updated.name; // keep in sync for this closure
+        alert("Saved!");
+      } catch (err) {
+        alert("Failed to save: " + err.message);
+      } finally {
+        btn.textContent = originalText; btn.disabled = false;
+      }
+    });
+
+    card.querySelector(".ea-remove-btn").addEventListener("click", async () => {
+      if (!confirm(`Remove "${account.name || "this account"}"? This can't be undone.`)) return;
+      try {
+        const nextAccounts = migratedEmailAccounts().filter((a) => a.id !== account.id);
+        await setDoc(doc(db, "settings", "store_config"), { emailAccounts: nextAccounts }, { merge: true });
+        SETTINGS.emailAccounts = nextAccounts;
+        await renderEmailAccounts();
+      } catch (err) {
+        alert("Failed to remove: " + err.message);
+      }
+    });
+
+    return card;
+  }
+
+  document.getElementById("add-email-account-btn").addEventListener("click", async () => {
+    const current = migratedEmailAccounts();
+    const newAccount = {
+      id: crypto.randomUUID(),
+      name: `Account ${current.length + 1}`,
+      enabled: true,
+      publicKey: "", serviceId: "",
+      templates: { newOrderAdmin: "", customerOrderConfirm: "", orderStatusUpdate: "", contactForm: "", supportReply: "" }
+    };
+    SETTINGS.emailAccounts = [...current, newAccount];
+    await renderEmailAccounts();
+    // Open the newly-added card straight away so the admin doesn't have
+    // to hunt for it and click to expand.
+    const newCard = document.querySelector(`[data-account-id="${newAccount.id}"]`);
+    if (newCard) {
+      newCard.querySelector(".ea-body").style.display = "block";
+      newCard.querySelector(".ea-chevron").style.transform = "rotate(90deg)";
+      newCard.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  });
+
   document.getElementById("account-settings-form").addEventListener("submit", (e) => {
     e.preventDefault();
     saveSettingsPatch({
@@ -5124,14 +5334,6 @@ setTimeout(() => {
       sellerState: document.getElementById("set-seller-state").value.trim(),
       gstNumber: document.getElementById("set-gst-number").value.trim(),
       taxRate: Number(document.getElementById("set-tax-rate").value) || 0,
-      imgbbKey: document.getElementById("set-imgbb-key").value,
-      emailjs_publicKey: document.getElementById("set-email-pub").value,
-      emailjs_serviceId: document.getElementById("set-email-srv").value,
-      emailjs_templateId: document.getElementById("set-email-tpl").value,
-      emailjs_customerTemplateId: document.getElementById("set-email-customer-tpl").value,
-      emailjs_statusTemplateId: document.getElementById("set-email-status-tpl").value,
-      emailjs_contactTemplateId: document.getElementById("set-email-contact-tpl").value,
-      emailjs_contactReplyTemplateId: document.getElementById("set-email-contact-reply-tpl").value,
       telegramApiKey: document.getElementById("set-telegram-api-key").value,
     }, document.getElementById("save-account-settings-btn"));
   });
@@ -5545,8 +5747,9 @@ setTimeout(() => {
   // ================================================================
   // SUPPORT TICKETS (Contact Us form submissions — api/submit-contact.js
   // writes these into the `contactTickets` collection; this is the admin
-  // side: list, reply — which emails the customer back via EmailJS using
-  // SETTINGS.emailjs_contactReplyTemplateId — and Close/Reopen.)
+  // side: list, reply — which emails the customer back via the
+  // "supportReply" purpose, round-robined by js/email-router.js — and
+  // Close/Reopen.)
   // ================================================================
   let ticketsList = [];
   let currentTicketTab = "open";
@@ -5654,11 +5857,10 @@ setTimeout(() => {
   });
 
   async function sendTicketReplyEmail(ticket, replyMessage) {
-    if (!SETTINGS.emailjs_contactReplyTemplateId || !SETTINGS.emailjs_publicKey || !SETTINGS.emailjs_serviceId) {
-      throw new Error("Support Reply Template ID not configured in Settings > Account — reply was saved but no email was sent.");
+    if (!hasEmailConfigured("supportReply")) {
+      throw new Error("Support Reply Template ID not configured in Settings > Email — reply was saved but no email was sent.");
     }
-    await loadEmailJsSdk();
-    return window.emailjs.send(SETTINGS.emailjs_serviceId, SETTINGS.emailjs_contactReplyTemplateId, {
+    return window.AzubaEmailRouter.send("supportReply", {
       customer_name: ticket.name,
       subject: ticket.subject,
       original_message: ticket.message,

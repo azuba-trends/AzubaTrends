@@ -286,6 +286,7 @@
 <script src="/js/tracking.js"></script>
 <script src="/js/security.js"></script>
 <script src="/js/layout.js"></script>
+<script src="/js/image-upload.js"></script>
 <script src="/js/loading-overlay.js"></script>
 <script src="/js/a2hs.js"></script>
     <script src="/js/cart.js"></script>
@@ -486,6 +487,20 @@
     let currentImageIndex = 0;
     let wasDragged = false; // set by the swipe handler below; read by the lightbox click handler
 
+    // Falls back to the site placeholder instead of a broken-image icon
+    // when a source URL 404s or otherwise fails to load (e.g. a free/
+    // anonymous-tier hosted image that's expired or been taken down).
+    // `this.onerror = null` before reassigning src is required — without
+    // it, if the placeholder itself ever failed to load too, the browser
+    // would call onerror again and loop forever re-requesting it.
+    function setImgWithFallback(imgEl, src) {
+      imgEl.onerror = function () {
+        this.onerror = null;
+        this.src = "/images/logo-placeholder.svg";
+      };
+      imgEl.src = src;
+    }
+
     async function renderBreadcrumb(product) {
       const catLink = document.getElementById("breadcrumb-category");
       const ancestorsEl = document.getElementById("breadcrumb-ancestors");
@@ -556,16 +571,18 @@
     function showImage(index, { fromLightbox } = {}) {
       currentImageIndex = ((index % images.length) + images.length) % images.length;
       mainImg.src = images[currentImageIndex];
+      mainImg.onerror = function () { this.onerror = null; this.src = "/images/logo-placeholder.svg"; };
       thumbsWrap.querySelectorAll(".gallery__thumb").forEach((t, i) => t.classList.toggle("is-active", i === currentImageIndex));
       const dots = document.getElementById("gallery-dots");
       if (dots) dots.querySelectorAll(".gallery__dot").forEach((d, i) => d.classList.toggle("is-active", i === currentImageIndex));
       if (fromLightbox && !lightbox.hidden) {
         lightboxImg.src = images[currentImageIndex];
+        lightboxImg.onerror = function () { this.onerror = null; this.src = "/images/logo-placeholder.svg"; };
         lightboxImg.alt = `${product.title} — view ${currentImageIndex + 1}`;
       }
     }
 
-    mainImg.src = images[0];
+    setImgWithFallback(mainImg, images[0]);
     mainImg.alt = product.title;
 
     if (images.length > 1) {
@@ -575,6 +592,7 @@
         thumb.className = "gallery__thumb" + (i === 0 ? " is-active" : "");
         const img = document.createElement("img");
         img.src = src;
+        img.onerror = function () { this.onerror = null; this.src = "/images/logo-placeholder.svg"; };
         img.alt = `${product.title} — view ${i + 1}`;
         img.loading = "lazy";
         thumb.appendChild(img);
@@ -594,6 +612,7 @@
         // Create incoming peer image
         const peer = document.createElement("img");
         peer.src = images[((nextIndex % images.length) + images.length) % images.length];
+        peer.onerror = function () { this.onerror = null; this.src = "/images/logo-placeholder.svg"; };
         peer.alt = "";
         peer.style.position = "absolute";
         peer.style.top = "0";
@@ -684,6 +703,7 @@
       function makePeer(index) {
         const img = document.createElement("img");
         img.src = images[((index % images.length) + images.length) % images.length];
+        img.onerror = function () { this.onerror = null; this.src = "/images/logo-placeholder.svg"; };
         img.alt = "";
         img.style.position = "absolute";
         img.style.top = "0";
@@ -806,6 +826,7 @@
       if (e.target.closest(".gallery__nav")) return;
       if (wasDragged) { wasDragged = false; return; }
       lightboxImg.src = mainImg.src;
+      lightboxImg.onerror = function () { this.onerror = null; this.src = "/images/logo-placeholder.svg"; };
       lightboxImg.alt = mainImg.alt;
       document.getElementById("lightbox-caption").hidden = true;
       lightbox.hidden = false;
@@ -1143,6 +1164,7 @@
             swatch.setAttribute("aria-label", color + (colorIsOut ? " (Out of Stock)" : ""));
             const img = document.createElement("img");
             img.src = imgSrc;
+            img.onerror = function () { this.onerror = null; this.src = "/images/logo-placeholder.svg"; };
             img.alt = color;
             img.loading = "lazy";
             swatch.appendChild(img);

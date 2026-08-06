@@ -106,6 +106,13 @@ window.SITE_CONFIG_READY = (async function() {
       // ImgBB key, same "not actually secret" exposure model as everything
       // else in this file (see the big comment at the top).
       window.SITE_CONFIG.imgbbKey = data.imgbbKey || "";
+      // Image Hosting — see Settings > Image Hosting. Both ImgBB and
+      // ImageKit's Public Key are meant to be exposed client-side (same
+      // model as everything above); ImageKit's PRIVATE key never comes
+      // anywhere near this file — see functions/api/imagekit-auth.js.
+      window.SITE_CONFIG.activeImageProvider = data.activeImageProvider || "imgbb";
+      window.SITE_CONFIG.imagekitPublicKey = data.imagekitPublicKey || "";
+      window.SITE_CONFIG.imagekitUrlEndpoint = data.imagekitUrlEndpoint || "";
       // This is the lightweight abuse-throttle key for api/telegram.js
       // (set as the TELEGRAM_NOTIFY_API_KEY env var in Vercel) — NOT a bot
       // token, safe to expose the same way the keys above are.

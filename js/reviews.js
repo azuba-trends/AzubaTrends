@@ -123,17 +123,16 @@ const Reviews = (function () {
   }
 
   async function uploadReviewImage(file) {
-    const key = window.SITE_CONFIG && window.SITE_CONFIG.imgbbKey;
-    if (!key) throw new Error("Image uploads aren't set up yet — the store hasn't added an ImgBB key.");
-    const formData = new FormData();
-    formData.append("image", file);
-    const res = await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(key)}`, {
-      method: "POST",
-      body: formData
-    });
-    const data = await res.json();
-    if (!data || !data.data || !data.data.url) throw new Error("Image upload failed. Please try again.");
-    return data.data.url;
+    const config = {
+      activeProvider: window.SITE_CONFIG && window.SITE_CONFIG.activeImageProvider,
+      imgbbKey: window.SITE_CONFIG && window.SITE_CONFIG.imgbbKey,
+      imagekitPublicKey: window.SITE_CONFIG && window.SITE_CONFIG.imagekitPublicKey,
+      imagekitUrlEndpoint: window.SITE_CONFIG && window.SITE_CONFIG.imagekitUrlEndpoint
+    };
+    if (!config.imgbbKey && !(config.imagekitPublicKey && config.imagekitUrlEndpoint)) {
+      throw new Error("Image uploads aren't set up yet — the store hasn't configured an image host.");
+    }
+    return window.AzubaImageUpload.upload(file, config);
   }
 
   // ---- "My reviews" delete tokens ------------------------------------
@@ -262,6 +261,7 @@ const Reviews = (function () {
         const img = document.createElement("img");
         img.className = "review-item__image";
         img.src = url;
+        img.onerror = function () { this.onerror = null; this.src = "/images/logo-placeholder.svg"; };
         img.loading = "lazy";
         img.alt = "Photo attached to review by " + (review.authorLabel || "a guest");
         img.addEventListener("click", () => openReviewLightbox(review, img));
@@ -298,6 +298,7 @@ const Reviews = (function () {
       return;
     }
     lightboxImg.src = imgEl.src;
+    lightboxImg.onerror = function () { this.onerror = null; this.src = "/images/logo-placeholder.svg"; };
     lightboxImg.alt = imgEl.alt;
 
     const caption = document.getElementById("lightbox-caption");

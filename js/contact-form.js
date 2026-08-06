@@ -9,7 +9,8 @@
  *      Tickets) and fires a Telegram alert. This step can never be
  *      skipped/bypassed from the browser (see firestore.rules).
  *   2. A best-effort EmailJS send straight to the store owner's inbox
- *      (SITE_CONFIG.adminEmail), using SITE_CONFIG.emailjs.contactTemplateId.
+ *      (SITE_CONFIG.adminEmail), routed through js/email-router.js's
+ *      round-robin (see Settings > Email — "contactForm" purpose).
  *      If this fails (EmailJS not configured yet, quota hit, etc.) the
  *      ticket is still safely saved by step 1 — so the submission is
  *      never lost, it just might not also land as an email that day.
@@ -52,36 +53,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (el) el.textContent = msg;
   }
 
-  async function loadEmailJsSdk() {
-    if (window.emailjs && window.__contactEmailJsReady) return;
-    await new Promise((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = "https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js";
-      script.onload = () => {
-        try {
-          window.emailjs.init({ publicKey: SITE_CONFIG.emailjs.publicKey });
-          window.__contactEmailJsReady = true;
-          resolve();
-        } catch (err) { reject(err); }
-      };
-      script.onerror = () => reject(new Error("Failed to load EmailJS SDK"));
-      document.head.appendChild(script);
-    });
-  }
-
   async function sendAdminNotificationEmail(data) {
     // Best-effort only — never allowed to make the whole submission look
     // like it failed. The ticket (step 1) already succeeded by the time
     // this runs.
     try {
       await window.SITE_CONFIG_READY;
-      const ej = SITE_CONFIG.emailjs || {};
-      if (!ej.publicKey || !ej.serviceId || !ej.contactTemplateId) {
-        console.warn("Contact form: EmailJS not fully configured (public key / service ID / contact template ID) — ticket was still saved.");
-        return;
-      }
-      await loadEmailJsSdk();
-      await window.emailjs.send(ej.serviceId, ej.contactTemplateId, {
+      await window.AzubaEmailRouter.send("contactForm", {
         from_name: data.name,
         from_email: data.email,
         subject: data.subject,

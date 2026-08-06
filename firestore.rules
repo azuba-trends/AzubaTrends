@@ -77,6 +77,22 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ImageKit's PRIVATE key (see functions/api/imagekit-auth.js) — unlike
+    // everything in settings/{settingId} above, this must never be
+    // readable by a random visitor's browser: it's the secret used to
+    // sign upload tokens, not a "publishable"-style key like ImgBB's or
+    // ImageKit's own Public Key. This exact literal path overrides the
+    // wildcard settings/{settingId} rule above for this one doc only
+    // (Firestore rules always prefer the most specific match at a given
+    // path) — admin-only read AND write via the client SDK. The Cloudflare
+    // Function that actually uses it reads via the service account
+    // (lib/firestore-rest.js), which always bypasses these rules
+    // entirely, so it can still read this regardless.
+    match /settings/imagekit_private {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
     // Orders — guests can CREATE an order (that's checkout, and checkout
     // never logs in), but only the admin can read the order list, view any
     // single order's details, update status, or delete anything. Without

@@ -5,6 +5,11 @@
  * using EmailJS (https://www.emailjs.com), a free client-side email
  * service — no backend server needed.
  *
+ * Which EmailJS ACCOUNT actually sends it is decided by js/email-router.js
+ * (round-robins across every account configured in Settings > Email for
+ * the "newOrderAdmin" / "customerOrderConfirm" purpose) — this file just
+ * builds the template params and asks the router to send them.
+ *
  * SECURITY REALITY CHECK (important — please read before deploying):
  * On a pure static site, there is NO way to hide the EmailJS public key,
  * service ID, or template ID from someone who opens DevTools — they are
@@ -34,29 +39,6 @@
  */
 
 const OrderEmail = (function () {
-  let sdkReady = false;
-
-  function loadSdk() {
-    return new Promise((resolve, reject) => {
-      if (sdkReady && window.emailjs) return resolve();
-      const script = document.createElement("script");
-      script.src =
-        "https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js";
-      script.onload = () => {
-        try {
-          window.emailjs.init({ publicKey: SITE_CONFIG.emailjs.publicKey });
-          sdkReady = true;
-          resolve();
-        } catch (err) {
-          reject(err);
-        }
-      };
-      script.onerror = () =>
-        reject(new Error("Failed to load EmailJS SDK — check network."));
-      document.head.appendChild(script);
-    });
-  }
-
   function formatItemsForEmail(items) {
     return (items || [])
       .map((item, i) => {
@@ -72,8 +54,6 @@ const OrderEmail = (function () {
    * text fields like address notes BEFORE calling this).
    */
   async function send(order) {
-    await loadSdk();
-
     // The 422 "recipients address is empty" error means EmailJS received
     // to_email as blank/undefined — fail loudly and early with a clear
     // message instead of letting EmailJS's own cryptic error surface,
@@ -83,9 +63,6 @@ const OrderEmail = (function () {
       throw new Error(
         'OrderEmail.send: SITE_CONFIG.adminEmail is missing/invalid — set "Support Email" in Admin > Settings so order emails have somewhere to go.'
       );
-    }
-    if (!SITE_CONFIG.emailjs || !SITE_CONFIG.emailjs.serviceId || !SITE_CONFIG.emailjs.templateId || !SITE_CONFIG.emailjs.publicKey) {
-      throw new Error('OrderEmail.send: EmailJS is not fully configured in Admin > Settings (public key / service ID / template ID).');
     }
 
     // Every field the order can possibly have — nothing left out, so the
@@ -121,35 +98,31 @@ const OrderEmail = (function () {
       to_email: toEmail,
     };
 
-    return window.emailjs.send(
-      SITE_CONFIG.emailjs.serviceId,
-      SITE_CONFIG.emailjs.templateId,
-      templateParams
-    ).then(async (adminResult) => {
-      // Also send a copy to the customer's own email so they have their
-      // order details in their inbox. Best-effort: if this fails (bad
-      // email typo, quota hit, etc.) it should NOT make the whole order
-      // placement look like it failed — the admin copy above already
-      // succeeded and the order itself is already saved, so we just log
-      // and swallow the error here rather than rejecting.
-      const customerEmail = order.customerEmail;
-      if (customerEmail && customerEmail.includes('@')) {
-        // Prefer a dedicated customer-facing template ("Thank you for your
-        // order!") if the admin has set one up; otherwise fall back to
-        // reusing the admin template so this still works out of the box.
-        const customerTemplateId = SITE_CONFIG.emailjs.customerTemplateId || SITE_CONFIG.emailjs.templateId;
+    const adminResult = await window.AzubaEmailRouter.send('newOrderAdmin', templateParams);
+
+    // Also send a copy to the customer's own email so they have their
+    // order details in their inbox. Best-effort: if this fails (bad
+    // email typo, quota hit, no account configured, etc.) it should NOT
+    // make the whole order placement look like it failed — the admin
+    // copy above already succeeded and the order itself is already
+    // saved, so we just log and swallow the error here.
+    const customerEmail = order.customerEmail;
+    if (customerEmail && customerEmail.includes('@')) {
+      try {
+        await window.AzubaEmailRouter.send('customerOrderConfirm', { ...templateParams, to_email: customerEmail });
+      } catch (err) {
+        // No account has a dedicated "customerOrderConfirm" template set
+        // up — reuse whatever handled the admin copy instead, same
+        // fallback the old single-account version had ("reuse the admin
+        // template for the customer copy too").
         try {
-          await window.emailjs.send(
-            SITE_CONFIG.emailjs.serviceId,
-            customerTemplateId,
-            { ...templateParams, to_email: customerEmail }
-          );
-        } catch (err) {
-          console.warn('OrderEmail.send: customer confirmation copy failed (order itself is unaffected):', err);
+          await window.AzubaEmailRouter.send('newOrderAdmin', { ...templateParams, to_email: customerEmail });
+        } catch (err2) {
+          console.warn('OrderEmail.send: customer confirmation copy failed (order itself is unaffected):', err2);
         }
       }
-      return adminResult;
-    });
+    }
+    return adminResult;
   }
 
   return { send };

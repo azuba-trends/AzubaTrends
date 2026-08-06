@@ -1495,6 +1495,8 @@
       <h2>Settings</h2>
       <div class="tab-strip">
         <button class="tab-btn active" data-settings-tab="account">Account</button>
+        <button class="tab-btn" data-settings-tab="images">Image Hosting</button>
+        <button class="tab-btn" data-settings-tab="email">Email</button>
         <button class="tab-btn" data-settings-tab="payment">Payment</button>
         <button class="tab-btn" data-settings-tab="margin">Store Margin</button>
         <button class="tab-btn" data-settings-tab="support">Support</button>
@@ -1520,10 +1522,6 @@
             <div class="form-field">
               <label>Admin Username</label>
               <input type="text" id="set-admin-username">
-            </div>
-            <div class="form-field">
-              <label>Image Upload API Key <span class="field-hint" style="display:inline;">(ImgBB — free key from api.imgbb.com)</span></label>
-              <input type="text" id="set-imgbb-key">
             </div>
             <div class="form-field full-width"><h3 style="border-bottom:1px solid #eee; padding-bottom:5px;">Invoice / Seller Details <span class="field-hint" style="display:inline; font-weight:normal;">(shown on downloadable order invoices — fill this in for your own registered business, whoever is reselling using this site)</span></h3></div>
             <div class="form-field">
@@ -1557,35 +1555,6 @@
               <label>Tax Rate %</label>
               <input type="number" id="set-tax-rate" min="0" step="0.01" value="0">
             </div>
-            <div class="form-field full-width"><h3 style="border-bottom:1px solid #eee; padding-bottom:5px;">EmailJS (order email notifications)</h3></div>
-            <div class="form-field">
-              <label>Public Key</label>
-              <input type="text" id="set-email-pub">
-            </div>
-            <div class="form-field">
-              <label>Service ID</label>
-              <input type="text" id="set-email-srv">
-            </div>
-            <div class="form-field">
-              <label>Template ID <span class="field-hint" style="display:inline;">(admin-facing "New Order Received" copy)</span></label>
-              <input type="text" id="set-email-tpl">
-            </div>
-            <div class="form-field full-width">
-              <label>Customer Order Confirmation Template ID <span class="field-hint" style="display:inline;">(optional — separate EmailJS template addressed to the CUSTOMER with "Thank you for your order!" wording. Leave blank to reuse the admin template above for the customer copy too.)</span></label>
-              <input type="text" id="set-email-customer-tpl" placeholder="e.g. template_abc456">
-            </div>
-            <div class="form-field full-width">
-              <label>Order Status Update Template ID <span class="field-hint" style="display:inline;">(optional — separate EmailJS template addressed to the CUSTOMER, not you. Leave blank to skip customer status emails.)</span></label>
-              <input type="text" id="set-email-status-tpl" placeholder="e.g. template_xyz123">
-            </div>
-            <div class="form-field full-width">
-              <label>Contact Form Template ID <span class="field-hint" style="display:inline;">(EmailJS template addressed to YOU — sent whenever a customer submits the Contact Us form. Leave blank to skip this email; the ticket is always saved in Support Tickets either way.)</span></label>
-              <input type="text" id="set-email-contact-tpl" placeholder="e.g. template_contact1">
-            </div>
-            <div class="form-field full-width">
-              <label>Support Reply Template ID <span class="field-hint" style="display:inline;">(optional — EmailJS template addressed to the CUSTOMER, used when you reply to a ticket from Support Tickets. Leave blank to skip customer reply emails.)</span></label>
-              <input type="text" id="set-email-contact-reply-tpl" placeholder="e.g. template_contactreply1">
-            </div>
             <div class="form-field full-width">
               <label>Telegram Notify API Key <span class="field-hint" style="display:inline;">(must exactly match the TELEGRAM_NOTIFY_API_KEY value you set in Vercel — see SERVICE-ACCOUNT-SETUP-GUIDE.md. This is what lets the storefront trigger a "new review" Telegram alert.)</span></label>
               <input type="text" id="set-telegram-api-key" placeholder="e.g. azuba-tg-8f3a91c2">
@@ -1595,6 +1564,66 @@
             </div>
           </form>
         </div>
+      </div>
+
+      <!-- Image Hosting tab -->
+      <div class="tab-panel" id="settings-tab-images">
+        <div class="card">
+          <h3 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:8px;">Active Image Host</h3>
+          <p class="field-hint">Product photos, review photos, and the delivery-partner logo all upload through whichever host is selected below. If it ever fails (like ImgBB's maintenance downtime), the other one — if configured — is tried automatically as a backup, with no manual switch needed.</p>
+          <div style="display:flex; gap:28px; align-items:center; margin-top:12px;">
+            <label style="display:flex; align-items:center; gap:8px; font-weight:normal; cursor:pointer;">
+              <input type="radio" name="active-image-provider" id="img-provider-imgbb" value="imgbb" style="width:auto;">
+              ImgBB
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; font-weight:normal; cursor:pointer;">
+              <input type="radio" name="active-image-provider" id="img-provider-imagekit" value="imagekit" style="width:auto;">
+              ImageKit
+            </label>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+          <h3 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:8px;">ImgBB</h3>
+          <p class="field-hint">Free key from api.imgbb.com.</p>
+          <div class="form-grid" style="margin-top:10px;">
+            <div class="form-field full-width">
+              <label>ImgBB API Key</label>
+              <input type="text" id="img-imgbb-key">
+            </div>
+          </div>
+          <button type="button" class="btn btn-primary" id="save-imgbb-btn" style="margin-top:6px;">Save ImgBB</button>
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+          <h3 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:8px;">ImageKit</h3>
+          <p class="field-hint">From your imagekit.io dashboard, under Developer Options. The Private Key is stored separately from everything else in Settings and is never sent to a visitor's browser — only this admin panel can read it back.</p>
+          <div class="form-grid" style="margin-top:10px;">
+            <div class="form-field">
+              <label>Public Key</label>
+              <input type="text" id="img-imagekit-public">
+            </div>
+            <div class="form-field">
+              <label>URL Endpoint <span class="field-hint" style="display:inline;">(e.g. https://ik.imagekit.io/yourid)</span></label>
+              <input type="text" id="img-imagekit-endpoint" placeholder="https://ik.imagekit.io/yourid">
+            </div>
+            <div class="form-field full-width">
+              <label>Private Key <span class="field-hint" style="display:inline;">(kept admin-only — never exposed publicly)</span></label>
+              <input type="password" id="img-imagekit-private" autocomplete="new-password">
+            </div>
+          </div>
+          <button type="button" class="btn btn-primary" id="save-imagekit-btn" style="margin-top:6px;">Save ImageKit</button>
+        </div>
+      </div>
+
+      <!-- Email tab -->
+      <div class="tab-panel" id="settings-tab-email">
+        <div class="card">
+          <h3 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:8px;">Email Accounts (EmailJS)</h3>
+          <p class="field-hint">Each free EmailJS account allows roughly 200 emails/month and up to 2 templates. Add as many accounts below as you need, and fill in whichever of the 5 purposes each one covers — leave the rest blank on that card. Sends automatically round-robin across every enabled account configured for a given purpose, so volume spreads out instead of one account hitting its cap.</p>
+          <button type="button" class="btn btn-primary" id="add-email-account-btn" style="margin-top:10px;">+ Add Email Account</button>
+        </div>
+        <div id="email-accounts-list"></div>
       </div>
 
       <!-- Payment tab -->
@@ -1776,6 +1805,8 @@
   </div>
 </div>
 
+<script src="js/image-upload.js"></script>
+<script src="js/email-router.js"></script>
 <script type="module" src="js/firebase-config.js"></script>
 <script src="js/security.js"></script>
 <script src="js/loading-overlay.js"></script>

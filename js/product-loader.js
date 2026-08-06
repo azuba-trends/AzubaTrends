@@ -352,7 +352,7 @@ const ProductLoader = (function () {
       <a href="${productUrl(product)}" class="product-card__link">
         <div class="product-card__media">
           ${unavailable ? `<span class="price-tag price-tag--stock">Out of Stock</span>` : ''}
-          <img src="${safeImage}" alt="${safeTitle}" loading="lazy">
+          <img src="${safeImage}" alt="${safeTitle}" loading="lazy" onerror="this.onerror=null;this.src='/images/logo-placeholder.svg';">
         </div>
       </a>
       <button type="button" class="product-card__wishlist${isSaved ? " is-active" : ""}" aria-label="Save to wishlist" aria-pressed="${isSaved ? "true" : "false"}" data-product-id="${window.Security ? window.Security.escapeHTML(String(product.id)) : product.id}">

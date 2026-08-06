@@ -1,5 +1,30 @@
 # AzubaTrends — Update Changelog
 
+## 2026-08-04 (5) — Multi-provider image hosting (ImgBB + ImageKit, with auto-failover) and multi-account round-robin email (EmailJS)
+
+**1. Image Hosting — Settings > Image Hosting (new tab).**
+Two providers can now be configured — ImgBB (unchanged) and ImageKit (new) — with a simple ON/OFF switch for which one is active. Both admin product-image uploads (`js/admin.js`) and guest review-photo uploads (`js/reviews.js`) go through a new shared `js/image-upload.js`, which also **auto-fails-over to the other provider** if the active one fails (e.g. the ImgBB maintenance-downtime issue from earlier today) — no manual switch needed when that happens.
+ImageKit's client-side upload isn't a bare-public-key model like ImgBB's — it needs a short-lived signed token, generated server-side so the account's Private Key never reaches the browser. New endpoint `functions/api/imagekit-auth.js` does this; the Private Key itself lives in a new, admin-only-readable Firestore doc (`settings/imagekit_private` — see the new `firestore.rules` entry), completely separate from the publicly-readable `settings/store_config` doc everything else lives in.
+
+**2. Email — Settings > Email (new tab), multiple EmailJS accounts with round-robin sending.**
+Replaced the single flat EmailJS config with a list of expandable/collapsible account cards (**+ Add Email Account**, each with its own Save and Remove). Every card has a Name (for your own reference only) and the same 5 purpose fields as before (New Order, Customer Confirmation, Status Update, Contact Form, Support Reply) — fill in whichever ones that particular EmailJS account covers (a free account allows ~2 templates), leave the rest blank.
+
+Sending now round-robins: for each of the 5 purposes, every ENABLED account with a template filled in for it takes turns, spreading volume across accounts instead of one hitting its free 200/month cap while others sit idle. New endpoint `functions/api/next-email-account.js` handles the fair rotation (a server-side counter is required here — different customers' browsers placing orders seconds apart have no way to coordinate "whose turn is it" on their own). New shared `js/email-router.js` (used by `checkout.html`, `contact.html`, and `admin.html`) asks that endpoint which account to use, sends via the EmailJS SDK, and automatically retries once on a different account if the send itself fails.
+
+The old single-account settings are auto-migrated (in-memory, on load) into a first "Account 1" card — nothing is lost, and it's written back to Firestore in the new shape the first time that card is saved.
+
+## 2026-08-04 (4) — Clearer error when ImgBB upload can't be reached (was showing as a misleading "CORS" error)
+
+Not a bug in any previous update — confirmed `uploadToImgBB()` was byte-for-byte unchanged by every prior session's edits. `fetch()` throwing before ImgBB ever responds (most commonly an ad-blocker/privacy extension, VPN, or network firewall blocking `api.imgbb.com`) now surfaces as its own clear message instead of the generic browser "CORS policy"/"Failed to fetch" wording, which was misleading — it's not an ImgBB-side CORS bug, since a real rejection FROM ImgBB (bad key, rate limit, etc.) already came back as a normal, separately-handled error response.
+
+## 2026-08-04 (3) — Broken product images now fall back to a placeholder instead of a broken-icon (product page gallery, cards site-wide, review photos, admin panel)
+
+Reported: some product images (gallery thumbnails, main image) were showing the browser's default broken-image icon, alongside "CORB" console warnings — meaning the browser actually got A response back for that image URL, just not valid image bytes (classic symptom of a dead/expired hosted-image link: the request succeeds but what comes back isn't an image anymore).
+
+Nothing in this codebase had an `onerror` fallback on ANY product image before this — a dead link just showed broken forever, everywhere that image was used. Added one everywhere a product/review image renders: `product.html`'s gallery (main image, thumbnails, slide-animation peer images, lightbox, color-variant swatches), `js/product-loader.js`'s `renderProductCard` (every product card site-wide — home, category, search, related products), `js/reviews.js`'s review photos, and the admin panel's product-row thumbnails + Reviews-modal review photos. A failed image now quietly swaps to `/images/logo-placeholder.svg` instead of the ugly broken icon.
+
+**This masks the symptom, not necessarily the cause** — if the specific images reported broken were uploaded through the store's imgbb integration (`js/admin.js`'s `imgbbKey` setting), the most common reason a previously-working image URL starts 404ing/CORB-ing later is that it was uploaded anonymously (not tied to a paid/registered imgbb account) and imgbb auto-expired it. If that's confirmed, the real fix is either an imgbb account with permanent storage, or re-hosting product images through a storage provider that doesn't expire them — worth checking directly in the browser's Network tab (filter: Img) for the exact failing URL and its response.
+
 ## 2026-08-04 (2) — Fixed: deleting a review didn't update the product card's ★ rating/count
 
 **Root cause:** `functions/api/delete-review.js` decremented the product's `ratingSum`/`ratingCount` (what every product card's star rating is computed from) as an un-awaited "fire and forget" write — the very last thing the function did before returning. On Cloudflare Pages Functions, a promise like that can get cut off mid-write the instant the response is sent back, unless it's either `await`ed or handed to `context.waitUntil()`. That's why the count/rating kept showing on the card even after the review itself was successfully deleted — the decrement usually just never actually reached Firestore.
