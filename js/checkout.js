@@ -403,7 +403,8 @@
     if (!parsed || !parsed.code) { appliedCoupon = null; return; }
 
     const subtotal = getCartTotal();
-    const result = await window.Coupon.validate(parsed.code, subtotal);
+    const cartItems = window.Cart ? window.Cart.getItems() : [];
+    const result = await window.Coupon.validate(parsed.code, subtotal, cartItems);
     appliedCoupon = result.valid ? { code: parsed.code, discount: result.discount } : null;
     if (!result.valid) sessionStorage.removeItem('applied_coupon');
   }

@@ -1450,6 +1450,123 @@ setTimeout(() => {
   }
 
   // ================================================================
+  // Generic checklist picker (search + "Select All" + multi-select),
+  // single-column sibling of createAvailabilityPicker above. Used by
+  // the Coupon form's "Applicable Brands" / "Applicable Products"
+  // sections. Supports two-level items (parent + nested variants,
+  // e.g. products with size/color variants) via `children` on an
+  // item — pass a flat list (no `children`) for a plain list like
+  // brands.
+  //
+  // itemsFn() must return: [{ id, label, children?: [{ id, label }] }]
+  // Selection is stored as a flat Set of ids (parent ids and/or
+  // child ids can both be present). Checking a parent does NOT
+  // auto-add its children's ids to the set — the *meaning* of a
+  // selected parent id is "this whole product, incl. every variant",
+  // resolved by the caller/storefront, not by forcing every child id
+  // into storage too.
+  // ================================================================
+  function createChecklistPicker(mountEl, { itemsFn, initialSelected, onChange, searchPlaceholder, emptyText, countNounSingular, countNounPlural }) {
+    const notifyChange = typeof onChange === "function" ? onChange : () => {};
+    const state = {
+      selected: new Set(initialSelected || []),
+      query: ""
+    };
+
+    mountEl.innerHTML = `
+      <div class="checklist-picker">
+        <div class="checklist-picker__toolbar">
+          <input type="text" class="checklist-picker__search cp-search" placeholder="${esc(searchPlaceholder || "Search...")}">
+          <button type="button" class="btn btn-outline cp-select-all-btn" style="padding:5px 10px; font-size:0.78rem;">Select All</button>
+          <button type="button" class="btn btn-outline cp-clear-btn" style="padding:5px 10px; font-size:0.78rem;">Clear</button>
+        </div>
+        <div class="checklist-picker__count cp-count"></div>
+        <div class="checklist-picker__list cp-list"></div>
+      </div>`;
+
+    const searchEl = mountEl.querySelector(".cp-search");
+    const selectAllBtn = mountEl.querySelector(".cp-select-all-btn");
+    const clearBtn = mountEl.querySelector(".cp-clear-btn");
+    const countEl = mountEl.querySelector(".cp-count");
+    const listEl = mountEl.querySelector(".cp-list");
+
+    function matches(label, q) { return !q || label.toLowerCase().includes(q); }
+
+    function render() {
+      const items = itemsFn() || [];
+      const q = state.query.trim().toLowerCase();
+
+      if (items.length === 0) {
+        listEl.innerHTML = `<div class="checklist-picker__empty">${esc(emptyText || "Nothing to select yet.")}</div>`;
+      } else {
+        let html = "";
+        items.forEach((item) => {
+          const children = item.children || [];
+          const selfMatch = matches(item.label, q);
+          const childMatches = children.filter((c) => matches(c.label, q));
+          const rowVisible = !q || selfMatch || childMatches.length > 0;
+          if (!rowVisible) return;
+
+          const parentSelected = state.selected.has(item.id);
+          html += `<label data-id="${esc(item.id)}" class="cp-row cp-parent-row">
+            <input type="checkbox" class="cp-cb" data-id="${esc(item.id)}" ${parentSelected ? "checked" : ""}>
+            <span>${esc(item.label)}${children.length ? ` <span style="color:var(--color-ink-soft); font-weight:normal;">(${children.length} variant${children.length === 1 ? "" : "s"})</span>` : ""}</span>
+          </label>`;
+
+          const childrenToShow = q ? childMatches : children;
+          childrenToShow.forEach((child) => {
+            const childSelected = state.selected.has(child.id);
+            const covered = parentSelected; // whole parent already selected — this variant is implicitly included
+            html += `<label data-id="${esc(child.id)}" class="cp-row cp-variant-row${covered ? " cp-covered-by-parent" : ""}">
+              <input type="checkbox" class="cp-cb" data-id="${esc(child.id)}" ${childSelected || covered ? "checked" : ""} ${covered ? "disabled title=\"Already covered — the parent product is selected\"" : ""}>
+              <span>- ${esc(child.label)}${covered ? " <span style=\"color:var(--color-ink-soft);\">(covered by parent)</span>" : ""}</span>
+            </label>`;
+          });
+        });
+        listEl.innerHTML = html || `<div class="checklist-picker__empty">No matches for "${esc(state.query)}".</div>`;
+      }
+
+      listEl.querySelectorAll(".cp-cb:not(:disabled)").forEach((cb) => {
+        cb.addEventListener("change", () => {
+          const id = cb.dataset.id;
+          if (cb.checked) state.selected.add(id); else state.selected.delete(id);
+          render();
+          notifyChange();
+        });
+      });
+
+      const noun = state.selected.size === 1 ? (countNounSingular || "item") : (countNounPlural || "items");
+      countEl.textContent = state.selected.size === 0
+        ? "Nothing selected — applies to all."
+        : `${state.selected.size} ${noun} selected.`;
+    }
+
+    searchEl.addEventListener("input", () => { state.query = searchEl.value; render(); });
+    selectAllBtn.addEventListener("click", () => {
+      (itemsFn() || []).forEach((item) => {
+        state.selected.add(item.id);
+        (item.children || []).forEach((c) => state.selected.add(c.id));
+      });
+      render();
+      notifyChange();
+    });
+    clearBtn.addEventListener("click", () => {
+      state.selected.clear();
+      render();
+      notifyChange();
+    });
+
+    render();
+
+    return {
+      getSelected() { return Array.from(state.selected); },
+      setSelected(ids) { state.selected = new Set(ids || []); render(); },
+      refresh() { render(); },
+      destroy() { mountEl.innerHTML = ""; }
+    };
+  }
+
+  // ================================================================
   // Generic auto-save draft helper for simpler forms (Brand, Category)
   // — same localStorage pattern/safety as the Product form's bespoke
   // version above, minus variant boxes / rich-text editors. Returns
@@ -1578,6 +1695,7 @@ setTimeout(() => {
     tbody.querySelectorAll(".del-brand-btn").forEach((b) => b.addEventListener("click", () => deleteBrand(b.dataset.id)));
 
     populateBrandDropdown();
+    if (couponBrandPicker) couponBrandPicker.refresh(); // keep Coupon form's "Applicable Brands" list in sync if it's open
   }
 
   function editBrand(id) {
@@ -1681,6 +1799,58 @@ setTimeout(() => {
   // COUPONS
   // ================================================================
   let couponsList = [];
+  let couponBrandPicker = null;
+  let couponProductPicker = null;
+
+  // Builds the { id, label, children } list the checklist picker needs
+  // from productsList — top-level (non-variant) products as parents,
+  // their variants nested underneath, labelled by color/size so the
+  // admin can tell them apart (e.g. "Red / M").
+  function couponProductPickerItems() {
+    const topLevel = productsList.filter((p) => !p.isVariant);
+    return topLevel
+      .map((p) => {
+        const children = productsList
+          .filter((c) => c.isVariant && c.parentId === p.id)
+          .map((c) => ({
+            id: c.id,
+            label: [c.color, c.size].filter(Boolean).join(" / ") || c.title || "Variant"
+          }))
+          .sort((a, b) => a.label.localeCompare(b.label));
+        return { id: p.id, label: p.title || "(untitled product)", children };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  function couponBrandPickerItems() {
+    return brandsList
+      .map((b) => ({ id: b.id, label: b.name || "(unnamed brand)" }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  function mountCouponBrandPicker(initialSelected) {
+    if (couponBrandPicker) couponBrandPicker.destroy();
+    couponBrandPicker = createChecklistPicker(document.getElementById("coupon-brand-mount"), {
+      itemsFn: couponBrandPickerItems,
+      initialSelected,
+      searchPlaceholder: "Search brands...",
+      emptyText: "No brands yet — add one under Brands first.",
+      countNounSingular: "brand",
+      countNounPlural: "brands"
+    });
+  }
+
+  function mountCouponProductPicker(initialSelected) {
+    if (couponProductPicker) couponProductPicker.destroy();
+    couponProductPicker = createChecklistPicker(document.getElementById("coupon-product-mount"), {
+      itemsFn: couponProductPickerItems,
+      initialSelected,
+      searchPlaceholder: "Search products...",
+      emptyText: "No products yet — add one under Products first.",
+      countNounSingular: "product/variant",
+      countNounPlural: "products/variants"
+    });
+  }
 
   document.getElementById("coupon-code").addEventListener("input", (e) => {
     // Force uppercase as the shopper types, since codes are matched
@@ -1705,6 +1875,8 @@ setTimeout(() => {
     document.getElementById("coupon-form-title").textContent = "Add New Coupon";
     document.getElementById("coupon-save-status").textContent = "";
     refreshCouponValueLabels();
+    mountCouponBrandPicker([]);
+    mountCouponProductPicker([]);
   }
 
   let unsubCoupons = null;
@@ -1728,7 +1900,7 @@ setTimeout(() => {
     const tbody = document.getElementById("coupons-table-body");
     tbody.innerHTML = "";
     if (couponsList.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--color-muted);">No coupons yet — click "+ Add Coupon" to create one.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--color-muted);">No coupons yet — click "+ Add Coupon" to create one.</td></tr>`;
       return;
     }
     couponsList.forEach((c) => {
@@ -1737,6 +1909,12 @@ setTimeout(() => {
       const statusLabel = expired ? "EXPIRED" : (c.active ? "ACTIVE" : "INACTIVE");
       const statusColor = expired ? "var(--color-danger)" : (c.active ? "var(--color-success)" : "var(--color-muted)");
       const valueDisplay = c.type === "percentage" ? `${c.value}%` : fmtRupee(c.value);
+      const brandCount = Array.isArray(c.brandIds) ? c.brandIds.length : 0;
+      const productCount = Array.isArray(c.productIds) ? c.productIds.length : 0;
+      const scopeParts = [];
+      if (brandCount > 0) scopeParts.push(`${brandCount} brand${brandCount === 1 ? "" : "s"}`);
+      if (productCount > 0) scopeParts.push(`${productCount} product${productCount === 1 ? "" : "s"}/variant${productCount === 1 ? "" : "s"}`);
+      const scopeDisplay = scopeParts.length ? esc(scopeParts.join(", ")) : `<span style="color:var(--color-ink-soft);">All products</span>`;
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td><input type="checkbox" class="row-select" data-id="${c.id}"></td>
@@ -1745,6 +1923,7 @@ setTimeout(() => {
         <td>${esc(valueDisplay)}</td>
         <td>${fmtRupee(c.minOrderValue || 0)}</td>
         <td>${c.type === "percentage" && c.maxDiscount ? fmtRupee(c.maxDiscount) : "—"}</td>
+        <td style="font-size:0.8rem;">${scopeDisplay}</td>
         <td>${c.expiryDate ? esc(c.expiryDate) : "No expiry"}</td>
         <td style="color:${statusColor}; font-weight:bold;">${statusLabel}</td>
         <td>
@@ -1771,6 +1950,8 @@ setTimeout(() => {
     document.getElementById("coupon-expiry").value = c.expiryDate || "";
     document.getElementById("coupon-active").checked = c.active !== false;
     refreshCouponValueLabels();
+    mountCouponBrandPicker(c.brandIds || []);
+    mountCouponProductPicker(c.productIds || []);
     document.getElementById("coupon-form-title").textContent = "Edit Coupon";
     goToSection("store-add-coupon");
   }
@@ -1812,6 +1993,11 @@ setTimeout(() => {
         minOrderValue: Number(document.getElementById("coupon-minorder").value) || 0,
         expiryDate: document.getElementById("coupon-expiry").value || "",
         active: document.getElementById("coupon-active").checked,
+        // Empty array on either = no restriction (applies to every
+        // brand / every product). A product id here can be a parent
+        // product (covers all its variants) or an individual variant id.
+        brandIds: couponBrandPicker ? couponBrandPicker.getSelected() : [],
+        productIds: couponProductPicker ? couponProductPicker.getSelected() : [],
         updatedAt: new Date().toISOString()
       };
 
@@ -2394,6 +2580,8 @@ setTimeout(() => {
         b.textContent = original; b.disabled = false;
       }
     }));
+
+    if (couponProductPicker) couponProductPicker.refresh(); // keep Coupon form's "Applicable Products" list in sync if it's open
   }
 
   // Same field-sync as the "🔄 Auto Sync from Parent" button inside Edit

@@ -321,11 +321,15 @@ export async function onRequestPost(context) {
       }
     }
 
-    // 2. Re-validate the coupon server-side, same rules coupon.js uses.
-    // (Coupons collection is small and this mirrors the original's
-    // case-insensitive-code matching, which a simple `where` equality
-    // filter can't do — so this one's still a full-collection read, same
-    // as before. Only the products read had the efficiency problem.)
+    // 2. Re-validate the coupon server-side, same rules coupon.js uses —
+    // including the optional brand/product restriction set in Admin ->
+    // Add Coupon -> "Applicable Brands" / "Applicable Products". This is
+    // the AUTHORITATIVE check: the client (cart.js/checkout.js) already
+    // does the same thing for a good UX, but a request straight to this
+    // API must never trust a discount amount it sent — it's recomputed
+    // here from scratch, restricted to only the items that actually
+    // qualify, using the same productsById docs already fetched above
+    // (zero extra reads).
     let discount = 0;
     let verifiedCouponCode = null;
     if (couponCode) {
@@ -337,8 +341,27 @@ export async function onRequestPost(context) {
       if (match && match.active && (!match.expiryDate || match.expiryDate >= todayString())) {
         const minOrder = Number(match.minOrderValue) || 0;
         if (subtotal >= minOrder) {
-          discount = computeCouponDiscount(match, subtotal);
-          verifiedCouponCode = match.code;
+          const brandIds = Array.isArray(match.brandIds) ? match.brandIds : [];
+          const productScopeIds = Array.isArray(match.productIds) ? match.productIds : [];
+          let eligibleSubtotal = subtotal;
+          if (brandIds.length > 0 || productScopeIds.length > 0) {
+            eligibleSubtotal = 0;
+            for (const vItem of verifiedItems) {
+              const product = productsById[vItem.productId];
+              const brandOk = brandIds.length === 0 || (product && brandIds.includes(product.brandId));
+              const productOk = productScopeIds.length === 0
+                || productScopeIds.includes(vItem.productId)
+                || (product && product.parentId && productScopeIds.includes(product.parentId));
+              if (brandOk && productOk) eligibleSubtotal += vItem.price * vItem.quantity;
+            }
+          }
+          if (eligibleSubtotal > 0) {
+            discount = computeCouponDiscount(match, eligibleSubtotal);
+            verifiedCouponCode = match.code;
+          }
+          // eligibleSubtotal === 0 -> coupon doesn't apply to anything in
+          // this cart; silently dropped, same as any other disqualified
+          // coupon (see comment below).
         }
       }
       // If it no longer qualifies, it's silently dropped rather than

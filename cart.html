@@ -310,7 +310,7 @@
         let parsed;
         try { parsed = JSON.parse(saved); } catch (err) { parsed = null; }
         if (parsed && parsed.code) {
-          window.Coupon.validate(parsed.code, subtotal).then((result) => {
+          window.Coupon.validate(parsed.code, subtotal, window.Cart.getItems()).then((result) => {
             if (result.valid) {
               appliedDiscount = result.discount;
               msg.textContent = result.message;
@@ -343,7 +343,7 @@
       const msg = document.getElementById("coupon-msg");
 
       if(!code) return;
-      const result = await window.Coupon.validate(code, subtotal);
+      const result = await window.Coupon.validate(code, subtotal, window.Cart.getItems());
       
       if(result.valid) {
         appliedDiscount = result.discount;

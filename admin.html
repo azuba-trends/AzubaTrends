@@ -963,7 +963,7 @@
             <thead>
               <tr>
                 <th><input type="checkbox" id="select-all-coupons"></th>
-                <th>Code</th><th>Type</th><th>Value</th><th>Min Order</th><th>Max Discount</th><th>Expiry</th><th>Status</th><th>Actions</th>
+                <th>Code</th><th>Type</th><th>Value</th><th>Min Order</th><th>Max Discount</th><th>Scope</th><th>Expiry</th><th>Status</th><th>Actions</th>
               </tr>
             </thead>
             <tbody id="coupons-table-body"></tbody>
@@ -1014,6 +1014,16 @@
               <input type="checkbox" id="coupon-active" style="width:auto;" checked>
               Active (uncheck to disable without deleting)
             </label>
+          </div>
+
+          <div class="form-field full-width">
+            <label>Applicable Brands <span class="field-hint" style="display:inline;">(leave empty / nothing selected = valid on every brand. If you select brands, this coupon will only discount products belonging to those brands — other brands' products stay unaffected.)</span></label>
+            <div id="coupon-brand-mount"></div>
+          </div>
+
+          <div class="form-field full-width">
+            <label>Applicable Products <span class="field-hint" style="display:inline;">(leave empty / nothing selected = valid on every product. Selecting a parent product covers all of its variants automatically; select individual variants below it — marked with "-" — to limit the coupon to just those variants.)</span></label>
+            <div id="coupon-product-mount"></div>
           </div>
 
           <div class="form-field full-width" style="display: flex; gap: 10px; margin-top: 10px;">

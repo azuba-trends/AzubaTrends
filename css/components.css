@@ -2222,6 +2222,65 @@ html {
 .ap-empty-note { padding: 10px 12px; font-size: 0.8rem; color: var(--color-muted); }
 
 /* ============================================================
+   Admin: generic checklist picker (search + select all + multi
+   select) — used by the Coupon form's Applicable Brands and
+   Applicable Products sections. Single-column version of the
+   availability-picker widget above, with optional nested rows
+   for product variants.
+   ============================================================ */
+.checklist-picker {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--space-2);
+  max-width: 480px;
+}
+.checklist-picker__toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px 8px;
+  flex-wrap: wrap;
+}
+.checklist-picker__search {
+  flex: 1 1 160px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+.checklist-picker__count {
+  font-size: 0.78rem;
+  color: var(--color-ink-soft);
+  padding: 0 12px 8px;
+}
+.checklist-picker__list {
+  overflow-y: auto;
+  max-height: 260px;
+  padding: 4px 12px 12px;
+  border-top: 1px solid var(--color-border);
+}
+.checklist-picker__list label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 2px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.checklist-picker__list label.is-hidden { display: none; }
+.checklist-picker__list label.cp-variant-row {
+  padding-left: 26px;
+  font-size: 0.8rem;
+  color: var(--color-ink-soft);
+}
+.checklist-picker__list label.cp-covered-by-parent { opacity: 0.55; }
+.checklist-picker__list label.cp-covered-by-parent input { pointer-events: none; }
+.checklist-picker__empty { padding: 10px 12px; font-size: 0.8rem; color: var(--color-muted); }
+
+/* ============================================================
    Storefront: product-level availability status (above Add to
    Cart / Buy Now) + a compact 3-step progress bar for the
    Cart -> Checkout -> Payment flow.
