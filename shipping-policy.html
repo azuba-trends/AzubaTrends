@@ -16,19 +16,61 @@
      canvas, making everything except fixed elements render too small. -->
 <script>
 (function () {
+  // PERF NOTE (forced reflow fix): the previous version of this script
+  // interleaved reads (screen.width / clientWidth) and writes (meta
+  // attribute, html.style.zoom, scrollTo) — each read after a write
+  // forced the browser to synchronously recompute layout before it could
+  // answer, and nudge() even dispatched a synthetic 'resize' event
+  // *synchronously*, which re-entered fix() (via the resize listener)
+  // mid-write. That's the classic read→write→read→write layout-thrashing
+  // pattern. Fixed by: (1) reading both widths once per pass instead of
+  // re-reading them in every helper, (2) batching all writes (meta
+  // rewrite, zoom toggle, scroll nudge) into requestAnimationFrame
+  // callbacks so they land together in one layout pass instead of being
+  // interleaved with reads, (3) a reentrancy guard so the deferred
+  // resize dispatch can't recursively kick off another read/write cycle
+  // while one is still in flight, and (4) coalescing every trigger
+  // through a single rAF-scheduled call so bursts of near-simultaneous
+  // events run the check once, not once per event.
+  //
+  // CORRECTNESS FIX (false-positive zoom fix — spontaneous zoom on
+  // devices that didn't actually have the OEM bug): the old heuristic
+  // fired on ANY mismatch over a flat 4px between screen.width and
+  // document.documentElement.clientWidth, and re-checked on every
+  // 'resize'/'visibilitychange'/visualViewport 'resize' event. That's
+  // far too sensitive — a 4px gap happens constantly from ordinary,
+  // non-buggy causes: Android "Display size" scaling, DPI/subpixel
+  // rounding, the status/nav bar showing or hiding, the on-screen
+  // keyboard opening (which fires a visualViewport resize), or the
+  // user's own deliberate pinch-zoom. Every one of those was getting
+  // "corrected" by forcing a zoom toggle, which is the spontaneous-zoom
+  // bug itself. Fixed by:
+  //   1. A much wider, size-relative threshold — real OEM phantom-canvas
+  //      bugs show up as a huge mismatch (e.g. a 980px desktop-mode
+  //      layout on a 360-412px real screen), not a few px. Requiring the
+  //      gap to be both >24px AND >8% of the real width keeps that catch
+  //      while ignoring ordinary rounding/DPI noise.
+  //   2. Skips entirely if the user has actually pinch-zoomed
+  //      (visualViewport.scale away from 1) — that's intentional user
+  //      input, not a layout bug, and must never be fought/reset.
+  //   3. Only re-runs the check on events that correspond to a genuine
+  //      new layout being computed (first paint, page restored from
+  //      bfcache, orientation change) — no longer re-triggers on plain
+  //      'resize' or visualViewport 'resize', which are exactly the
+  //      events fired by the keyboard opening or the browser's toolbar
+  //      auto-hiding on scroll, not by the OEM bug.
   function realWidth() {
     return (window.visualViewport && window.visualViewport.width) || window.screen.width || window.innerWidth;
   }
   function layoutWidth() {
     return document.documentElement.clientWidth || window.innerWidth;
   }
-  function mismatched() {
-    var real = Math.round(realWidth());
-    var layout = Math.round(layoutWidth());
-    return real && layout && Math.abs(layout - real) > 4;
+  function userHasZoomed() {
+    // A visualViewport.scale meaningfully away from 1 means the user is
+    // mid pinch-zoom (or has zoomed in) — respect that, don't "fix" it.
+    return !!(window.visualViewport && Math.abs(window.visualViewport.scale - 1) > 0.05);
   }
-  function rewriteMeta() {
-    var real = Math.round(realWidth());
+  function rewriteMeta(real) {
     var meta = document.querySelector('meta[name="viewport"]');
     if (!meta) {
       meta = document.createElement('meta');
@@ -47,43 +89,79 @@
   // actual pinch/zoom gesture — a JS content change doesn't trigger that
   // recompute. A tiny CSS zoom toggle forces the same kind of recompute
   // these engines do on a real pinch, without needing real touch input.
-  function nudge() {
+  // All writes below are grouped into rAF callbacks (one layout pass),
+  // instead of the previous write→read(scrollTo)→write→(sync dispatch)
+  // sequence.
+  var fixing = false;
+  function nudge(real, onDone) {
     var html = document.documentElement;
+    rewriteMeta(real);
     html.style.zoom = '99.9%';
     requestAnimationFrame(function () {
       html.style.zoom = '100%';
+      try { window.scrollTo(0, 1); window.scrollTo(0, 0); } catch (e) {}
       requestAnimationFrame(function () {
         html.style.zoom = '';
+        // Deferred (not synchronous) so any listener it wakes up —
+        // including this script's own, below — runs as a fresh task
+        // instead of re-entering mid-write.
+        try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+        onDone();
       });
     });
-    try { window.scrollTo(0, 1); window.scrollTo(0, 0); } catch (e) {}
-    try { window.dispatchEvent(new Event('resize')); } catch (e) {}
   }
   var attempts = 0;
-  function fix() {
-    if (!mismatched()) return;
-    rewriteMeta();
-    nudge();
+  function runCheck() {
+    if (fixing) return; // reentrancy guard
+    if (userHasZoomed()) return; // never fight the user's own pinch-zoom
+    // Single read pass: grab both widths once and reuse them, instead of
+    // each helper re-reading clientWidth/screen.width on its own.
+    var real = Math.round(realWidth());
+    var layout = Math.round(layoutWidth());
+    if (!real || !layout) return;
+    var gap = Math.abs(layout - real);
+    // Wide, size-relative threshold — see CORRECTNESS FIX note above.
+    // Ordinary DPI/rounding/status-bar noise stays well under this;
+    // a real OEM phantom-canvas bug (e.g. 980 vs 360) blows past it.
+    var threshold = Math.max(24, real * 0.08);
+    if (gap <= threshold) return;
+    fixing = true;
+    nudge(real, function () {
+      fixing = false;
+    });
     attempts++;
     // Retry with backoff — on a very slow connection the page keeps
     // reflowing as images/content arrive, which can re-trigger the bug
     // after the first fix looked successful.
     if (attempts < 8) {
-      setTimeout(function () { if (mismatched()) fix(); }, attempts * 250);
+      setTimeout(scheduleCheck, attempts * 250);
     }
   }
-  fix();
-  document.addEventListener('DOMContentLoaded', fix);
-  window.addEventListener('load', fix);
-  window.addEventListener('pageshow', fix);
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) fix(); });
-  window.addEventListener('orientationchange', function () { setTimeout(fix, 200); });
-  window.addEventListener('resize', fix);
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', fix);
+  // Coalesces bursts of near-simultaneous triggers into a single check
+  // per animation frame rather than one per event.
+  var rafId = null;
+  function scheduleCheck() {
+    if (rafId) return;
+    rafId = requestAnimationFrame(function () {
+      rafId = null;
+      runCheck();
+    });
   }
+  scheduleCheck();
+  document.addEventListener('DOMContentLoaded', scheduleCheck);
+  window.addEventListener('load', scheduleCheck);
+  window.addEventListener('pageshow', scheduleCheck);
+  // NOTE: intentionally NOT listening for plain 'resize', visualViewport
+  // 'resize', or 'visibilitychange' anymore — those fire constantly for
+  // legitimate, non-buggy reasons (keyboard open/close, browser toolbar
+  // auto-hide on scroll, tab switch) and were the main source of the
+  // spontaneous re-zoom reported on real devices. Orientation change is
+  // kept, since a rotation is a genuine new layout that's worth
+  // rechecking, same as the initial-load triggers above.
+  window.addEventListener('orientationchange', function () { setTimeout(scheduleCheck, 200); });
 })();
 </script>
+
 <link rel="icon" type="image/svg+xml" href="/images/favicon.svg">
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="/images/icons/favicon-32.png">
@@ -113,8 +191,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/main.css?v=20260806c">
-<link rel="stylesheet" href="css/components.css?v=20260806c">
+<link rel="stylesheet" href="css/main.min.css?v=20260808">
+<link rel="stylesheet" href="css/components.min.css?v=20260808">
 </head>
 <body>
 
@@ -203,17 +281,16 @@
 
 <div id="footer-mount"></div>
 
-<script src="js/site-config.js"></script>
-<script src="js/tracking.js"></script>
-<script src="js/security.js"></script>
-<script src="js/zoom-debug.js"></script>
-<script src="js/layout.js"></script>
-<script src="js/loading-overlay.js"></script>
-<script src="js/a2hs.js"></script>
-<script src="js/cart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
-<script src="js/product-loader.js"></script>
-<script src="js/search.js"></script>
+<script defer src="js/site-config.min.js?v=20260808"></script>
+<script defer src="js/tracking.min.js?v=20260808"></script>
+<script defer src="js/security.min.js?v=20260808"></script>
+<script defer src="js/layout.min.js?v=20260808"></script>
+<script defer src="js/loading-overlay.min.js?v=20260808"></script>
+<script defer src="js/a2hs.min.js?v=20260808"></script>
+<script defer src="js/cart.min.js?v=20260808"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/fuse.js@7/dist/fuse.min.js"></script>
+<script defer src="js/product-loader.min.js?v=20260808"></script>
+<script defer src="js/search.min.js?v=20260808"></script>
 <script>
   window.addEventListener("layout:ready", () => ProductLoader.initHeader());
   document.addEventListener("DOMContentLoaded", () => {

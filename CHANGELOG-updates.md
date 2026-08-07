@@ -1,5 +1,170 @@
 # AzubaTrends — Update Changelog
 
+## 2026-08-08 (3) — CSP fix, zoom false-positive fix, footer/delivery-checker overflow fix
+
+Four items confirmed pending in the previous verification pass — all fixed now.
+
+**1. CSP — `apis.google.com` blocked (console error on every page).**
+Added `https://apis.google.com`, `https://accounts.google.com`,
+`https://www.google.com` to `script-src` + `connect-src`, and
+`https://*.firebaseapp.com` + `https://accounts.google.com` +
+`https://apis.google.com` to `frame-src` in `_headers`. Root cause
+unchanged from the earlier diagnosis: the site doesn't use Google
+Sign-In — `apis.google.com/js/api.js?onload=__iframefcb...` is the
+AdSense/Ad Manager "Funding Choices" consent SDK's internal helper
+script, loaded from a domain that was never whitelisted even though its
+parent domains (`fundingchoicesmessages.google.com`,
+`pagead2.googlesyndication.com`) already were.
+
+**2. Zoom bug (spontaneous zoom on Android, all devices) — the actual
+false-positive trigger, not just its forced-reflow performance cost.**
+`AZUBA-VIEWPORT-FIX` (top of every page's `<head>`) previously fired on
+*any* mismatch over a flat 4px between `screen.width` and
+`document.documentElement.clientWidth`, and re-checked on every
+`resize`/`visibilitychange`/visualViewport `resize` event. That's far too
+sensitive — a few px gap happens constantly from ordinary, non-buggy
+causes (Android "Display size" scaling, DPI/subpixel rounding, the
+status/nav bar hiding, the keyboard opening, or the user's own pinch-zoom)
+and every one of those was getting "corrected" by forcing a zoom toggle —
+which *is* the spontaneous-zoom bug. Fixed:
+- Threshold is now size-relative: `max(24px, 8% of real width)` instead
+  of a flat 4px — a genuine OEM phantom-canvas bug (e.g. a 980px
+  desktop-mode layout on a 360-412px real screen) is still hundreds of px
+  off and gets caught easily; ordinary rounding/DPI noise (a handful of
+  px) no longer triggers anything.
+- Skips entirely if `visualViewport.scale` is away from `1` — the user is
+  mid pinch-zoom or has deliberately zoomed in; that's never something
+  this script should fight or reset.
+- No longer re-runs on plain `resize`, visualViewport `resize`, or
+  `visibilitychange` — those are exactly the events fired by the keyboard
+  opening or the browser toolbar auto-hiding on scroll, not by the actual
+  OEM layout bug (which only manifests at initial parse/paint time or on
+  a real rotation). Kept: `DOMContentLoaded`, `load`, `pageshow`,
+  `orientationchange` — genuine new-layout moments.
+- The forced-reflow performance fix from the previous session (batched
+  rAF writes, reentrancy guard, single read-per-pass) is untouched —
+  this only changes *when/whether* it fires, not how it fires.
+
+**3. Delivery Check button overflowing on narrow screens (`product.html`).**
+`.delivery-checker__row input` had `flex: 1` but no `min-width: 0` — the
+classic flexbox trap where a flex item defaults to `min-width: auto`
+(its own content width) as its shrink floor, so on narrow screens it
+couldn't shrink enough and pushed the Check button past the edge. Added
+`min-width: 0`.
+
+**4. Footer Subscribe button overflowing on narrow screens.**
+The `<input>` inside `.site-footer__subscribe-form` already had
+`min-width: 0` (pre-existing, not a gap). The gap was one level up:
+`.site-footer__subscribe` itself — a grid item of
+`.site-footer__inner--full` — had no `min-width: 0` of its own, so CSS
+Grid's default `min-width: auto` on grid items could still force that
+column wider than its track. Added `.site-footer__subscribe { min-width:
+0; }` as a defensive fix at the grid level, on top of the existing
+flex-level fix.
+
+**Files changed:** `_headers` (CSP), all 20 HTML pages (viewport-fix
+script — identical block, byte-for-byte, replaced everywhere),
+`css/components.css` (both `min-width: 0` additions), plus
+`css/components.min.css` regenerated via `npm run build` to pick up the
+CSS change.
+
+---
+
+## 2026-08-08 (2) — PageSpeed Fix #7: Long cache lifetimes for css/js/images
+
+**Root cause:** `_headers` had no `Cache-Control` rules for static assets at
+all — every visit re-downloaded `css/*`, `js/*`, and `images/*` from
+scratch (or relied on Cloudflare's default, short edge cache), instead of
+the browser reusing its own local copy on repeat visits.
+
+**Fix — added to `_headers`:**
+- `/css/*` and `/js/*` → `Cache-Control: public, max-age=31536000, immutable`
+  (1 year). This is safe **because every reference to these files already
+  carries a `?v=20260808` query string** (css already had this from an
+  earlier fix; **added the same `?v=20260808` to every first-party
+  `<script src="js/...">` tag across all 20 HTML pages as part of this
+  fix**, since js had none before). Bump that version string site-wide
+  whenever `npm run build` ships real content changes, and every cache —
+  browser or edge — treats it as a new URL immediately, no stale-asset
+  wait.
+- `/images/*` → `Cache-Control: public, max-age=2592000` (30 days,
+  deliberately **not** `immutable` and **not** 1 year). These files
+  (favicon/icons, hero-banner, logo-placeholder, animation GIFs) aren't
+  query-string versioned, and this exact scenario already happened once —
+  the 2026-07-22 favicon/icon regeneration changed these files' content
+  in place with no rename. A year-long immutable cache would've meant
+  real visitors stuck seeing the old favicon for up to a year. 30 days
+  still clears Lighthouse's "efficient cache lifetimes" audit while
+  keeping that risk bounded. Worth adding proper `?v=`/content-hash
+  versioning to `/images/*` later so this can move to the same 1-year
+  immutable rule as css/js.
+
+**Duplicated JS (~2 KiB) from the original report:** scanned every pair of
+first-party `js/*.js` files for shared code blocks — found nothing
+significant (no near-duplicate function bodies, no copy-pasted utility
+code). Whatever Lighthouse flagged is likely a small piece of vendor code
+loaded twice on the same page (e.g. a shared Firebase SDK chunk pulled in
+by two separate imports) rather than anything in this codebase's own
+files — not worth chasing for ~2 KiB. Left as-is, matching the original
+report's own "low priority" call on this one.
+
+---
+
+## 2026-08-08 — PageSpeed Fix #6: Build-time JS/CSS minification pipeline + unused-CSS purge
+
+**Root cause:** `js/*.js` (31 files, ~589 KiB combined) were served completely
+unminified — `main.css`/`components.css` already had hand-run `.min.css`
+siblings from an earlier fix, but nothing regenerated them automatically, and
+neither stylesheet had ever had dead/unused rules stripped out.
+
+**Fix — new `scripts/build.mjs` (run via `npm run build`):**
+1. **JS minify:** every `js/*.js` → `js/*.min.js` via esbuild. `admin.js` and
+   `firebase-config.js` (the only two real ES modules, loaded with
+   `<script type="module">`) are minified in `esm` format; every other file
+   is minified with `format` left unset and `treeShaking: false` **on
+   purpose** — several of these classic scripts (`page-loader.js`,
+   `category-chips.js`, `cart-button-ui.js`, etc.) declare a top-level
+   `const Foo = ...` that other inline `<script>` blocks reference as an
+   implicit global, without a `window.Foo =` assignment. esbuild's default
+   `iife` output wraps the file and treats that now-"unused" top-level
+   binding as dead code and deletes it — caught this in testing
+   (`page-loader.js` minified down to `(()=>{})();`, which would have
+   broken `PageLoader.getPageBySlug`/`overlayDefaultPage` on every page
+   that uses it) before it shipped.
+   Result: **589.2 KiB → 283.7 KiB** (saved ~305 KiB, well past the report's
+   19 KiB estimate since it also covers every JS file, not just two).
+2. **CSS minify + purge unused rules:** `main.css`/`components.css` are run
+   through PurgeCSS (scanning every `*.html` + `js/*.js` for class usage,
+   with a safelist for dynamically-built classes — `is-*`, `has-*`, `js-*`,
+   `active`, `open`, `show`, `hide`, `selected`, `error`, etc. — so
+   runtime-toggled classes aren't stripped just because PurgeCSS's static
+   scan doesn't catch them) then minified with esbuild's CSS minifier.
+   Result: **101.3 KiB → 64.5 KiB**. Verified safe by cross-checking every
+   `classList.add/toggle/remove(...)` call and every `class="..."` string
+   built in JS against the purged output — zero classes were dropped that
+   still exist in the source.
+3. **Critical CSS:** `css/critical-source.css` → `css/critical.min.css` is
+   now also regenerated by the same script (minify only, no purge — it's
+   already a small hand-curated subset) instead of being minified by hand.
+
+**Also updated:** every `<script src="js/...">` tag across all 20 HTML
+pages (`index.html`, `product.html`, `checkout.html`, `admin.html`, etc.)
+now points at the `.min.js` file instead of the source file. CDN scripts
+(`fuse.min.js`, `qrcode.min.js`) were left untouched — only first-party
+`js/*.js` references were rewritten.
+
+**New `package.json` scripts/devDependencies:** `npm run build` →
+`node scripts/build.mjs`; added `esbuild` and `purgecss` as
+`devDependencies` (run `npm install` once before the first `npm run build`).
+
+**Going forward:** whenever `js/*.js` or `css/main.css` /
+`css/components.css` / `css/critical-source.css` changes, run
+`npm run build` before deploying — it regenerates every `.min.js`/`.min.css`
+file in place. The source files stay the ones you actually edit; the `.min.*`
+files are build output and shouldn't be hand-edited.
+
+---
+
 ## 2026-08-04 (5) — Multi-provider image hosting (ImgBB + ImageKit, with auto-failover) and multi-account round-robin email (EmailJS)
 
 **1. Image Hosting — Settings > Image Hosting (new tab).**

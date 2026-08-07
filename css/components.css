@@ -1469,6 +1469,9 @@ html {
 
 .delivery-checker__row input {
   flex: 1;
+  min-width: 0; /* flex items default to min-width:auto, which locks this
+                   input to its intrinsic content width and pushes the
+                   Check button past the edge on narrow screens */
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   padding: 9px 12px;
@@ -2698,6 +2701,13 @@ html {
 .site-footer__social a svg { width: 16px; height: 16px; }
 .site-footer__social a:hover { background: var(--color-primary); color: #fff; }
 
+/* Defensive fix: .site-footer__subscribe is a grid item of
+   .site-footer__inner--full. CSS Grid items default to min-width:auto,
+   so even though the input inside already shrinks correctly (min-width:0
+   below), the column itself can still be forced wider than its track by
+   that default — this pins it to the track's actual computed width
+   instead, closing that gap for good. */
+.site-footer__subscribe { min-width: 0; }
 .site-footer__subscribe p { font-size: 0.85rem; margin-bottom: var(--space-3); }
 .site-footer__subscribe-form {
   display: flex;

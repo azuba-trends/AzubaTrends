@@ -5,8 +5,15 @@
   "type": "module",
   "description": "AzubaTrends storefront — Cloudflare Pages Functions + Firestore REST",
   "comment_dependencies": "firebase-admin, pdfkit, and archiver from the old Vercel version are gone for good — lib/firestore-rest.js fully replaces firebase-admin, and pdf-lib + fflate (below) replace pdfkit + archiver for invoice/invoice-bulk (see lib/invoice.js). Run `npm install` before deploying so these are actually present in node_modules for the Pages build.",
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
   "dependencies": {
     "pdf-lib": "^1.17.1",
     "fflate": "^0.8.3"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1",
+    "purgecss": "^8.0.0"
   }
 }

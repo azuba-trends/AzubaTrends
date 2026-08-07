@@ -7,7 +7,7 @@
   X-Content-Type-Options: nosniff
   X-Frame-Options: SAMEORIGIN
   Referrer-Policy: strict-origin-when-cross-origin
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.gstatic.com https://www.googletagmanager.com https://connect.facebook.net https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://www.googletagservices.com https://tpc.googlesyndication.com https://fundingchoicesmessages.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://www.gstatic.com https://api.emailjs.com https://firestore.googleapis.com https://firebase.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.imgbb.com https://www.googleapis.com https://firebasestorage.googleapis.com https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://connect.facebook.net https://www.facebook.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://api.postalpincode.in https://nominatim.openstreetmap.org https://fonts.googleapis.com https://fonts.gstatic.com https://cdn.jsdelivr.net https://i.ibb.co https://fcm.googleapis.com https://oauth2.googleapis.com https://upload.imagekit.io https://ik.imagekit.io; frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://www.facebook.com https://fundingchoicesmessages.google.com;
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.gstatic.com https://www.googletagmanager.com https://connect.facebook.net https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://www.googletagservices.com https://tpc.googlesyndication.com https://fundingchoicesmessages.google.com https://apis.google.com https://accounts.google.com https://www.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://www.gstatic.com https://api.emailjs.com https://firestore.googleapis.com https://firebase.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.imgbb.com https://www.googleapis.com https://firebasestorage.googleapis.com https://www.google-analytics.com https://analytics.google.com https://www.google.com https://www.googletagmanager.com https://connect.facebook.net https://www.facebook.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://api.postalpincode.in https://nominatim.openstreetmap.org https://fonts.googleapis.com https://fonts.gstatic.com https://cdn.jsdelivr.net https://i.ibb.co https://fcm.googleapis.com https://oauth2.googleapis.com https://upload.imagekit.io https://ik.imagekit.io https://apis.google.com https://accounts.google.com; frame-src 'self' https://*.firebaseapp.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://www.facebook.com https://fundingchoicesmessages.google.com https://accounts.google.com https://apis.google.com;
 
 # The service worker file itself must never be served stale — browsers
 # already re-check it on every navigation, but forcing no-cache here
@@ -17,3 +17,31 @@
 # right away, instead of only after their cached copy happens to expire.
 /sw.js
   Cache-Control: no-cache
+
+# --- Long cache lifetimes for static assets (PageSpeed fix #7) ---
+#
+# /css/* and /js/* are safe to cache for a full year + `immutable`: every
+# reference to these files across every HTML page carries a `?v=YYYYMMDD`
+# query string (see index.html etc. — e.g. `main.min.css?v=20260808`,
+# `site-config.min.js?v=20260808`). Bump that date string (site-wide) the
+# next time `npm run build` regenerates the .min.* files with real content
+# changes, and every browser/edge cache instantly treats it as a brand-new
+# URL — no waiting for the old cache entry to expire.
+/css/*
+  Cache-Control: public, max-age=31536000, immutable
+/js/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# /images/* is intentionally NOT `immutable` and capped at 30 days, not a
+# year: these files (favicon/icons, hero-banner, logo-placeholder,
+# animations) are NOT query-string versioned like css/js are, and this
+# has already bitten the site once — the 2026-07-22 favicon/icon
+# regeneration changed these exact file paths' *content* with no rename.
+# A year-long immutable cache would have meant real visitors kept seeing
+# the old favicon for up to a year. 30 days still satisfies Lighthouse's
+# "efficient cache lifetimes" audit and meaningfully cuts repeat-visit
+# image requests, without that stale-forever risk. If these ever get a
+# proper `?v=` / content-hash versioning scheme added, this can safely
+# move to the same 1-year immutable rule as css/js above.
+/images/*
+  Cache-Control: public, max-age=2592000

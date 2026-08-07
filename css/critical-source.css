@@ -1,0 +1,131 @@
+/* Critical CSS — inlined in <head>. Kept in sync manually with main.css /
+   components.css. Covers only what's needed to paint the first screen
+   (design tokens, reset, body/typography base, .container, hero-banner)
+   so there's no flash-of-unstyled-content while the full stylesheets
+   load asynchronously (see index.html preload+swap). */
+
+:root {
+  --color-bg: #FFFFFF;
+  --color-surface: #FFFFFF;
+  --color-surface-sunken: #FAFAFA;
+  --color-ink: #181818;
+  --color-ink-soft: #6B6B6B;
+  --color-muted: #6B6B6B;
+  --color-border: #E8E8E8;
+  --color-primary: #C1502E;
+  --color-primary-dark: #A8431F;
+  --color-primary-tint: #FBEAE3;
+  --color-accent: #C1502E;
+  --color-accent-dark: #A8431F;
+  --color-clay: #C1502E;
+  --color-clay-tint: #FBEAE3;
+  --color-success: #1E8E3E;
+  --color-success-tint: #E6F4EA;
+  --color-danger: #D33;
+  --color-danger-tint: #FBEAEA;
+  --color-star: #F5A623;
+  --font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --header-height: 72px;
+  --bottom-nav-height: 60px;
+  --max-width: 1440px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 6px 20px rgba(0,0,0,0.10);
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 24px; --space-6: 32px; --space-7: 48px; --space-8: 64px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body, h1, h2, h3, h4, p, figure, ul, ol { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+img, svg { display: block; max-width: 100%; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+input, textarea, select { font: inherit; color: inherit; }
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--color-ink);
+  background: var(--color-bg);
+  line-height: 1.5;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  padding-bottom: var(--bottom-nav-height);
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  color: var(--color-ink);
+  line-height: 1.2;
+  font-weight: 700;
+}
+h1 { font-size: 22px; }
+h2 { font-size: 18px; }
+h3 { font-size: 16px; font-weight: 600; }
+@media (min-width: 768px) {
+  h1 { font-size: 32px; }
+  h2 { font-size: 24px; }
+  h3 { font-size: 18px; }
+}
+
+.container {
+  width: 100%;
+  max-width: var(--max-width);
+  margin-inline: auto;
+  padding-inline: var(--space-4);
+}
+main { flex: 1; }
+
+/* ---------- Hero banner (LCP element) ---------- */
+.hero-banner {
+  position: relative;
+  margin-top: var(--space-5);
+  margin-bottom: var(--space-5);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  background: linear-gradient(115deg, #F3E7DD 0%, #EFDDCB 45%, #E7CBAE 100%);
+}
+.hero-banner__bg-image {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  object-position: bottom;
+  z-index: 0;
+}
+.hero-banner__decor { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.hero-banner__content { position: relative; z-index: 1; max-width: 480px; padding: var(--space-7) var(--space-6); }
+.hero-banner__eyebrow {
+  display: inline-block; font-size: 0.75rem; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--color-primary-dark); margin-bottom: var(--space-3);
+}
+.hero-banner__title { font-size: 2.2rem; line-height: 1.15; font-weight: 700; color: var(--color-ink); margin-bottom: var(--space-3); }
+.hero-banner__subtitle { font-size: 1rem; color: var(--color-ink-soft); margin-bottom: var(--space-5); max-width: 42ch; }
+.hero-banner__actions { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+
+@media (max-width: 767px) {
+  .hero-banner { min-height: auto; padding: 40px 20px; margin-top: var(--space-4); align-items: flex-start; }
+  .hero-banner__bg-image { object-position: 80% center !important; }
+  .hero-banner__content { padding: 0; max-width: 100%; }
+  .hero-banner__eyebrow { font-size: 0.75rem; }
+  .hero-banner__title { font-size: 1.2rem; line-height: 1.2; margin-bottom: 12px; }
+  .hero-banner__subtitle { font-size: 0.65rem; line-height: 1.4; max-width: 70%; }
+}
