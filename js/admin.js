@@ -636,6 +636,207 @@ setTimeout(() => {
     });
   }
 
+  // ================================================================
+  // MEDIA LIBRARY — opened instead of the native OS file picker for
+  // every image field in this panel. Two tabs:
+  //   "Media"  — browse images already sitting in the ImageKit account
+  //              (fetched via /api/imagekit-list), so the same file
+  //              never gets uploaded twice.
+  //   "Upload" — pick new file(s) from this computer; each one is
+  //              uploaded immediately (same compressImage + uploadToImgBB
+  //              pipeline every field already used) and, once done,
+  //              handed straight back as the selection — no separate
+  //              "Add" click needed for a fresh upload.
+  //
+  // openMediaLibrary({ multiple }) returns a Promise<string[]> — the
+  // chosen URL(s), or [] if the admin closed the modal without picking
+  // anything. Every image field wires its click through this instead of
+  // letting the browser's own file dialog open directly.
+  // ================================================================
+  const mlModal = document.getElementById("media-library-modal");
+  const mlCloseBtn = document.getElementById("ml-close-btn");
+  const mlTabs = mlModal ? mlModal.querySelectorAll(".ml-tab") : [];
+  const mlPanels = mlModal ? mlModal.querySelectorAll(".ml-panel") : [];
+  const mlSearchInput = document.getElementById("ml-search");
+  const mlGrid = document.getElementById("ml-media-grid");
+  const mlLoadMoreWrap = document.getElementById("ml-media-loadmore");
+  const mlLoadMoreBtn = document.getElementById("ml-loadmore-btn");
+  const mlUploadInput = document.getElementById("ml-upload-input");
+  const mlUploadBtn = document.getElementById("ml-upload-btn");
+  const mlUploadHint = document.getElementById("ml-upload-hint");
+  const mlUploadProgress = document.getElementById("ml-upload-progress");
+  const mlAddBtn = document.getElementById("ml-add-btn");
+  const mlSelectedCount = document.getElementById("ml-selected-count");
+
+  let mlState = null; // set fresh every time the modal opens
+
+  function mlSwitchTab(tab) {
+    mlState.activeTab = tab;
+    mlTabs.forEach((btn) => btn.classList.toggle("active", btn.dataset.mlTab === tab));
+    mlPanels.forEach((panel) => { panel.hidden = panel.dataset.mlPanel !== tab; });
+    if (tab === "media" && mlState.mediaFiles.length === 0 && !mlState.mediaLoading) {
+      mlFetchMediaPage(true);
+    }
+  }
+
+  function mlUpdateFooter() {
+    const n = mlState.selected.size;
+    mlSelectedCount.textContent = n === 0 ? "" : `${n} selected`;
+    mlAddBtn.disabled = n === 0;
+  }
+
+  function mlRenderGrid() {
+    if (mlState.mediaFiles.length === 0) {
+      mlGrid.innerHTML = `<div class="ml-media-empty">${esc(mlState.mediaEmptyMessage || "No media found.")}</div>`;
+      return;
+    }
+    mlGrid.innerHTML = mlState.mediaFiles.map((f) => `
+      <div class="ml-media-item${mlState.selected.has(f.url) ? " selected" : ""}" data-url="${esc(f.url)}" title="${esc(f.name || "")}">
+        <img src="${esc(f.thumbnail || f.url)}" loading="lazy" alt="${esc(f.name || "")}">
+        <span class="ml-check">✓</span>
+        <span class="ml-name">${esc(f.name || "")}</span>
+      </div>`).join("");
+
+    mlGrid.querySelectorAll(".ml-media-item").forEach((el) => {
+      el.addEventListener("click", () => {
+        const url = el.dataset.url;
+        if (mlState.multiple) {
+          if (mlState.selected.has(url)) mlState.selected.delete(url); else mlState.selected.add(url);
+          el.classList.toggle("selected", mlState.selected.has(url));
+          mlUpdateFooter();
+        } else {
+          mlResolveAndClose([url]);
+        }
+      });
+    });
+  }
+
+  async function mlFetchMediaPage(reset) {
+    if (reset) { mlState.mediaFiles = []; mlState.mediaSkip = 0; mlGrid.innerHTML = ""; }
+    mlState.mediaLoading = true;
+    mlLoadMoreBtn.textContent = "Loading...";
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+      const params = new URLSearchParams({ skip: String(mlState.mediaSkip), limit: "60" });
+      if (mlState.searchQuery) params.set("search", mlState.searchQuery);
+      const res = await fetch(`/api/imagekit-list?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${idToken}` }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        mlState.mediaEmptyMessage = data.error || "Couldn't load media.";
+        mlLoadMoreWrap.hidden = true;
+      } else {
+        mlState.mediaFiles = mlState.mediaFiles.concat(data.files);
+        mlState.mediaSkip += data.files.length;
+        mlState.mediaEmptyMessage = mlState.searchQuery ? `No media matching "${mlState.searchQuery}".` : "No media uploaded yet — switch to the Upload tab.";
+        mlLoadMoreWrap.hidden = !data.hasMore;
+      }
+    } catch (err) {
+      mlState.mediaEmptyMessage = "Couldn't load media. Please try again.";
+      mlLoadMoreWrap.hidden = true;
+    }
+    mlState.mediaLoading = false;
+    mlLoadMoreBtn.textContent = "Load more";
+    mlRenderGrid();
+  }
+
+  let mlSearchDebounce = null;
+  if (mlSearchInput) mlSearchInput.addEventListener("input", () => {
+    clearTimeout(mlSearchDebounce);
+    mlSearchDebounce = setTimeout(() => {
+      mlState.searchQuery = mlSearchInput.value.trim();
+      mlFetchMediaPage(true);
+    }, 400);
+  });
+  if (mlLoadMoreBtn) mlLoadMoreBtn.addEventListener("click", () => mlFetchMediaPage(false));
+
+  mlTabs.forEach((btn) => btn.addEventListener("click", () => mlSwitchTab(btn.dataset.mlTab)));
+
+  if (mlUploadBtn) mlUploadBtn.addEventListener("click", () => mlUploadInput.click());
+  if (mlUploadInput) mlUploadInput.addEventListener("change", async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (files.length === 0) return;
+
+    mlUploadBtn.disabled = true;
+    const uploaded = [];
+    for (let i = 0; i < files.length; i++) {
+      const row = document.createElement("div");
+      row.className = "ml-progress-row";
+      row.textContent = `Uploading ${files[i].name || "image"}...`;
+      mlUploadProgress.appendChild(row);
+      try {
+        const url = await uploadToImgBB(files[i]);
+        uploaded.push(url);
+        row.textContent = `✓ ${files[i].name || "image"} uploaded.`;
+      } catch (err) {
+        row.textContent = `✗ ${files[i].name || "image"}: ${err.message || "upload failed"}`;
+      }
+    }
+    mlUploadBtn.disabled = false;
+    if (uploaded.length > 0) {
+      setTimeout(() => mlResolveAndClose(mlState.multiple ? uploaded : [uploaded[0]]), 400);
+    }
+  });
+
+  function mlResolveAndClose(urls) {
+    mlModal.hidden = true;
+    mlUploadProgress.innerHTML = "";
+    const resolve = mlState && mlState.resolve;
+    mlState = null;
+    if (resolve) resolve(urls || []);
+  }
+
+  if (mlCloseBtn) mlCloseBtn.addEventListener("click", () => mlResolveAndClose([]));
+  if (mlModal) mlModal.addEventListener("click", (e) => { if (e.target === mlModal) mlResolveAndClose([]); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && mlModal && !mlModal.hidden) mlResolveAndClose([]);
+  });
+  if (mlAddBtn) mlAddBtn.addEventListener("click", () => mlResolveAndClose(Array.from(mlState.selected)));
+
+  /**
+   * Opens the Media Library and resolves with the chosen URL(s).
+   * @param {{multiple?: boolean}} opts
+   * @returns {Promise<string[]>} chosen URL(s), or [] if cancelled.
+   */
+  function openMediaLibrary(opts) {
+    return new Promise((resolve) => {
+      mlState = {
+        multiple: !!(opts && opts.multiple),
+        selected: new Set(),
+        mediaFiles: [],
+        mediaSkip: 0,
+        mediaLoading: false,
+        mediaEmptyMessage: "",
+        searchQuery: "",
+        activeTab: "media",
+        resolve
+      };
+      mlSearchInput.value = "";
+      mlUploadInput.multiple = mlState.multiple;
+      mlUploadHint.textContent = mlState.multiple ? "Choose one or more images from your computer." : "Choose an image from your computer.";
+      mlUploadProgress.innerHTML = "";
+      mlUpdateFooter();
+      mlModal.hidden = false;
+      mlSwitchTab("media");
+    });
+  }
+
+  // Intercepts a native file input's click so picking an image for this
+  // field opens the Media Library first instead of the OS file dialog
+  // directly — `onPicked(urls)` gets the chosen URL(s) (already fully
+  // uploaded, nothing left to do at form-submit time for these).
+  function wireMediaLibraryField(inputEl, multiple, onPicked) {
+    if (!inputEl) return;
+    inputEl.addEventListener("click", (e) => {
+      e.preventDefault();
+      openMediaLibrary({ multiple }).then((urls) => {
+        if (urls.length > 0) onPicked(urls);
+      });
+    });
+  }
+
   // Shared by editProduct() and the auto-save draft restorer below —
   // re-renders the existing-image previews from the current (text-only)
   // #prod-existing-images / #prod-existing-delivery-img hidden inputs,
@@ -728,6 +929,11 @@ setTimeout(() => {
     document.getElementById("cat-slug").value = generateSlug(e.target.value);
   });
   document.getElementById("cat-image").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("cat-image-preview"), 1));
+  wireMediaLibraryField(document.getElementById("cat-image"), false, (urls) => {
+    document.getElementById("cat-existing-image").value = urls[0];
+    refreshCategoryImagePreview();
+    categoryDraft.scheduleSave();
+  });
 
   // Existing (already-saved) category image preview, with a × remove
   // button — same pattern as refreshFeaturePreview/refreshDeliveryLogoPreview
@@ -1081,10 +1287,26 @@ setTimeout(() => {
     document.getElementById("bcat-slug").value = generateSlug(e.target.value);
   });
   document.getElementById("bcat-image").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("bcat-image-preview"), 1));
+  document.getElementById("bcat-image").addEventListener("change", (e) => {
+    if (e.target.files[0]) document.getElementById("bcat-existing-image").value = "";
+  });
+  function refreshBlogCategoryImagePreview() {
+    const url = document.getElementById("bcat-existing-image").value;
+    previewExistingImages(document.getElementById("bcat-image-preview"), url ? [url] : [], () => {
+      document.getElementById("bcat-existing-image").value = "";
+      document.getElementById("bcat-image").value = "";
+      refreshBlogCategoryImagePreview();
+    });
+  }
+  wireMediaLibraryField(document.getElementById("bcat-image"), false, (urls) => {
+    document.getElementById("bcat-existing-image").value = urls[0];
+    refreshBlogCategoryImagePreview();
+  });
 
   function resetBlogCategoryForm() {
     document.getElementById("blogcategory-form").reset();
     document.getElementById("bcat-id").value = "";
+    document.getElementById("bcat-existing-image").value = "";
     document.getElementById("bcat-image-preview").innerHTML = "";
     document.getElementById("blogcategory-form-title").textContent = "Add New Blog Category";
   }
@@ -1130,7 +1352,8 @@ setTimeout(() => {
     document.getElementById("bcat-desc").value = cat.description || "";
     document.getElementById("bcat-meta-title").value = cat.metaTitle || "";
     document.getElementById("bcat-meta-desc").value = cat.metaDesc || "";
-    previewExistingImages(document.getElementById("bcat-image-preview"), cat.image ? [cat.image] : []);
+    document.getElementById("bcat-existing-image").value = cat.image || "";
+    refreshBlogCategoryImagePreview();
     document.getElementById("blogcategory-form-title").textContent = "Edit Blog Category";
     goToSection("blog-add-category");
   }
@@ -1145,7 +1368,7 @@ setTimeout(() => {
     const btn = document.getElementById("save-blogcat-btn");
     btn.textContent = "Saving..."; btn.disabled = true;
     try {
-      let image = blogCategoriesList.find((c) => c.id === document.getElementById("bcat-id").value)?.image || "";
+      let image = document.getElementById("bcat-existing-image").value || "";
       const file = document.getElementById("bcat-image").files[0];
       if (file) image = await uploadToImgBB(file);
 
@@ -1633,6 +1856,26 @@ setTimeout(() => {
     document.getElementById("brand-slug").value = generateSlug(e.target.value);
   });
   document.getElementById("brand-image").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("brand-image-preview"), 1));
+  // A newly chosen file replaces whatever existing image was there —
+  // same "existing" pointer clears on file replace, remove-button
+  // clears it too — pattern as refreshCategoryImagePreview.
+  document.getElementById("brand-image").addEventListener("change", (e) => {
+    if (e.target.files[0]) document.getElementById("brand-existing-image").value = "";
+  });
+  function refreshBrandImagePreview() {
+    const url = document.getElementById("brand-existing-image").value;
+    previewExistingImages(document.getElementById("brand-image-preview"), url ? [url] : [], () => {
+      document.getElementById("brand-existing-image").value = "";
+      document.getElementById("brand-image").value = "";
+      refreshBrandImagePreview();
+      brandDraft.scheduleSave();
+    });
+  }
+  wireMediaLibraryField(document.getElementById("brand-image"), false, (urls) => {
+    document.getElementById("brand-existing-image").value = urls[0];
+    refreshBrandImagePreview();
+    brandDraft.scheduleSave();
+  });
 
   const brandDraft = setupSimpleFormDraft({
     formSelector: "#brand-form",
@@ -1657,6 +1900,7 @@ setTimeout(() => {
   function resetBrandForm() {
     document.getElementById("brand-form").reset();
     document.getElementById("brand-id").value = "";
+    document.getElementById("brand-existing-image").value = "";
     document.getElementById("brand-image-preview").innerHTML = "";
     document.getElementById("brand-form-title").textContent = "Add New Brand";
     mountBrandAvailabilityPicker(null);
@@ -1707,7 +1951,8 @@ setTimeout(() => {
     document.getElementById("brand-desc").value = b.description || "";
     document.getElementById("brand-meta-title").value = b.metaTitle || "";
     document.getElementById("brand-meta-desc").value = b.metaDesc || "";
-    previewExistingImages(document.getElementById("brand-image-preview"), b.image ? [b.image] : []);
+    document.getElementById("brand-existing-image").value = b.image || "";
+    refreshBrandImagePreview();
     mountBrandAvailabilityPicker(b.availability || null);
     document.getElementById("brand-form-title").textContent = "Edit Brand";
     brandDraft.checkDraft();
@@ -1733,7 +1978,7 @@ setTimeout(() => {
     const btn = document.getElementById("save-brand-btn");
     btn.textContent = "Saving..."; btn.disabled = true;
     try {
-      let image = brandsList.find((b) => b.id === document.getElementById("brand-id").value)?.image || "";
+      let image = document.getElementById("brand-existing-image").value || "";
       const file = document.getElementById("brand-image").files[0];
       if (file) image = await uploadToImgBB(file);
 
@@ -2083,13 +2328,37 @@ setTimeout(() => {
   });
   document.getElementById("sd-content-visual").addEventListener("input", renderSeoChecklist);
   document.getElementById("prod-feature-img").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("prod-feature-preview"), 1));
+  wireMediaLibraryField(document.getElementById("prod-feature-img"), false, (urls) => {
+    const imgs = JSON.parse(document.getElementById("prod-existing-images").value || "[]");
+    imgs[0] = urls[0];
+    document.getElementById("prod-existing-images").value = JSON.stringify(imgs);
+    refreshFeaturePreview();
+    scheduleProductDraftSave();
+  });
   document.getElementById("prod-gallery-imgs").addEventListener("change", (e) => {
     const newFiles = Array.from(e.target.files || []);
     pendingGalleryFiles = pendingGalleryFiles.concat(newFiles).slice(0, 5);
     renderGalleryPreview();
     e.target.value = ""; // reset so picking the very same file again still fires "change"
   });
+  wireMediaLibraryField(document.getElementById("prod-gallery-imgs"), true, (urls) => {
+    const imgs = JSON.parse(document.getElementById("prod-existing-images").value || "[]");
+    const existingGallery = imgs.slice(1);
+    let gallery = existingGallery.concat(urls);
+    if (gallery.length > 5) {
+      alert(`Only 5 gallery images are kept — the first ${gallery.length - 5} you picked wouldn't fit and were skipped.`);
+      gallery = gallery.slice(0, 5);
+    }
+    document.getElementById("prod-existing-images").value = JSON.stringify([imgs[0] || "", ...gallery]);
+    refreshGalleryExistingPreview();
+    scheduleProductDraftSave();
+  });
   document.getElementById("prod-delivery-img").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("prod-delivery-preview"), 1));
+  wireMediaLibraryField(document.getElementById("prod-delivery-img"), false, (urls) => {
+    document.getElementById("prod-existing-delivery-img").value = urls[0];
+    refreshDeliveryLogoPreview();
+    scheduleProductDraftSave();
+  });
 
   // ----------------------------------------------------------------
   // Generic rich-text editor factory — same Visual/Code, execCommand-
@@ -2185,21 +2454,14 @@ setTimeout(() => {
     }
 
     if (imageBtnId) {
-      const fileInput = document.getElementById(imageFileId);
-      document.getElementById(imageBtnId).addEventListener("click", () => fileInput.click());
-      fileInput.addEventListener("change", async (e) => {
-        const file = e.target.files[0];
-        e.target.value = "";
-        if (!file) return;
-        try {
-          const url = await uploadToImgBB(file);
+      document.getElementById(imageBtnId).addEventListener("click", () => {
+        openMediaLibrary({ multiple: false }).then((urls) => {
+          if (urls.length === 0) return;
           visualEl.focus();
-          const html = `<img src="${esc(url)}" class="rte-img--medium rte-img--center" alt="">`;
+          const html = `<img src="${esc(urls[0])}" class="rte-img--medium rte-img--center" alt="">`;
           if (!document.execCommand("insertHTML", false, html)) visualEl.insertAdjacentHTML("beforeend", html);
           syncCodeFromVisual();
-        } catch (err) {
-          alert("Image upload failed: " + err.message);
-        }
+        });
       });
 
       function showImageToolbar(img) {
@@ -3975,26 +4237,20 @@ setTimeout(() => {
     rteSyncCodeFromVisual();
   });
 
-  // --- Image insert: upload via the same ImgBB pipeline used elsewhere,
-  // then drop an <img> at the cursor, wrapped so size/align classes
+  // --- Image insert: opens the Media Library (browse existing ImageKit
+  // media or upload new) instead of the OS file picker directly, then
+  // drops an <img> at the cursor, wrapped so size/align classes
   // (applied via the mini image toolbar below) have something to target. ---
-  const rteImageFile = document.getElementById("rte-image-file");
-  document.getElementById("rte-image-btn").addEventListener("click", () => rteImageFile.click());
-  rteImageFile.addEventListener("change", async (e) => {
-    const file = e.target.files[0];
-    e.target.value = "";
-    if (!file) return;
-    try {
-      const url = await uploadToImgBB(file);
+  document.getElementById("rte-image-btn").addEventListener("click", () => {
+    openMediaLibrary({ multiple: false }).then((urls) => {
+      if (urls.length === 0) return;
       rteVisual.focus();
-      const html = `<img src="${esc(url)}" class="rte-img--medium rte-img--center" alt="">`;
+      const html = `<img src="${esc(urls[0])}" class="rte-img--medium rte-img--center" alt="">`;
       if (!document.execCommand("insertHTML", false, html)) {
         rteVisual.insertAdjacentHTML("beforeend", html);
       }
       rteSyncCodeFromVisual();
-    } catch (err) {
-      alert("Image upload failed: " + err.message);
-    }
+    });
   });
 
   // --- Selecting an image inside the editor shows a mini toolbar for
@@ -4159,6 +4415,21 @@ setTimeout(() => {
   });
 
   document.getElementById("bp-cover-img").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("bp-cover-preview"), 1));
+  document.getElementById("bp-cover-img").addEventListener("change", (e) => {
+    if (e.target.files[0]) document.getElementById("bp-existing-cover").value = "";
+  });
+  function refreshBlogCoverPreview() {
+    const url = document.getElementById("bp-existing-cover").value;
+    previewExistingImages(document.getElementById("bp-cover-preview"), url ? [url] : [], () => {
+      document.getElementById("bp-existing-cover").value = "";
+      document.getElementById("bp-cover-img").value = "";
+      refreshBlogCoverPreview();
+    });
+  }
+  wireMediaLibraryField(document.getElementById("bp-cover-img"), false, (urls) => {
+    document.getElementById("bp-existing-cover").value = urls[0];
+    refreshBlogCoverPreview();
+  });
 
   function ensureUniqueBlogSlug(baseSlug, excludeId) {
     const taken = new Set(blogPostsList.filter((p) => p.id !== excludeId).map((p) => p.slug).filter(Boolean));
@@ -4207,7 +4478,7 @@ setTimeout(() => {
     document.getElementById("bp-tags").value = (p.tags || []).join(", ");
     document.getElementById("bp-existing-cover").value = p.coverImage || "";
     document.getElementById("bp-cover-preview").innerHTML = "";
-    previewExistingImages(document.getElementById("bp-cover-preview"), p.coverImage ? [p.coverImage] : []);
+    refreshBlogCoverPreview();
     rteActiveTab = "visual";
     document.querySelectorAll("#blog-add-post .rte-tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.rteTab === "visual"));
     rteVisual.hidden = false;
@@ -4601,6 +4872,21 @@ setTimeout(() => {
     renderPageSeoChecklist();
   });
   document.getElementById("pg-image").addEventListener("change", (e) => previewFileList(e.target, document.getElementById("pg-image-preview"), 1));
+  document.getElementById("pg-image").addEventListener("change", (e) => {
+    if (e.target.files[0]) document.getElementById("pg-existing-image").value = "";
+  });
+  function refreshPageImagePreview() {
+    const url = document.getElementById("pg-existing-image").value;
+    previewExistingImages(document.getElementById("pg-image-preview"), url ? [url] : [], () => {
+      document.getElementById("pg-existing-image").value = "";
+      document.getElementById("pg-image").value = "";
+      refreshPageImagePreview();
+    });
+  }
+  wireMediaLibraryField(document.getElementById("pg-image"), false, (urls) => {
+    document.getElementById("pg-existing-image").value = urls[0];
+    refreshPageImagePreview();
+  });
 
   function ensureUniquePageSlug(baseSlug, excludeId) {
     const taken = new Set(pagesList.filter((p) => p.id !== excludeId).map((p) => p.slug).filter(Boolean));
@@ -4650,7 +4936,7 @@ setTimeout(() => {
     document.getElementById("pg-meta-desc").value = p.metaDesc || "";
     document.getElementById("pg-existing-image").value = p.image || "";
     document.getElementById("pg-image-preview").innerHTML = "";
-    previewExistingImages(document.getElementById("pg-image-preview"), p.image ? [p.image] : []);
+    refreshPageImagePreview();
     pgRteActiveTab = "visual";
     document.querySelectorAll('[data-pgrte-tab]').forEach((b) => b.classList.toggle("active", b.dataset.pgrteTab === "visual"));
     pgRteVisual.hidden = false;
@@ -6122,22 +6408,9 @@ setTimeout(() => {
     pushImagePreview.appendChild(wrap);
   }
   if (pushImageFileInput) {
-    pushImageFileInput.addEventListener("change", async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const label = document.querySelector('label[for="push-image-file"]');
-      const originalLabelText = label.textContent;
-      try {
-        label.textContent = "Uploading...";
-        const url = await uploadToImgBB(file);
-        pushImageUrlInput.value = url;
-        renderPushImagePreview(url);
-      } catch (err) {
-        alert(err.message || "Image upload failed.");
-      } finally {
-        label.textContent = originalLabelText;
-        pushImageFileInput.value = "";
-      }
+    wireMediaLibraryField(pushImageFileInput, false, (urls) => {
+      pushImageUrlInput.value = urls[0];
+      renderPushImagePreview(urls[0]);
     });
   }
   // Typing/pasting a URL directly should update the preview too.

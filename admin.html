@@ -933,6 +933,7 @@
           <div class="form-field full-width upload-box">
             <div class="upload-box__title"><span class="upload-icon">🖼️</span> Brand Logo <span class="field-hint" style="margin:0;">(optional)</span></div>
             <input type="file" id="brand-image" accept="image/*">
+            <input type="hidden" id="brand-existing-image">
             <div class="img-preview-row" id="brand-image-preview"></div>
           </div>
           <div class="form-field full-width">
@@ -1424,6 +1425,7 @@
           <div class="form-field full-width upload-box">
             <div class="upload-box__title"><span class="upload-icon">🖼️</span> Category Image <span class="field-hint" style="margin:0;">(optional)</span></div>
             <input type="file" id="bcat-image" accept="image/*">
+            <input type="hidden" id="bcat-existing-image">
             <div class="img-preview-row" id="bcat-image-preview"></div>
           </div>
           <div class="form-field full-width" style="display: flex; gap: 10px;">
@@ -1912,6 +1914,52 @@
   <button class="lightbox__close" id="admin-lightbox-close" aria-label="Close image">&times;</button>
   <div class="lightbox__content">
     <img id="admin-lightbox-img" src="" alt="">
+  </div>
+</div>
+
+<!-- ================================================================
+     Media Library — opened instead of the native file picker whenever
+     an admin clicks any image-upload field. Two tabs: "Media" (browse
+     images already uploaded to ImageKit, so the same file never gets
+     uploaded twice) and "Upload" (pick new file(s) from this computer).
+     Built + driven entirely from js/admin.js's openMediaLibrary().
+     ================================================================ -->
+<div class="ml-overlay" id="media-library-modal" hidden>
+  <div class="ml-modal" role="dialog" aria-modal="true" aria-label="Media Library">
+    <div class="ml-header">
+      <div class="ml-tabs">
+        <button type="button" class="ml-tab" data-ml-tab="media">Media</button>
+        <button type="button" class="ml-tab" data-ml-tab="upload">Upload</button>
+      </div>
+      <button type="button" class="ml-close" id="ml-close-btn" aria-label="Close Media Library">&times;</button>
+    </div>
+
+    <div class="ml-body">
+      <div class="ml-panel" data-ml-panel="upload" hidden>
+        <input type="file" id="ml-upload-input" accept="image/*" style="display:none;">
+        <div class="ml-upload-dropzone" id="ml-upload-dropzone">
+          <span class="ml-upload-icon">🖼️</span>
+          <button type="button" class="btn btn-primary" id="ml-upload-btn">Upload Media</button>
+          <p class="ml-upload-hint" id="ml-upload-hint">Choose image(s) from your computer.</p>
+        </div>
+        <div class="ml-upload-progress" id="ml-upload-progress"></div>
+      </div>
+
+      <div class="ml-panel" data-ml-panel="media" hidden>
+        <div class="ml-media-toolbar">
+          <input type="text" id="ml-search" class="ml-search" placeholder="Search media by name...">
+        </div>
+        <div class="ml-media-grid" id="ml-media-grid"></div>
+        <div class="ml-media-loadmore" id="ml-media-loadmore" hidden>
+          <button type="button" class="btn btn-outline" id="ml-loadmore-btn">Load more</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="ml-footer">
+      <span class="ml-selected-count" id="ml-selected-count"></span>
+      <button type="button" class="btn btn-primary" id="ml-add-btn" disabled>Add</button>
+    </div>
   </div>
 </div>
 

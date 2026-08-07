@@ -880,16 +880,6 @@ html {
   }
 }
 
-@media (max-width: 360px) {
-  .pdp-sticky-actions__inner {
-    flex-wrap: wrap;
-  }
-  #buy-now-btn-sticky,
-  #add-to-cart-mount-sticky {
-    min-width: 100% !important;
-  }
-}
-
 .delivery-partner-note {
   display: flex;
   align-items: center;
@@ -972,22 +962,6 @@ html {
 .product-info__actions #buy-now-btn {
   flex: 1;
   min-width: 140px;
-}
-
-/* Safety net: on very narrow screens (~<330px effective width, e.g. older
-   budget phones or bumped-up system font/zoom) two 140px-min buttons +
-   their gap + container padding no longer fit side by side and were
-   pushing the page into horizontal overflow. Below this width, stack them
-   full-width instead of letting them force the row wider than the
-   viewport. Same fix applied to the sticky mobile action bar below. */
-@media (max-width: 360px) {
-  .product-info__actions {
-    flex-wrap: wrap;
-  }
-  .product-info__actions #buy-now-btn,
-  #add-to-cart-mount {
-    min-width: 100% !important;
-  }
 }
 
 .product-info__meta {
@@ -2886,3 +2860,141 @@ html {
     font-size: 16px !important;
   }
 }
+
+/* ============================================================
+   Admin: Media Library modal — opened instead of the native file
+   picker for every image-upload field in the admin panel. See
+   openMediaLibrary() in js/admin.js.
+   ============================================================ */
+.ml-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 25, 0.6);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.ml-overlay[hidden] { display: none; }
+.ml-modal {
+  background: var(--color-surface, #fff);
+  border-radius: 10px;
+  width: min(760px, 100%);
+  max-height: min(640px, 90vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.ml-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--color-border);
+  padding: 6px 10px 0 16px;
+}
+.ml-tabs { display: flex; gap: 4px; }
+.ml-tab {
+  border: none;
+  background: none;
+  padding: 12px 16px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-ink-soft);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.ml-tab.active { color: var(--color-primary, #111); border-bottom-color: var(--color-primary, #111); }
+.ml-close {
+  border: none;
+  background: none;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--color-ink-soft);
+  padding: 6px 10px;
+}
+.ml-close:hover { color: var(--color-ink); }
+
+.ml-body { flex: 1; overflow-y: auto; padding: 16px; }
+.ml-panel[hidden] { display: none; }
+
+.ml-upload-dropzone {
+  border: 2px dashed var(--color-border);
+  border-radius: 10px;
+  padding: 40px 20px;
+  text-align: center;
+}
+.ml-upload-icon { font-size: 2.2rem; display: block; margin-bottom: 10px; }
+.ml-upload-hint { font-size: 0.82rem; color: var(--color-ink-soft); margin: 10px 0 0; }
+.ml-upload-progress { margin-top: 14px; font-size: 0.85rem; color: var(--color-ink-soft); }
+.ml-upload-progress .ml-progress-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+
+.ml-media-toolbar { margin-bottom: 12px; }
+.ml-search {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+.ml-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+}
+.ml-media-item {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+  background: var(--color-bg-soft, #f3f3f3);
+}
+.ml-media-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ml-media-item.selected { border-color: var(--color-primary, #111); }
+.ml-media-item .ml-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-primary, #111);
+  color: #fff;
+  font-size: 0.75rem;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.ml-media-item.selected .ml-check { display: flex; }
+.ml-media-item .ml-name {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: linear-gradient(transparent, rgba(0,0,0,0.65));
+  color: #fff;
+  font-size: 0.68rem;
+  padding: 12px 6px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ml-media-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  padding: 30px 10px;
+}
+.ml-media-loadmore { text-align: center; margin-top: 14px; }
+
+.ml-footer {
+  border-top: 1px solid var(--color-border);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ml-selected-count { font-size: 0.82rem; color: var(--color-ink-soft); }
