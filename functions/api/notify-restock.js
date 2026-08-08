@@ -22,7 +22,7 @@
 // visitor.
 
 import { requireAdmin } from "../../lib/auth.js";
-import { getDocs, deleteDoc } from "../../lib/firestore-rest.js";
+import { getDocs, batchWrite } from "../../lib/firestore-rest.js";
 import { sendWebPush } from "../../lib/web-push.js";
 
 function json(data, status = 200) {
@@ -92,7 +92,26 @@ export async function onRequestPost(context) {
       // Clear the waiting list for this product regardless of individual
       // delivery success — a stale subscription just means that device
       // can't be reached, retrying it later won't fix that.
-      await Promise.all(waitingRows.map((w) => deleteDoc(env, `stock_notifications/${w.id}`).catch(() => {})));
+      //
+      // Batched via batchWrite() (single atomic :commit) instead of one
+      // deleteDoc() round trip per row — same fix as recalcRatings() in
+      // admin-tools.js. Chunked at 400 (Firestore's per-commit write
+      // limit is 500) even though a single product's waiting list is
+      // realistically far smaller than that, so this stays correct if it
+      // ever isn't. Wrapped in try/catch (not per-row .catch()) since
+      // batchWrite is all-or-nothing per chunk — a failed chunk just
+      // means those rows are retried next time this product restocks,
+      // same "not the end of the world" outcome the old per-row .catch()
+      // silently allowed.
+      const deleteBatchSize = 400;
+      for (let i = 0; i < waitingRows.length; i += deleteBatchSize) {
+        const chunk = waitingRows.slice(i, i + deleteBatchSize);
+        try {
+          await batchWrite(env, chunk.map((w) => ({ type: "delete", path: `stock_notifications/${w.id}` })));
+        } catch (err) {
+          console.error("notify-restock: batch delete failed for waiting-list chunk", err.message);
+        }
+      }
     }));
 
     return json({ ok: true, notified, productsProcessed: items.length });
