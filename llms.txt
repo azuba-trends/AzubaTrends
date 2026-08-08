@@ -1,13 +1,14 @@
 # AzubaTrends
 
-> Handmade and hand-loomed home goods, delivered across West Bengal —
-> terracotta, jute, brass, kantha textiles, and more.
+> Home & lifestyle products curated from trusted sellers, delivered
+> across West Bengal.
 
-AzubaTrends is a small ecommerce store selling handmade and hand-loomed
-home goods, with delivery across West Bengal, India. The catalog spans
-categories such as terracotta décor, jute products, brassware, and
-kantha textiles, alongside other handcrafted home goods. Each product
-page includes pricing, available sizes/colors, and shipping details.
+AzubaTrends is a small ecommerce store selling home & lifestyle
+products curated from trusted third-party sellers, with delivery
+across West Bengal, India. AzubaTrends does not manufacture products
+itself — it is a reselling business, and product listings reflect
+what each seller actually offers. Each product page includes pricing,
+available sizes/colors, and shipping details.
 
 ## Categories
 

@@ -4619,7 +4619,7 @@ setTimeout(() => {
     {
       slug: "home", isDefault: true, heading: "AzubaTrends — Everyday goods for the home",
       metaTitle: "AzubaTrends — Everyday goods for the home",
-      metaDesc: "Handmade and hand-loomed home goods, delivered across West Bengal. Terracotta, jute, brass, kantha textiles, and more.",
+      metaDesc: "Shop trending home & lifestyle products at honest prices, curated from trusted sellers across India. Fast delivery across Kolkata & West Bengal.",
       keyphrase: "", content: "", contentPosition: "after-products", status: "published"
     },
     {
@@ -4659,9 +4659,9 @@ setTimeout(() => {
   // saved content like any other page.
   const DEFAULT_PAGE_LIVE_CONTENT = {
     about: `<h2>Our story</h2>
-<p>AzubaTrends started as a way to bring hand-made and hand-loomed goods from artisans across West Bengal directly to nearby homes — without a showroom, and without the usual markup. "AzubaTrends" means courtyard: the shared, everyday space where a home actually happens.</p>
+<p>AzubaTrends started as a way to bring trending home &amp; lifestyle products directly to nearby homes across West Bengal — without a showroom, and without the usual markup. "AzubaTrends" means courtyard: the shared, everyday space where a home actually happens.</p>
 <h2>What we sell</h2>
-<p>Everything in the shop is either handmade or hand-finished — terracotta, jute, brass, copper, and hand-stitched textiles among them. Replace this paragraph with real sourcing details, artisan partners, or workshop locations once available.</p>
+<p>We curate home &amp; lifestyle products from trusted sellers and bring them to you at a fair, honest price. We don't manufacture these products ourselves. Replace this paragraph with real sourcing/seller details once available.</p>
 <h2>Delivery area</h2>
 <p>We currently deliver within West Bengal, India only. If an address falls outside that area, checkout will let you know before you pay.</p>
 <h2>Get in touch</h2>
