@@ -4688,19 +4688,13 @@ setTimeout(() => {
   };
 
   async function seedDefaultPagesIfEmpty() {
-    if (pagesSeeded) return;
-    pagesSeeded = true;
-    try {
-      const existing = new Set(pagesList.map((p) => p.slug));
-      const missing = DEFAULT_PAGES_SEED.filter((p) => !existing.has(p.slug));
-      if (missing.length === 0) return;
-      for (const p of missing) {
-        const now = new Date().toISOString();
-        await addDoc(collection(db, "pages"), { ...p, createdAt: now, updatedAt: now });
-      }
-    } catch (err) {
-      console.error("seedDefaultPagesIfEmpty error", err);
-    }
+    // DISABLED: home/about/terms/404 are plain static HTML files and are
+    // never read from Firestore by the live site — this seeding only ever
+    // cluttered the "pages" collection with duplicate docs that did
+    // nothing. New/custom pages still go through the normal "+ Add Page"
+    // flow below and still live in Firestore as intended — this only
+    // stops the four *default* pages from being auto-created here.
+    return;
   }
 
   let unsubPages = null;
@@ -4726,12 +4720,10 @@ setTimeout(() => {
       const sColor = p.status === "published" ? "var(--color-success)" : "var(--color-accent-dark)";
       const dateStr = p.updatedAt ? new Date(p.updatedAt).toLocaleDateString("en-IN") : "—";
       const url = p.slug === "home" ? "/" : `/${p.slug}`;
-      const deleteBtn = p.isDefault
-        ? `<button class="btn btn-outline" disabled title="Default pages can't be deleted, only edited" style="padding:4px 8px; font-size:0.8rem; opacity:0.5; cursor:not-allowed;">Delete</button>`
-        : `<button class="btn btn-outline del-page-btn" data-id="${p.id}" style="color:var(--color-danger); padding:4px 8px; font-size:0.8rem;">Delete</button>`;
+      const deleteBtn = `<button class="btn btn-outline del-page-btn" data-id="${p.id}" style="color:var(--color-danger); padding:4px 8px; font-size:0.8rem;">Delete</button>`;
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>${p.isDefault ? "" : `<input type="checkbox" class="row-select" data-id="${p.id}">`}</td>
+        <td><input type="checkbox" class="row-select" data-id="${p.id}"></td>
         <td>${esc(p.heading || "(untitled)")}</td>
         <td><a href="${esc(url)}" target="_blank" style="color:var(--color-primary);">${esc(url)}</a></td>
         <td>${p.isDefault ? '<span style="font-weight:bold;">Default</span>' : "Custom"}</td>
@@ -4759,19 +4751,12 @@ setTimeout(() => {
   }
 
   async function deletePage(id) {
-    const p = pagesList.find((x) => x.id === id);
-    if (p && p.isDefault) { alert("Default pages can't be deleted — only edited."); return; }
-    if (!confirm("Delete this page permanently?")) return;
+    if (!confirm("Delete this page permanently? (Static pages like Home/About/Terms/404 keep working from their .html files regardless — this only removes the Firestore admin-panel record.)")) return;
     await deleteDoc(doc(db, "pages", id));
   }
 
   wireBulkSelect("pages-table-body", "select-all-pages", "bulk-delete-pages-btn", async (ids) => {
-    // Default pages never render a checkbox (see renderPagesTable), so any
-    // id reaching here is already guaranteed custom — but double-check
-    // against Firestore rules' own protection as a second safety net.
     for (const id of ids) {
-      const p = pagesList.find((x) => x.id === id);
-      if (p && p.isDefault) continue;
       await deleteDoc(doc(db, "pages", id));
     }
   });
