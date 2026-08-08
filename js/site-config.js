@@ -50,20 +50,43 @@ window.SITE_CONFIG_READY = (async function() {
   // admin.html in this same browser, onAuthStateChanged below picks up
   // that same session immediately, with no separate login step needed on
   // the storefront pages themselves.
-  const { getAuth, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js");
-  const auth = getAuth(app);
-  window.FirebaseApp.auth = auth;
+  //
+  // PERF FIX (Lighthouse "Network dependency tree" / "Use efficient cache
+  // lifetimes" — the ~3.6s critical-path chain through
+  // <project>.firebaseapp.com's auth iframe): calling getAuth() is what
+  // makes the Firebase Auth SDK inject that hidden iframe, and it used to
+  // happen synchronously as part of this same startup chain, competing
+  // for bandwidth/priority with the hero image, fonts, and product data
+  // on every single storefront pageview — even though 99%+ of visitors
+  // are not the admin and get zero benefit from it. Deferring it to
+  // requestIdleCallback (i.e. "once the browser has spare time after the
+  // real page content is handled") means the iframe still loads and
+  // AzubaAdminReady still resolves — the admin's Delete buttons still
+  // appear, just a beat later — but it no longer sits on the page's
+  // critical path. setTimeout is the fallback for Safari, which has no
+  // requestIdleCallback.
   window.AzubaAdmin = { isAdmin: false };
   let resolveAdminReady;
   // Other scripts can `await window.AzubaAdminReady` to be sure the
-  // (persisted, so effectively instant) initial auth check has actually
-  // completed before reading window.AzubaAdmin.isAdmin.
+  // (persisted, so effectively instant once it runs) initial auth check
+  // has actually completed before reading window.AzubaAdmin.isAdmin.
   window.AzubaAdminReady = new Promise((resolve) => { resolveAdminReady = resolve; });
-  onAuthStateChanged(auth, (user) => {
-    window.AzubaAdmin.isAdmin = !!user;
-    window.dispatchEvent(new CustomEvent("azubaadmin:change", { detail: { isAdmin: !!user } }));
-    if (resolveAdminReady) { resolveAdminReady(); resolveAdminReady = null; }
-  });
+
+  const initAdminAuth = async () => {
+    const { getAuth, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js");
+    const auth = getAuth(app);
+    window.FirebaseApp.auth = auth;
+    onAuthStateChanged(auth, (user) => {
+      window.AzubaAdmin.isAdmin = !!user;
+      window.dispatchEvent(new CustomEvent("azubaadmin:change", { detail: { isAdmin: !!user } }));
+      if (resolveAdminReady) { resolveAdminReady(); resolveAdminReady = null; }
+    });
+  };
+  if ("requestIdleCallback" in window) {
+    requestIdleCallback(initAdminAuth, { timeout: 3000 });
+  } else {
+    setTimeout(initAdminAuth, 1500);
+  }
 
   // Fetch Settings from Firebase
   try {

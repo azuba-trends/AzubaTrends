@@ -177,7 +177,8 @@
 <link id="page-canonical" rel="canonical" href="https://azubatrends.pages.dev/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
 <link rel="stylesheet" href="/css/main.min.css?v=20260808">
 <link rel="stylesheet" href="/css/components.min.css?v=20260808">
 </head>
@@ -729,19 +730,24 @@
 
     function showImage(index, { fromLightbox } = {}) {
       currentImageIndex = ((index % images.length) + images.length) % images.length;
-      mainImg.src = images[currentImageIndex];
+      // Gallery main view renders large (near full container width) but
+      // is not the zoomed lightbox — 800px covers it without over-fetching
+      // the original upload (see ProductLoader.optimizedImageUrl).
+      mainImg.src = window.ProductLoader.optimizedImageUrl(images[currentImageIndex], 800);
       mainImg.onerror = function () { this.onerror = null; this.src = "/images/logo-placeholder.svg"; };
       thumbsWrap.querySelectorAll(".gallery__thumb").forEach((t, i) => t.classList.toggle("is-active", i === currentImageIndex));
       const dots = document.getElementById("gallery-dots");
       if (dots) dots.querySelectorAll(".gallery__dot").forEach((d, i) => d.classList.toggle("is-active", i === currentImageIndex));
       if (fromLightbox && !lightbox.hidden) {
+        // Lightbox is the zoomed-in view — deliberately left at full
+        // original resolution, not run through optimizedImageUrl.
         lightboxImg.src = images[currentImageIndex];
         lightboxImg.onerror = function () { this.onerror = null; this.src = "/images/logo-placeholder.svg"; };
         lightboxImg.alt = `${product.title} — view ${currentImageIndex + 1}`;
       }
     }
 
-    setImgWithFallback(mainImg, images[0]);
+    setImgWithFallback(mainImg, window.ProductLoader.optimizedImageUrl(images[0], 800));
     mainImg.alt = product.title;
 
     if (images.length > 1) {
@@ -750,7 +756,9 @@
         thumb.type = "button";
         thumb.className = "gallery__thumb" + (i === 0 ? " is-active" : "");
         const img = document.createElement("img");
-        img.src = src;
+        // Thumbnail strip renders tiny (~48-64px) — request a right-sized
+        // version instead of the full product photo.
+        img.src = window.ProductLoader.optimizedImageUrl(src, 120);
         img.onerror = function () { this.onerror = null; this.src = "/images/logo-placeholder.svg"; };
         img.alt = `${product.title} — view ${i + 1}`;
         img.loading = "lazy";
@@ -770,7 +778,7 @@
         
         // Create incoming peer image
         const peer = document.createElement("img");
-        peer.src = images[((nextIndex % images.length) + images.length) % images.length];
+        peer.src = window.ProductLoader.optimizedImageUrl(images[((nextIndex % images.length) + images.length) % images.length], 800);
         peer.onerror = function () { this.onerror = null; this.src = "/images/logo-placeholder.svg"; };
         peer.alt = "";
         peer.style.position = "absolute";
@@ -861,7 +869,7 @@
 
       function makePeer(index) {
         const img = document.createElement("img");
-        img.src = images[((index % images.length) + images.length) % images.length];
+        img.src = window.ProductLoader.optimizedImageUrl(images[((index % images.length) + images.length) % images.length], 800);
         img.onerror = function () { this.onerror = null; this.src = "/images/logo-placeholder.svg"; };
         img.alt = "";
         img.style.position = "absolute";
@@ -1308,7 +1316,7 @@
           row.className = "variant-color-row";
           colors.forEach((color) => {
             const sibling = findAnySiblingForColor(color);
-            const imgSrc = (sibling && sibling.images && sibling.images[0]) ? sibling.images[0] : "images/logo-placeholder.svg";
+            const imgSrc = (sibling && sibling.images && sibling.images[0]) ? ProductLoader.optimizedImageUrl(sibling.images[0], 120) : "images/logo-placeholder.svg";
             // A color is "out of stock" only once EVERY size under it is
             // unavailable (naturally out of stock or manually paused).
             // Still clickable — same as any other sold-out product on this

@@ -96,7 +96,12 @@
     row.setAttribute("role", "option");
 
     const img = document.createElement("img");
-    img.src = (product.images && product.images[0]) || "";
+    // Dropdown suggestion thumbnail is tiny (~40-48px on screen) — request
+    // a right-sized ImageKit render instead of the full product photo
+    // (see optimizedImageUrl in product-loader.js; no-op for non-ImageKit
+    // URLs like ImgBB).
+    const rawImg = (product.images && product.images[0]) || "";
+    img.src = rawImg ? ProductLoader.optimizedImageUrl(rawImg, 120) : "";
     img.alt = "";
     img.loading = "lazy";
 

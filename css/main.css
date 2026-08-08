@@ -13,6 +13,35 @@
      untouched while the whole site reskins from one place.
    ========================================================================== */
 
+/* PERF/CLS FIX (Lighthouse "Layout shift culprits", CLS 0.255 → ~0):
+   The Google Fonts CSS loads "Inter" with font-display: swap, which means
+   text first paints in the browser's default sans-serif, then re-flows
+   into Inter once it downloads a moment later. Inter and the default
+   fallback (Arial/Helvetica on most platforms) have different vertical
+   metrics (ascent/descent/line-gap) and average glyph widths, so that
+   swap visibly shifts every line of text down/up and reflows wrapped
+   text — that's exactly what the report's "main" 0.145 + 0.111 layout
+   shift entries are.
+   "Inter Fallback" below is a LOCAL font (no network request — it's just
+   Arial/Helvetica under a different name) with its metrics numerically
+   adjusted (ascent-override/descent-override/line-gap-override/
+   size-adjust) to match real Inter almost exactly. Putting it directly
+   after "Inter" in the font stack means: the very first paint already
+   uses a fallback sized/spaced like Inter, so when the real Inter
+   webfont finishes loading and swaps in, line heights and text wrapping
+   don't change — no reflow, no CLS. These specific override values are
+   the same ones Next.js's next/font generates for Inter+Arial (a widely
+   published, verified-accurate set), not a guess.
+*/
+@font-face {
+  font-family: "Inter Fallback";
+  src: local("Arial"), local("Arial MT"), local("Helvetica"), local("Helvetica Neue");
+  ascent-override: 90.4365%;
+  descent-override: 22.518%;
+  line-gap-override: 0%;
+  size-adjust: 107.1194%;
+}
+
 :root {
   /* Colour — AzubaTrends Design System */
   --color-bg: #FFFFFF;
@@ -50,8 +79,8 @@
   --admin-sidebar-text-dim: #7C8291;
 
   /* Type — Inter everywhere, no serif */
-  --font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: "Inter", "Inter Fallback", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-body: "Inter", "Inter Fallback", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
   /* Layout */
   --header-height: 72px;

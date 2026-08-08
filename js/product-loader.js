@@ -4,6 +4,43 @@ const ProductLoader = (function () {
   const currency = "₹";
 
   // ------------------------------------------------------------------
+  // PERF FIX (Lighthouse "Improve image delivery" — Est savings 998 KiB):
+  // Product photos come from whatever the admin uploaded (via ImgBB or
+  // ImageKit — see Settings > Image Hosting / js/image-upload.js), at
+  // whatever original resolution they were saved at. A grid of product
+  // cards then displays that same full-resolution file shrunk down to a
+  // ~300px-wide card with plain CSS — the browser still has to download
+  // every original byte to do that shrinking, which is exactly what this
+  // audit is flagging.
+  //
+  // ImageKit (unlike ImgBB) serves images through a URL-based transform
+  // API: appending `?tr=w-<width>,q-<quality>,f-auto` to an
+  // ik.imagekit.io URL makes ImageKit itself resize/recompress/pick a
+  // modern format (e.g. WebP/AVIF where the browser supports it) at the
+  // CDN edge, so the browser only downloads a file already sized for
+  // where it's being shown. This is a real, verifiable fix for anyone on
+  // ImageKit; it's a no-op passthrough for ImgBB URLs (or any other
+  // host), since ImgBB has no equivalent transform API to call — that
+  // part of the gap can't be closed from this codebase alone. Widths are
+  // picked per call site (card thumbnail vs. full-size gallery image)
+  // via the `width` argument.
+  // ------------------------------------------------------------------
+  function optimizedImageUrl(url, width) {
+    if (!url || typeof url !== "string") return url;
+    if (!/(^https?:)?\/\/[^/]*\.imagekit\.io\//i.test(url)) return url;
+    try {
+      const u = new URL(url, window.location.origin);
+      // Don't stack transforms if this URL was already built with one
+      // (e.g. re-rendered from cached product data).
+      if (u.searchParams.has("tr")) return url;
+      u.searchParams.set("tr", `w-${width},q-70,f-auto`);
+      return u.toString();
+    } catch (err) {
+      return url; // malformed URL — fall back to the original, unmodified
+    }
+  }
+
+  // ------------------------------------------------------------------
   // Fast single-product path (see functions/api/product.js). Holds the
   // result of the most recent /api/product hit so getVariantSiblings()
   // and product.html's breadcrumb render can reuse it instead of firing a
@@ -326,7 +363,10 @@ const ProductLoader = (function () {
     const safeTitle = window.Security ? window.Security.escapeHTML(product.title) : String(product.title || "");
     const safeCategory = window.Security ? window.Security.escapeHTML(product.category) : String(product.category || "");
     const safeBrand = window.Security ? window.Security.escapeHTML(product.brand || "") : String(product.brand || "");
-    const safeImage = window.Security ? window.Security.escapeHTML(image) : image;
+    // Card thumbnails render at ~300px wide max — request a right-sized,
+    // compressed version instead of the original upload (see
+    // optimizedImageUrl above).
+    const safeImage = window.Security ? window.Security.escapeHTML(optimizedImageUrl(image, 400)) : optimizedImageUrl(image, 400);
     // This card represents the whole color (every size of it), not one
     // specific size, so only the color is shown here — the size itself is
     // picked on the product page, not implied by which card was clicked.
@@ -578,7 +618,7 @@ const ProductLoader = (function () {
     window.addEventListener("cart:updated", (e) => setBadge(e.detail.count));
   }
 
-  const API = { loadAllProducts, getProductById, getProductBySlug, getProductByParentAndVariantSlug, getVariantSiblings, getFastBreadcrumb, dedupeVariantGroups, pickDefaultVariant, isUnavailable, productUrl, calcDiscount, formatPrice, sortByStock, sortSizes, getCategories, renderProductCard, renderGrid, renderSkeletonGrid, renderCategoryChips, initHeader, trackCategoryInterest, mountRelatedProducts };
+  const API = { loadAllProducts, getProductById, getProductBySlug, getProductByParentAndVariantSlug, getVariantSiblings, getFastBreadcrumb, dedupeVariantGroups, pickDefaultVariant, isUnavailable, productUrl, calcDiscount, formatPrice, sortByStock, sortSizes, getCategories, renderProductCard, renderGrid, renderSkeletonGrid, renderCategoryChips, initHeader, trackCategoryInterest, mountRelatedProducts, optimizedImageUrl };
   window.ProductLoader = API;
   return API;
 })();

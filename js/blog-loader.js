@@ -148,7 +148,11 @@ const BlogLoader = (function () {
     }
     if (block.type === "image" && block.imageUrl) {
       const caption = block.caption ? `<figcaption>${esc(block.caption)}</figcaption>` : "";
-      return `<figure class="blog-post__figure"><img src="${esc(block.imageUrl)}" alt="${esc(block.caption || "")}" loading="lazy">${caption}</figure>`;
+      // In-article image renders near full content width — 900px covers
+      // it on both mobile and desktop without over-fetching (see
+      // ProductLoader.optimizedImageUrl; no-op for non-ImageKit URLs).
+      const optimizedSrc = window.ProductLoader ? window.ProductLoader.optimizedImageUrl(block.imageUrl, 900) : block.imageUrl;
+      return `<figure class="blog-post__figure"><img src="${esc(optimizedSrc)}" alt="${esc(block.caption || "")}" loading="lazy">${caption}</figure>`;
     }
     return "";
   }
@@ -180,12 +184,16 @@ const BlogLoader = (function () {
   function renderBlogCard(post) {
     const cover = post.coverImage || "images/logo-placeholder.svg";
     const esc = (s) => (window.Security ? window.Security.escapeHTML(s) : String(s ?? ""));
+    // Blog card cover renders at ~350-400px wide in the grid — request a
+    // right-sized version instead of the original upload (see
+    // ProductLoader.optimizedImageUrl; no-op for non-ImageKit URLs).
+    const optimizedCover = window.ProductLoader ? window.ProductLoader.optimizedImageUrl(cover, 500) : cover;
     const primaryCategory = (post.categories && post.categories[0])
       ? `<span class="taxonomy-pill taxonomy-pill--category">${esc(post.categories[0])}</span>`
       : "";
     return `
       <a href="/blog/${encodeURIComponent(post.slug)}" class="blog-card">
-        <img src="${esc(cover)}" alt="" class="blog-card__img" loading="lazy">
+        <img src="${esc(optimizedCover)}" alt="" class="blog-card__img" loading="lazy">
         <div class="blog-card__body">
           ${primaryCategory}
           <h3 class="blog-card__title">${esc(post.title)}</h3>
